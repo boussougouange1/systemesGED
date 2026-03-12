@@ -26,9 +26,30 @@ const { data, error } = await supabaseClient
 
 if(error){
 console.error("Erreur Supabase :", error)
-}else{
-console.log("Documents :", data)
+return
 }
+
+console.log("Documents :", data)
+
+const container = document.getElementById("documentsList")
+
+container.innerHTML = ""
+
+data.forEach(doc => {
+
+const item = document.createElement("div")
+
+item.innerHTML = `
+<div style="background:#1e293b;padding:15px;margin:10px;border-radius:10px">
+<h3>${doc.name}</h3>
+<p>${doc.description}</p>
+<a href="${doc.file_url}" target="_blank">Ouvrir</a>
+</div>
+`
+
+container.appendChild(item)
+
+})
 
 }
 
@@ -530,6 +551,10 @@ loadDocuments()
                         </div>
 
                         <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="documentGrid">
+    <!-- Documents injected by JS -->
+</div>
+
+<div id="documentsList"></div>
                             <!-- Documents injected by JS -->
                         </div>
                     </div>
