@@ -14,13 +14,13 @@
 const supabaseUrl = "https://spgtflhrppeoidjguhs.supabase.co"
 const supabaseKey = "sb_publishable_0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ"
 
-const supabase = supabase.createClient(supabaseUrl, supabaseKey)
+const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey)
 
 console.log("Connexion Supabase initialisée")
 
 async function loadDocuments(){
 
-const { data, error } = await supabase
+const { data, error } = await supabaseClient
 .from("documents")
 .select("*")
 
