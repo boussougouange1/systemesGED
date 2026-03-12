@@ -16,6 +16,14 @@ const supabaseKey = "sb_publishable_0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ"
 
 const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey)
 
+document.addEventListener("DOMContentLoaded", function(){
+
+document.getElementById("fileInput").addEventListener("change", uploadDocument)
+
+loadDocuments()
+
+})
+
 console.log("Connexion Supabase initialisée")
 
 async function loadDocuments(){
@@ -31,7 +39,7 @@ return
 
 console.log("Documents :", data)
 
-const container = document.getElementById("documentsList")
+const container = document.getElementById("documentGrid")
 
 container.innerHTML = ""
 
@@ -43,7 +51,9 @@ item.innerHTML = `
 <div style="background:#1e293b;padding:15px;margin:10px;border-radius:10px">
 <h3>${doc.name}</h3>
 <p>${doc.description}</p>
-<a href="${doc.file_url}" target="_blank">Ouvrir</a>
+<button onclick="openPreview('${doc.file_url}','${doc.name}')">
+Ouvrir
+</button>
 </div>
 `
 
@@ -53,7 +63,48 @@ container.appendChild(item)
 
 }
 
+async function uploadDocument(){
+
+const fileInput = document.getElementById("fileInput")
+const files = fileInput.files
+
+if(files.length === 0){
+alert("Aucun fichier sélectionné")
+return
+}
+
+for (const file of files){
+
+const fileName = Date.now() + "_" + file.name
+
+const { data, error } = await supabaseClient.storage
+.from("documents")
+.upload(fileName, file, { upsert: true })
+
+if(error){
+console.error("Erreur upload :", error)
+continue
+}
+
+const fileUrl = supabaseUrl + "/storage/v1/object/public/documents/" + fileName
+
+await supabaseClient
+.from("documents")
+.insert([
+{
+name: file.name,
+description: "Document importé",
+file_url: fileUrl
+}
+])
+
+}
+
+alert("Documents importés avec succès")
+
 loadDocuments()
+
+}
 
 </script>
    
@@ -554,7 +605,6 @@ loadDocuments()
     <!-- Documents injected by JS -->
 </div>
 
-<div id="documentsList"></div>
                             <!-- Documents injected by JS -->
                         </div>
                     </div>
@@ -692,13 +742,13 @@ loadDocuments()
             <div class="p-6 space-y-6">
                 <!-- Drop Zone -->
                 <div id="dropZone" class="border-2 border-dashed border-blue-500/30 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-blue-500/5 transition-all cursor-pointer bg-slate-900/30" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="document.getElementById('fileInput').click()">
-                    <input type="file" id="fileInput" multiple class="hidden" onchange="handleFileSelect(event)">
+                    <input type="file" id="fileInput" multiple class="hidden" >
                     <div class="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400 border border-blue-400/30 floating">
                         <i class="fas fa-cloud-upload-alt text-3xl"></i>
                     </div>
                     <p class="text-lg font-bold text-white mb-2">Glissez-déposez vos fichiers ici</p>
                     <p class="text-blue-300/70 mb-4">ou cliquez pour parcourir</p>
-                    <p class="text-xs text-blue-400/60">PDF, Word, Excel, Images jusqu'à 50MB</p>
+			<p class="text-xs text-blue-400/60">PDF, Word, Excel, Images jusqu'à 50MB</p>
                 </div>
 
                 <!-- Upload Progress -->
@@ -747,8 +797,8 @@ loadDocuments()
             </div>
 
             <div class="p-6 border-t border-blue-500/20 flex justify-end gap-3 sticky bottom-0 bg-slate-900/95 backdrop-blur-xl rounded-b-2xl">
-                <button onclick="closeUploadModal()" class="px-4 py-2 text-blue-300 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-500/30 hover:border-blue-400/50">Annuler</button>
-                <button onclick="simulateUpload()" class="btn-primary px-6 py-2 text-white rounded-lg font-semibold">Importer</button>
+                
+                <button onclick="uploadDocument()" class="btn-primary"> Importer </button>
             </div>
         </div>
     </div>
@@ -876,16 +926,7 @@ loadDocuments()
 
     <script>
         // Data Models
-        const documents = [
-            { id: 1, name: 'Contrat_Fournisseur_2024.pdf', type: 'pdf', size: '2.4 MB', date: '15/03/2024', author: 'Marie D.', status: 'validé', tags: ['Contrat', 'Fournisseur'] },
-            { id: 2, name: 'Compte_Rendu_Reunion.docx', type: 'word', size: '845 KB', date: '14/03/2024', author: 'Jean L.', status: 'en_cours', tags: ['Réunion', 'Direction'] },
-            { id: 3, name: 'Budget_Previsionnel_2024.xlsx', type: 'excel', size: '1.2 MB', date: '13/03/2024', author: 'Pierre M.', status: 'validé', tags: ['Finance', 'Budget'] },
-            { id: 4, name: 'Procedure_Onboarding.pdf', type: 'pdf', size: '3.1 MB', date: '12/03/2024', author: 'Sophie K.', status: 'brouillon', tags: ['RH', 'Procedure'] },
-            { id: 5, name: 'Photo_Evenement_Entreprise.jpg', type: 'image', size: '4.5 MB', date: '10/03/2024', author: 'Lucas B.', status: 'validé', tags: ['Événement', 'Communication'] },
-            { id: 6, name: 'Contrat_Client_ABC.pdf', type: 'pdf', size: '1.8 MB', date: '09/03/2024', author: 'Marie D.', status: 'en_validation', tags: ['Contrat', 'Client'] },
-            { id: 7, name: 'Rapport_Annuel_2023.pdf', type: 'pdf', size: '5.2 MB', date: '08/03/2024', author: 'Direction', status: 'archivé', tags: ['Rapport', 'Annuel'] },
-            { id: 8, name: 'Note_Service_IT.pdf', type: 'pdf', size: '450 KB', date: '07/03/2024', author: 'Thomas R.', status: 'validé', tags: ['IT', 'Interne'] },
-        ];
+        ;
 
         const workflows = [
             { 
@@ -940,8 +981,7 @@ loadDocuments()
         ];
 
         // Initialization
-        document.addEventListener('DOMContentLoaded', () => {
-            renderDocuments();
+        document.addEventListener("DOMContentLoaded", () => {
             renderWorkflows();
             renderActivities();
             setupKeyboardShortcuts();
@@ -961,59 +1001,6 @@ loadDocuments()
                     el.classList.add('active');
                 }
             });
-        }
-
-        // Render Functions
-        function renderDocuments() {
-            const grid = document.getElementById('documentGrid');
-            const typeIcons = {
-                pdf: { icon: 'fa-file-pdf', color: 'text-red-400', bg: 'from-red-500/20 to-red-600/20', border: 'border-red-400/30' },
-                word: { icon: 'fa-file-word', color: 'text-blue-400', bg: 'from-blue-500/20 to-blue-600/20', border: 'border-blue-400/30' },
-                excel: { icon: 'fa-file-excel', color: 'text-green-400', bg: 'from-green-500/20 to-green-600/20', border: 'border-green-400/30' },
-                image: { icon: 'fa-file-image', color: 'text-purple-400', bg: 'from-purple-500/20 to-purple-600/20', border: 'border-purple-400/30' }
-            };
-
-            grid.innerHTML = documents.map(doc => {
-                const typeStyle = typeIcons[doc.type] || typeIcons.pdf;
-                const statusColors = {
-                    validé: 'bg-green-500/20 text-green-400 border-green-500/30',
-                    en_cours: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-                    brouillon: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-                    en_validation: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-                    archivé: 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-                };
-
-                return `
-                    <div class="document-card glass-card rounded-xl p-4 cursor-pointer group border border-blue-500/20 hover:border-blue-400/50" onclick="openPreview(${doc.id})">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="w-12 h-12 bg-gradient-to-br ${typeStyle.bg} rounded-xl flex items-center justify-center ${typeStyle.color} border ${typeStyle.border} group-hover:scale-110 transition-transform">
-                                <i class="fas ${typeStyle.icon} text-xl"></i>
-                            </div>
-                            <div class="relative">
-                                <button class="text-blue-400/60 hover:text-blue-300 p-1 transition-colors" onclick="event.stopPropagation()">
-                                    <i class="fas fa-ellipsis-v"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <h4 class="font-bold text-white mb-1 truncate text-sm" title="${doc.name}">${doc.name}</h4>
-                        <div class="flex items-center gap-2 text-xs text-blue-300/70 mb-3">
-                            <span>${doc.size}</span>
-                            <span>•</span>
-                            <span>${doc.date}</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="px-2 py-1 rounded-full text-xs font-bold border ${statusColors[doc.status]} status-badge">
-                                ${doc.status.replace('_', ' ')}
-                            </span>
-                            <div class="flex -space-x-2">
-                                <div class="w-7 h-7 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-xs border-2 border-slate-900 font-bold">
-                                    ${doc.author.charAt(0)}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
         }
 
         function renderWorkflows() {
@@ -1157,13 +1144,10 @@ loadDocuments()
         }
 
         // Preview Handling
-        function openPreview(docId) {
-            const doc = documents.find(d => d.id === docId);
-            if (doc) {
-                document.getElementById('previewTitle').textContent = doc.name;
-                document.getElementById('previewModal').classList.remove('hidden');
-            }
-        }
+        function openPreview(url, name){
+    document.getElementById('previewTitle').textContent = name
+    window.open(url, "_blank")
+}
 
         function closePreviewModal() {
             document.getElementById('previewModal').classList.add('hidden');
