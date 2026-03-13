@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SystemesGED - Gestion Électronique de Documents</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -20,21 +20,18 @@
                         brand: {
                             50: '#e6f0ff',
                             100: '#cce0ff',
-                            200: '#99c2ff',
-                            300: '#66a3ff',
-                            400: '#3385ff',
-                            500: '#0066ff',
-                            600: '#0052cc',
-                            700: '#003d99',
-                            800: '#002966',
-                            900: '#001433',
-                            dark: '#0a1628',
-                            light: '#1e3a8a'
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
                         }
                     },
-                    boxShadow: {
-                        'glow': '0 0 20px rgba(59, 130, 246, 0.5)',
-                        'glow-lg': '0 0 40px rgba(59, 130, 246, 0.6)'
+                    screens: {
+                        'xs': '375px',
+                        'sm': '640px',
+                        'md': '768px',
+                        'lg': '1024px',
+                        'xl': '1280px',
+                        '2xl': '1536px',
                     }
                 }
             }
@@ -42,21 +39,28 @@
     </script>
     
     <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        
         body {
             background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0f172a 100%);
             min-height: 100vh;
+            overflow-x: hidden;
         }
         
         .glass-panel {
             background: rgba(30, 58, 138, 0.15);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(96, 165, 250, 0.2);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
         
         .glass-card {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid rgba(96, 165, 250, 0.15);
             transition: all 0.3s ease;
         }
@@ -64,8 +68,6 @@
         .glass-card:hover {
             background: rgba(255, 255, 255, 0.1);
             border-color: rgba(96, 165, 250, 0.4);
-            transform: translateY(-2px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(59, 130, 246, 0.2);
         }
         
         .sidebar-item {
@@ -79,18 +81,10 @@
             color: #60a5fa;
         }
         
-        .logo-glow {
-            filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.6));
-            animation: pulse-glow 3s ease-in-out infinite;
-        }
-        
-        @keyframes pulse-glow {
-            0%, 100% { filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.6)); }
-            50% { filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.9)); }
-        }
-        
-        .search-glow:focus {
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3), 0 0 20px rgba(59, 130, 246, 0.2);
+        .gradient-text {
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         
         .btn-primary {
@@ -104,41 +98,65 @@
             box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
         }
         
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        
         .document-card {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
         }
         
         .document-card:hover {
-            transform: translateY(-4px) scale(1.02);
+            transform: translateY(-4px);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 30px rgba(59, 130, 246, 0.3);
-        }
-        
-        .gradient-text {
-            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .floating {
-            animation: float 6s ease-in-out infinite;
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
         }
         
         .drag-over {
             border: 2px dashed #3b82f6;
             background: rgba(59, 130, 246, 0.1);
-            box-shadow: 0 0 30px rgba(59, 130, 246, 0.3) inset;
         }
         
+        /* Mobile sidebar */
+        .mobile-sidebar {
+            position: fixed;
+            top: 0;
+            left: -100%;
+            width: 80%;
+            max-width: 300px;
+            height: 100vh;
+            z-index: 100;
+            transition: left 0.3s ease;
+        }
+        
+        .mobile-sidebar.open {
+            left: 0;
+        }
+        
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 99;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* Touch-friendly */
+        .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        
+        /* Scrollbar */
         ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
         }
         
         ::-webkit-scrollbar-track {
@@ -147,300 +165,467 @@
         
         ::-webkit-scrollbar-thumb {
             background: #3b82f6;
-            border-radius: 4px;
+            border-radius: 3px;
         }
         
-        .notification-dot {
-            animation: blink 2s infinite;
+        /* Safe areas for mobile */
+        @supports (padding-top: env(safe-area-inset-top)) {
+            .safe-top {
+                padding-top: env(safe-area-inset-top);
+            }
+            .safe-bottom {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
         }
         
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        /* Grid responsive */
+        .doc-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        
+        @media (min-width: 640px) {
+            .doc-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .doc-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        @media (min-width: 1280px) {
+            .doc-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        /* Modal responsive */
+        .modal-content {
+            width: 95%;
+            max-width: 600px;
+            max-height: 90vh;
+        }
+        
+        @media (min-width: 768px) {
+            .modal-content {
+                width: 80%;
+            }
+        }
+        
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        
+        @media (min-width: 640px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        /* Bottom nav for mobile */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(96, 165, 250, 0.2);
+        }
+        
+        @media (min-width: 1024px) {
+            .bottom-nav {
+                display: none;
+            }
+        }
+        
+        /* Hide desktop sidebar on mobile */
+        @media (max-width: 1023px) {
+            .desktop-sidebar {
+                display: none;
+            }
+        }
+        
+        /* Show desktop sidebar on large screens */
+        @media (min-width: 1024px) {
+            .mobile-menu-btn {
+                display: none;
+            }
         }
     </style>
 </head>
-<body class="text-gray-100 font-sans antialiased overflow-hidden">
+<body class="text-gray-100 font-sans antialiased pb-20 lg:pb-0">
 
-    <div id="app" class="h-screen flex flex-col">
+    <!-- Mobile Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+    
+    <!-- Mobile Sidebar -->
+    <aside class="mobile-sidebar glass-panel border-r border-blue-500/20 flex flex-col overflow-y-auto safe-top safe-bottom" id="mobileSidebar">
+        <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <img src="logo-systemesGED.png" class="w-10 h-10 rounded-full">
+                <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
+            </div>
+            <button onclick="closeMobileSidebar()" class="p-2 text-blue-400 hover:text-white">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
         
-        <!-- Header -->
-        <header class="glass-panel border-b border-blue-500/20 sticky top-0 z-50">
-            <div class="flex items-center justify-between px-6 py-3">
-                <div class="flex items-center gap-3">
-                    <div class="relative w-12 h-12 flex items-center justify-center">
-                        <img src="logo-systemesGED.png" alt="Logo" class="w-full h-full object-contain logo-glow rounded-full">
+        <nav class="p-4 space-y-2 flex-1">
+            <button onclick="switchView('dashboard'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300 active" data-view="dashboard">
+                <i class="fas fa-chart-pie w-5 text-center text-blue-400"></i>
+                <span class="font-medium">Tableau de bord</span>
+            </button>
+            
+            <button onclick="switchView('documents'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300" data-view="documents">
+                <i class="fas fa-file-alt w-5 text-center text-blue-400"></i>
+                <span class="font-medium">Documents</span>
+                <span id="mobileDocCount" class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full">0</span>
+            </button>
+
+            <button onclick="switchView('workflows'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300" data-view="workflows">
+                <i class="fas fa-project-diagram w-5 text-center text-blue-400"></i>
+                <span class="font-medium">Workflows</span>
+            </button>
+        </nav>
+        
+        <div class="p-4 border-t border-blue-500/20">
+            <div class="glass-card rounded-xl p-3 border border-blue-400/20">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-bold text-blue-300 text-xs">Stockage</span>
+                    <span id="mobileStoragePercent" class="text-xs text-blue-400 font-bold">0%</span>
+                </div>
+                <div class="w-full bg-slate-900/50 rounded-full h-1.5 mb-2">
+                    <div id="mobileStorageBar" class="bg-gradient-to-r from-blue-500 to-blue-400 h-1.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Header -->
+    <header class="glass-panel border-b border-blue-500/20 sticky top-0 z-40 safe-top">
+        <div class="flex items-center justify-between px-4 lg:px-6 py-3">
+            <!-- Left: Menu + Logo -->
+            <div class="flex items-center gap-3">
+                <button class="mobile-menu-btn p-2 -ml-2 text-blue-400 hover:text-white touch-target" onclick="openMobileSidebar()">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+                
+                <div class="flex items-center gap-2 lg:gap-3">
+                    <div class="relative w-10 h-10 flex-shrink-0">
+                        <img src="logo-systemesGED.png" alt="Logo" class="w-full h-full object-contain rounded-full">
                     </div>
-                    <div>
-                        <h1 class="text-2xl font-bold tracking-tight">
+                    <div class="hidden sm:block">
+                        <h1 class="text-xl lg:text-2xl font-bold tracking-tight">
                             <span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span>
                         </h1>
-                        <p class="text-xs text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v2.4</p>
+                        <p class="text-[10px] lg:text-xs text-blue-300/80 font-medium tracking-wider hidden lg:block">CLOUD EDITION v2.4</p>
                     </div>
                 </div>
+            </div>
 
-                <div class="flex-1 max-w-2xl mx-8">
-                    <div class="relative group">
-                        <input type="text" id="globalSearch" placeholder="Rechercher dans tous les documents (Ctrl+K)..." 
-                               class="w-full pl-12 pr-4 py-2.5 bg-slate-900/50 border border-blue-500/30 rounded-xl focus:bg-slate-900/80 focus:border-blue-400 search-glow transition-all outline-none text-sm text-gray-200 placeholder-gray-500">
-                        <i class="fas fa-search absolute left-4 top-3 text-blue-400 group-focus-within:text-blue-300"></i>
+            <!-- Center: Search -->
+            <div class="flex-1 max-w-xl mx-2 lg:mx-8">
+                <div class="relative">
+                    <input type="text" id="globalSearch" placeholder="Rechercher... (Ctrl+K)" 
+                           class="w-full pl-10 pr-4 py-2 lg:py-2.5 bg-slate-900/50 border border-blue-500/30 rounded-xl focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-none text-sm text-gray-200 placeholder-gray-500 transition-all">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-blue-400"></i>
+                    <div class="hidden lg:flex absolute right-3 top-1/2 -translate-y-1/2 gap-1">
+                        <span class="px-2 py-0.5 bg-blue-900/50 border border-blue-500/30 rounded text-xs text-blue-300">Ctrl</span>
+                        <span class="px-2 py-0.5 bg-blue-900/50 border border-blue-500/30 rounded text-xs text-blue-300">K</span>
                     </div>
                 </div>
+            </div>
 
-                <div class="flex items-center gap-4">
-                    <button class="relative p-2 text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 rounded-lg transition-all" onclick="toggleNotifications()">
-                        <i class="fas fa-bell text-lg"></i>
-                        <span class="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full notification-dot shadow-lg shadow-red-500/50"></span>
+            <!-- Right: Actions -->
+            <div class="flex items-center gap-2 lg:gap-4">
+                <button class="relative p-2 text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 rounded-lg transition-all touch-target" onclick="toggleNotifications()">
+                    <i class="fas fa-bell text-lg"></i>
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                </button>
+
+                <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
+                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span class="text-xs text-green-400 font-medium">Cloud</span>
+                </div>
+
+                <div class="flex items-center gap-2 pl-2 lg:pl-4 border-l border-blue-500/30">
+                    <div class="text-right hidden lg:block">
+                        <p class="text-sm font-semibold text-white">Admin</p>
+                        <p class="text-xs text-blue-300">GED</p>
+                    </div>
+                    <div class="w-9 h-9 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg cursor-pointer">
+                        AS
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Desktop Sidebar -->
+        <aside class="desktop-sidebar w-64 glass-panel border-r border-blue-500/20 flex-col overflow-y-auto hidden lg:flex">
+            <nav class="p-4 space-y-1">
+                <button onclick="switchView('dashboard')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300 active" data-view="dashboard">
+                    <i class="fas fa-chart-pie w-5 text-center text-blue-400"></i>
+                    <span class="font-medium">Tableau de bord</span>
+                </button>
+                
+                <button onclick="switchView('documents')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300" data-view="documents">
+                    <i class="fas fa-file-alt w-5 text-center text-blue-400"></i>
+                    <span class="font-medium">Documents</span>
+                    <span id="docCount" class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full">0</span>
+                </button>
+
+                <button onclick="switchView('workflows')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300" data-view="workflows">
+                    <i class="fas fa-project-diagram w-5 text-center text-blue-400"></i>
+                    <span class="font-medium">Workflows</span>
+                    <span class="ml-auto bg-orange-500/20 text-orange-300 text-xs px-2 py-1 rounded-full">3</span>
+                </button>
+
+                <div class="pt-4 mt-4 border-t border-blue-500/20">
+                    <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Admin</p>
+                    
+                    <button onclick="switchView('users')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300" data-view="users">
+                        <i class="fas fa-users w-5 text-center text-blue-400"></i>
+                        <span class="font-medium">Utilisateurs</span>
                     </button>
 
-                    <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full">
-                        <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span class="text-xs text-green-400 font-medium">Cloud Actif</span>
+                    <button onclick="switchView('settings')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300" data-view="settings">
+                        <i class="fas fa-cog w-5 text-center text-blue-400"></i>
+                        <span class="font-medium">Config</span>
+                    </button>
+                </div>
+            </nav>
+
+            <div class="mt-auto p-4 border-t border-blue-500/20">
+                <div class="glass-card rounded-xl p-4 border border-blue-400/20">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-bold text-blue-300 flex items-center gap-2">
+                            <i class="fas fa-cloud text-blue-400"></i>
+                            Stockage
+                        </span>
+                        <span id="storagePercent" class="text-xs text-blue-400 font-bold">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-900/50 rounded-full h-2 mb-2">
+                        <div id="storageBar" class="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                    <p id="storageText" class="text-xs text-blue-300/70">0 MB / 100 MB</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto p-4 lg:p-6 relative" id="mainContent">
+            <!-- Background -->
+            <div class="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                <div class="absolute top-10 right-10 w-64 lg:w-96 h-64 lg:h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
+                <div class="absolute bottom-10 left-10 w-48 lg:w-72 h-48 lg:h-72 bg-blue-800/10 rounded-full blur-3xl"></div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="view-section space-y-4 lg:space-y-6 relative z-10">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1">Tableau de bord</h2>
+                        <p class="text-sm lg:text-base text-blue-300/80">Vue d'ensemble GED cloud</p>
+                    </div>
+                    <button onclick="openUploadModal()" class="btn-primary px-4 lg:px-6 py-3 text-white rounded-xl flex items-center justify-center gap-2 font-semibold text-sm lg:text-base touch-target">
+                        <i class="fas fa-plus"></i>
+                        <span class="hidden sm:inline">Nouveau document</span>
+                        <span class="sm:hidden">Ajouter</span>
+                    </button>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats-grid">
+                    <div class="glass-card rounded-2xl p-4 lg:p-6 border border-blue-500/20">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="w-12 h-12 lg:w-14 lg:h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 border border-blue-400/30">
+                                <i class="fas fa-file-alt text-xl lg:text-2xl"></i>
+                            </div>
+                            <span class="text-green-400 text-xs lg:text-sm font-bold bg-green-500/10 px-2 py-1 rounded-full">+12%</span>
+                        </div>
+                        <h3 id="totalDocs" class="text-2xl lg:text-3xl font-bold text-white mb-1">0</h3>
+                        <p class="text-blue-300/70 text-xs lg:text-sm">Documents</p>
                     </div>
 
-                    <div class="flex items-center gap-3 pl-4 border-l border-blue-500/30">
-                        <div class="text-right hidden md:block">
-                            <p class="text-sm font-semibold text-white">Admin System</p>
-                            <p class="text-xs text-blue-300">Administrateur GED</p>
+                    <div class="glass-card rounded-2xl p-4 lg:p-6 border border-blue-500/20">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="w-12 h-12 lg:w-14 lg:h-14 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 border border-orange-400/30">
+                                <i class="fas fa-clock text-xl lg:text-2xl"></i>
+                            </div>
+                            <span class="text-orange-400 text-xs font-bold bg-orange-500/10 px-2 py-1 rounded-full">En cours</span>
                         </div>
-                        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30 cursor-pointer hover:scale-105 transition-transform border-2 border-blue-400/50">
-                            AS
+                        <h3 class="text-2xl lg:text-3xl font-bold text-white mb-1">3</h3>
+                        <p class="text-blue-300/70 text-xs lg:text-sm">Workflows</p>
+                    </div>
+
+                    <div class="glass-card rounded-2xl p-4 lg:p-6 border border-blue-500/20">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="w-12 h-12 lg:w-14 lg:h-14 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 border border-purple-400/30">
+                                <i class="fas fa-search text-xl lg:text-2xl"></i>
+                            </div>
+                            <span class="text-green-400 text-xs font-bold bg-green-500/10 px-2 py-1 rounded-full">+5%</span>
+                        </div>
+                        <h3 class="text-2xl lg:text-3xl font-bold text-white mb-1">156</h3>
+                        <p class="text-blue-300/70 text-xs lg:text-sm">Recherches</p>
+                    </div>
+
+                    <div class="glass-card rounded-2xl p-4 lg:p-6 border border-blue-500/20">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="w-12 h-12 lg:w-14 lg:h-14 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 border border-green-400/30">
+                                <i class="fas fa-check-circle text-xl lg:text-2xl"></i>
+                            </div>
+                            <span class="text-green-400 text-xs font-bold bg-green-500/10 px-2 py-1 rounded-full">99.9%</span>
+                        </div>
+                        <h3 class="text-2xl lg:text-3xl font-bold text-white mb-1">100%</h3>
+                        <p class="text-blue-300/70 text-xs lg:text-sm">RGPD</p>
+                    </div>
+                </div>
+
+                <!-- Activity -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+                    <div class="lg:col-span-2 glass-card rounded-2xl border border-blue-500/20 p-4 lg:p-6">
+                        <h3 class="text-lg lg:text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="fas fa-stream text-blue-400"></i>
+                            Activité récente
+                        </h3>
+                        <div class="space-y-3" id="activityList">
+                            <p class="text-blue-300/50 text-center py-4 text-sm">Aucune activité</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card rounded-2xl border border-blue-500/20 p-4 lg:p-6">
+                        <h3 class="text-lg lg:text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="fas fa-star text-yellow-400"></i>
+                            Accès rapide
+                        </h3>
+                        <div class="space-y-3">
+                            <button class="w-full glass-card p-3 lg:p-4 rounded-xl hover:bg-blue-500/10 transition-all text-left border border-blue-500/20">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 lg:w-12 lg:h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400 border border-red-400/30 flex-shrink-0">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="font-semibold text-white text-sm truncate">Contrats</p>
+                                        <p class="text-xs text-blue-300/70">45 fichiers</p>
+                                    </div>
+                                </div>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
-        </header>
 
-        <div class="flex flex-1 overflow-hidden">
-            <!-- Sidebar -->
-            <aside class="w-64 glass-panel border-r border-blue-500/20 flex flex-col overflow-y-auto">
-                <nav class="p-4 space-y-1">
-                    <button onclick="switchView('dashboard')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300 transition-all group active" data-view="dashboard">
-                        <i class="fas fa-chart-pie w-5 text-center text-blue-400"></i>
-                        <span class="font-medium">Tableau de bord</span>
+            <!-- Documents View -->
+            <div id="documents-view" class="view-section hidden space-y-4 lg:space-y-6 relative z-10">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1">Documents</h2>
+                        <p class="text-sm text-blue-300/80">Gestion documentaire</p>
+                    </div>
+                    <button onclick="openUploadModal()" class="btn-primary px-4 py-2.5 text-white rounded-xl flex items-center justify-center gap-2 font-semibold text-sm touch-target">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Importer</span>
                     </button>
-                    
-                    <button onclick="switchView('documents')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300 transition-all group" data-view="documents">
-                        <i class="fas fa-file-alt w-5 text-center text-blue-400"></i>
-                        <span class="font-medium">Documents</span>
-                        <span id="docCount" class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full border border-blue-500/30">0</span>
-                    </button>
-
-                    <button onclick="switchView('workflows')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300 transition-all group" data-view="workflows">
-                        <i class="fas fa-project-diagram w-5 text-center text-blue-400"></i>
-                        <span class="font-medium">Workflows</span>
-                        <span class="ml-auto bg-orange-500/20 text-orange-300 text-xs px-2 py-1 rounded-full border border-orange-500/30">3</span>
-                    </button>
-
-                    <div class="pt-4 mt-4 border-t border-blue-500/20">
-                        <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Administration</p>
-                        
-                        <button onclick="switchView('users')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300 transition-all group" data-view="users">
-                            <i class="fas fa-users w-5 text-center text-blue-400"></i>
-                            <span class="font-medium">Utilisateurs</span>
-                        </button>
-
-                        <button onclick="switchView('settings')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300 hover:text-blue-300 transition-all group" data-view="settings">
-                            <i class="fas fa-cog w-5 text-center text-blue-400"></i>
-                            <span class="font-medium">Configuration</span>
-                        </button>
-                    </div>
-                </nav>
-
-                <div class="mt-auto p-4 border-t border-blue-500/20">
-                    <div class="glass-card rounded-xl p-4 border border-blue-400/20">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm font-bold text-blue-300 flex items-center gap-2">
-                                <i class="fas fa-cloud text-blue-400"></i>
-                                Stockage Cloud
-                            </span>
-                            <span id="storagePercent" class="text-xs text-blue-400 font-bold">0%</span>
-                        </div>
-                        <div class="w-full bg-slate-900/50 rounded-full h-2 mb-2 border border-blue-500/20">
-                            <div id="storageBar" class="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all duration-500 shadow-glow" style="width: 0%"></div>
-                        </div>
-                        <p id="storageText" class="text-xs text-blue-300/70">0 MB sur 100 MB utilisés</p>
-                    </div>
-                </div>
-            </aside>
-
-            <!-- Main Content -->
-            <main class="flex-1 overflow-y-auto p-6 relative" id="mainContent">
-                <div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-                    <div class="absolute top-10 right-10 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
-                    <div class="absolute bottom-10 left-10 w-72 h-72 bg-blue-800/10 rounded-full blur-3xl"></div>
                 </div>
 
-                <!-- Dashboard View -->
-                <div id="dashboard-view" class="view-section space-y-6 relative z-10">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-3xl font-bold text-white mb-1">Tableau de bord</h2>
-                            <p class="text-blue-300/80">Vue d'ensemble de votre système GED cloud</p>
-                        </div>
-                        <button onclick="openUploadModal()" class="btn-primary px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold">
-                            <i class="fas fa-plus"></i>
-                            Nouveau document
-                        </button>
+                <div class="glass-card rounded-2xl border border-blue-500/20 overflow-hidden">
+                    <div class="p-3 lg:p-4 border-b border-blue-500/20 bg-blue-900/20">
+                        <span class="text-sm text-blue-300">Tous les documents</span>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div class="glass-card rounded-2xl p-6 border border-blue-500/20">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-2xl flex items-center justify-center text-blue-400 border border-blue-400/30 floating">
-                                    <i class="fas fa-file-alt text-2xl"></i>
-                                </div>
-                                <span class="text-green-400 text-sm font-bold flex items-center gap-1 bg-green-500/10 px-2 py-1 rounded-full border border-green-500/30">
-                                    <i class="fas fa-arrow-up text-xs"></i> +12%
-                                </span>
-                            </div>
-                            <h3 id="totalDocs" class="text-3xl font-bold text-white mb-1">0</h3>
-                            <p class="text-blue-300/70 text-sm">Documents actifs</p>
-                        </div>
-
-                        <div class="glass-card rounded-2xl p-6 border border-blue-500/20">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="w-14 h-14 bg-gradient-to-br from-orange-500/20 to-orange-600/20 rounded-2xl flex items-center justify-center text-orange-400 border border-orange-400/30">
-                                    <i class="fas fa-clock text-2xl"></i>
-                                </div>
-                                <span class="text-orange-400 text-sm font-bold bg-orange-500/10 px-2 py-1 rounded-full border border-orange-500/30">En attente</span>
-                            </div>
-                            <h3 class="text-3xl font-bold text-white mb-1">3</h3>
-                            <p class="text-blue-300/70 text-sm">Workflows en cours</p>
-                        </div>
-
-                        <div class="glass-card rounded-2xl p-6 border border-blue-500/20">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-purple-600/20 rounded-2xl flex items-center justify-center text-purple-400 border border-purple-400/30 floating" style="animation-delay: 1s;">
-                                    <i class="fas fa-search text-2xl"></i>
-                                </div>
-                                <span class="text-green-400 text-sm font-bold bg-green-500/10 px-2 py-1 rounded-full border border-green-500/30">+5%</span>
-                            </div>
-                            <h3 class="text-3xl font-bold text-white mb-1">156</h3>
-                            <p class="text-blue-300/70 text-sm">Recherches ce mois</p>
-                        </div>
-
-                        <div class="glass-card rounded-2xl p-6 border border-blue-500/20">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="w-14 h-14 bg-gradient-to-br from-green-500/20 to-green-600/20 rounded-2xl flex items-center justify-center text-green-400 border border-green-400/30">
-                                    <i class="fas fa-check-circle text-2xl"></i>
-                                </div>
-                                <span class="text-green-400 text-sm font-bold bg-green-500/10 px-2 py-1 rounded-full border border-green-500/30">99.9%</span>
-                            </div>
-                            <h3 class="text-3xl font-bold text-white mb-1">100%</h3>
-                            <p class="text-blue-300/70 text-sm">Conformité RGPD</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div class="lg:col-span-2 glass-card rounded-2xl border border-blue-500/20 p-6">
-                            <div class="flex items-center justify-between mb-6">
-                                <h3 class="text-xl font-bold text-white flex items-center gap-2">
-                                    <i class="fas fa-stream text-blue-400"></i>
-                                    Activité récente
-                                </h3>
-                            </div>
-                            <div class="space-y-3" id="activityList">
-                                <p class="text-blue-300/50 text-center py-4">Aucune activité récente</p>
-                            </div>
-                        </div>
-
-                        <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
-                            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                <i class="fas fa-star text-yellow-400"></i>
-                                Accès rapide
-                            </h3>
-                            <div class="space-y-3">
-                                <button class="w-full glass-card p-4 rounded-xl hover:bg-blue-500/10 transition-all text-left group border border-blue-500/20 hover:border-blue-400/50">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-12 h-12 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-xl flex items-center justify-center text-red-400 border border-red-400/30">
-                                            <i class="fas fa-file-pdf text-lg"></i>
-                                        </div>
-                                        <div class="flex-1">
-                                            <p class="font-semibold text-white text-sm">Contrats</p>
-                                            <p class="text-xs text-blue-300/70">Dossier • Documents légaux</p>
-                                        </div>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
+                    <div class="p-4 doc-grid" id="documentGrid">
+                        <p class="text-blue-300/50 col-span-full text-center py-8 text-sm">Chargement...</p>
                     </div>
                 </div>
+            </div>
 
-                <!-- Documents View -->
-                <div id="documents-view" class="view-section hidden space-y-6 relative z-10">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-3xl font-bold text-white mb-1">Gestion documentaire</h2>
-                            <p class="text-blue-300/80">Organisation et classification des documents</p>
-                        </div>
-                        <button onclick="openUploadModal()" class="btn-primary px-4 py-2.5 text-white rounded-xl flex items-center gap-2 font-semibold">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            Importer
-                        </button>
-                    </div>
-
-                    <div class="glass-card rounded-2xl border border-blue-500/20 overflow-hidden">
-                        <div class="p-4 border-b border-blue-500/20 flex items-center justify-between bg-blue-900/20">
-                            <div class="flex items-center gap-2 text-sm text-blue-300">
-                                <span class="text-white font-medium">Tous les documents</span>
-                            </div>
-                        </div>
-
-                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="documentGrid">
-                            <p class="text-blue-300/50 col-span-4 text-center py-8">Chargement...</p>
-                        </div>
-                    </div>
+            <!-- Other Views -->
+            <div id="workflows-view" class="view-section hidden relative z-10">
+                <div class="glass-card rounded-2xl border border-blue-500/20 p-8 lg:p-12 text-center">
+                    <i class="fas fa-project-diagram text-4xl lg:text-6xl text-blue-400 mb-4"></i>
+                    <h2 class="text-xl lg:text-2xl font-bold text-white mb-2">Workflows</h2>
+                    <p class="text-blue-300/70 text-sm">Fonctionnalité en développement</p>
                 </div>
+            </div>
 
-                <!-- Workflows View -->
-                <div id="workflows-view" class="view-section hidden space-y-6 relative z-10">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h2 class="text-3xl font-bold text-white mb-1">Workflows de validation</h2>
-                            <p class="text-blue-300/80">Circuits de validation et processus métier</p>
-                        </div>
-                    </div>
-                    <div class="glass-card rounded-2xl border border-blue-500/20 p-12 text-center">
-                        <p class="text-blue-300/70">Fonctionnalité en développement</p>
-                    </div>
+            <div id="users-view" class="view-section hidden relative z-10">
+                <div class="glass-card rounded-2xl border border-blue-500/20 p-8 text-center">
+                    <i class="fas fa-users text-4xl text-blue-400 mb-4"></i>
+                    <h2 class="text-xl font-bold text-white">Utilisateurs</h2>
                 </div>
+            </div>
 
-                <!-- Users View -->
-                <div id="users-view" class="view-section hidden relative z-10">
-                    <div class="glass-card rounded-2xl border border-blue-500/20 p-12 text-center">
-                        <p class="text-blue-300/70">Gestion des utilisateurs</p>
-                    </div>
+            <div id="settings-view" class="view-section hidden relative z-10">
+                <div class="glass-card rounded-2xl border border-blue-500/20 p-8 text-center">
+                    <i class="fas fa-cog text-4xl text-blue-400 mb-4"></i>
+                    <h2 class="text-xl font-bold text-white">Configuration</h2>
                 </div>
-
-                <!-- Settings View -->
-                <div id="settings-view" class="view-section hidden relative z-10">
-                    <div class="glass-card rounded-2xl border border-blue-500/20 p-12 text-center">
-                        <p class="text-blue-300/70">Configuration système</p>
-                    </div>
-                </div>
-            </main>
-        </div>
+            </div>
+        </main>
     </div>
 
+    <!-- Bottom Navigation (Mobile) -->
+    <nav class="bottom-nav safe-bottom lg:hidden">
+        <div class="flex justify-around items-center py-2">
+            <button onclick="switchView('dashboard')" class="flex flex-col items-center gap-1 p-2 text-blue-400 touch-target" data-mobile-view="dashboard">
+                <i class="fas fa-chart-pie text-lg"></i>
+                <span class="text-[10px]">Accueil</span>
+            </button>
+            <button onclick="switchView('documents')" class="flex flex-col items-center gap-1 p-2 text-gray-400 touch-target" data-mobile-view="documents">
+                <i class="fas fa-file-alt text-lg"></i>
+                <span class="text-[10px]">Docs</span>
+            </button>
+            <button onclick="openUploadModal()" class="flex flex-col items-center gap-1 p-2 text-blue-400 touch-target">
+                <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center -mt-6 shadow-lg shadow-blue-500/50 border-4 border-slate-900">
+                    <i class="fas fa-plus text-white"></i>
+                </div>
+            </button>
+            <button onclick="switchView('workflows')" class="flex flex-col items-center gap-1 p-2 text-gray-400 touch-target" data-mobile-view="workflows">
+                <i class="fas fa-project-diagram text-lg"></i>
+                <span class="text-[10px]">Flows</span>
+            </button>
+            <button onclick="switchView('settings')" class="flex flex-col items-center gap-1 p-2 text-gray-400 touch-target" data-mobile-view="settings">
+                <i class="fas fa-cog text-lg"></i>
+                <span class="text-[10px]">Param</span>
+            </button>
+        </div>
+    </nav>
+
     <!-- Upload Modal -->
-    <div id="uploadModal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="glass-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-blue-500/30">
-            <div class="p-6 border-b border-blue-500/20 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur-xl z-10 rounded-t-2xl">
+    <div id="uploadModal" class="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="modal-content glass-card rounded-t-2xl sm:rounded-2xl border border-blue-500/30 w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-4 lg:p-6 border-b border-blue-500/20 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur-xl z-10">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white">
                         <i class="fas fa-cloud-upload-alt"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-white">Importer des documents</h3>
+                    <h3 class="text-lg lg:text-xl font-bold text-white">Importer</h3>
                 </div>
-                <button onclick="closeUploadModal()" class="text-blue-400 hover:text-white transition-colors p-2 hover:bg-blue-500/20 rounded-lg">
+                <button onclick="closeUploadModal()" class="text-blue-400 hover:text-white p-2 touch-target">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
             
-            <div class="p-6 space-y-6">
+            <div class="p-4 lg:p-6 space-y-4 lg:space-y-6">
                 <!-- Drop Zone -->
-                <div id="dropZone" class="border-2 border-dashed border-blue-500/30 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-blue-500/5 transition-all cursor-pointer bg-slate-900/30" 
+                <div id="dropZone" class="border-2 border-dashed border-blue-500/30 rounded-2xl p-8 lg:p-12 text-center hover:border-blue-400 hover:bg-blue-500/5 transition-all cursor-pointer bg-slate-900/30 touch-target" 
                      ondrop="handleDrop(event)" 
                      ondragover="handleDragOver(event)" 
                      ondragleave="handleDragLeave(event)" 
@@ -448,37 +633,36 @@
                     
                     <input type="file" id="fileInput" multiple class="hidden" onchange="handleFileSelect(event)">
                     
-                    <div class="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400 border border-blue-400/30 floating">
-                        <i class="fas fa-cloud-upload-alt text-3xl"></i>
+                    <div class="w-16 h-16 lg:w-20 lg:h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400 border border-blue-400/30 mx-auto">
+                        <i class="fas fa-cloud-upload-alt text-2xl lg:text-3xl"></i>
                     </div>
-                    <p class="text-lg font-bold text-white mb-2">Glissez-déposez vos fichiers ici</p>
-                    <p class="text-blue-300/70 mb-4">ou cliquez pour parcourir</p>
-                    <p class="text-xs text-blue-400/60">PDF, Word, Excel, Images jusqu'à 50MB</p>
+                    <p class="text-base lg:text-lg font-bold text-white mb-2">Déposez vos fichiers ici</p>
+                    <p class="text-blue-300/70 text-sm mb-2">ou touchez pour parcourir</p>
+                    <p class="text-xs text-blue-400/60">Max 50MB</p>
                 </div>
 
-                <!-- Upload Progress -->
+                <!-- Progress -->
                 <div id="uploadProgress" class="hidden space-y-3">
                     <div class="flex items-center justify-between text-sm">
-                        <span class="font-medium text-white">Téléchargement en cours...</span>
+                        <span class="text-white">Upload...</span>
                         <span class="text-blue-400 font-bold" id="progressPercent">0%</span>
                     </div>
-                    <div class="w-full bg-slate-900/50 rounded-full h-2 border border-blue-500/20">
-                        <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all duration-300 shadow-glow" style="width: 0%"></div>
+                    <div class="w-full bg-slate-900/50 rounded-full h-2">
+                        <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all" style="width: 0%"></div>
                     </div>
                 </div>
 
-                <!-- Success Message -->
+                <!-- Success -->
                 <div id="uploadSuccess" class="hidden text-center py-4">
-                    <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-green-400 border border-green-400/30">
+                    <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-green-400 border border-green-400/30 mx-auto">
                         <i class="fas fa-check text-2xl"></i>
                     </div>
-                    <p class="text-white font-bold mb-2">Upload réussi !</p>
-                    <p class="text-blue-300/70 text-sm">Vos documents ont été importés</p>
+                    <p class="text-white font-bold">Upload réussi !</p>
                 </div>
             </div>
 
-            <div class="p-6 border-t border-blue-500/20 flex justify-end gap-3 sticky bottom-0 bg-slate-900/95 backdrop-blur-xl rounded-b-2xl">
-                <button onclick="closeUploadModal()" class="px-4 py-2 text-blue-300 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-500/30 hover:border-blue-400/50">
+            <div class="p-4 lg:p-6 border-t border-blue-500/20 sticky bottom-0 bg-slate-900/95 backdrop-blur-xl">
+                <button onclick="closeUploadModal()" class="w-full px-4 py-3 text-blue-300 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-500/30 touch-target">
                     Fermer
                 </button>
             </div>
@@ -486,40 +670,59 @@
     </div>
 
     <script>
-        // Configuration Supabase - REMPLACEZ PAR VOS VRAIES CLÉS
+        // Supabase config
         const supabaseUrl = "https://spgtflhprppeoidjguhs.supabase.co"
         const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE2NjY4MDIsImV4cCI6MjA1NzI0MjgwMn0.0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ"
         
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey)
-
-        // État global
+        
         let currentDocuments = []
         const MAX_STORAGE_MB = 100
 
-        // Initialisation
+        // Init
         document.addEventListener("DOMContentLoaded", function() {
             loadDocuments()
             setupKeyboardShortcuts()
         })
+
+        // Mobile sidebar
+        function openMobileSidebar() {
+            document.getElementById('mobileSidebar').classList.add('open')
+            document.getElementById('sidebarOverlay').classList.add('active')
+            document.body.style.overflow = 'hidden'
+        }
+
+        function closeMobileSidebar() {
+            document.getElementById('mobileSidebar').classList.remove('open')
+            document.getElementById('sidebarOverlay').classList.remove('active')
+            document.body.style.overflow = ''
+        }
 
         // Navigation
         function switchView(viewName) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'))
             document.getElementById(`${viewName}-view`).classList.remove('hidden')
             
+            // Desktop sidebar
             document.querySelectorAll('.sidebar-item').forEach(el => {
                 el.classList.remove('active')
                 if(el.dataset.view === viewName) {
                     el.classList.add('active')
                 }
             })
-
-            if (viewName === 'documents') {
-                loadDocuments()
-            }
+            
+            // Mobile bottom nav
+            document.querySelectorAll('[data-mobile-view]').forEach(el => {
+                el.classList.remove('text-blue-400')
+                el.classList.add('text-gray-400')
+                if(el.dataset.mobileView === viewName) {
+                    el.classList.remove('text-gray-400')
+                    el.classList.add('text-blue-400')
+                }
+            })
         }
 
-        // Charger les documents
+        // Load documents
         async function loadDocuments() {
             try {
                 const { data, error } = await supabaseClient
@@ -527,11 +730,7 @@
                     .select("*")
                     .order("created_at", { ascending: false })
 
-                if (error) {
-                    console.error("Erreur Supabase:", error)
-                    showError("Impossible de charger les documents")
-                    return
-                }
+                if (error) throw error
 
                 currentDocuments = data || []
                 renderDocuments()
@@ -539,23 +738,24 @@
 
             } catch (err) {
                 console.error("Erreur:", err)
-                showError("Erreur de connexion")
+                document.getElementById("documentGrid").innerHTML = 
+                    '<p class="text-red-400 col-span-full text-center py-8">Erreur de chargement</p>'
             }
         }
 
-        // Afficher les documents
+        // Render documents
         function renderDocuments() {
             const container = document.getElementById("documentGrid")
             
             if (currentDocuments.length === 0) {
                 container.innerHTML = `
-                    <div class="col-span-4 text-center py-12">
-                        <div class="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400 border border-blue-400/20">
+                    <div class="col-span-full text-center py-12">
+                        <div class="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400 border border-blue-400/20 mx-auto">
                             <i class="fas fa-folder-open text-3xl"></i>
                         </div>
                         <p class="text-blue-300/70 mb-2">Aucun document</p>
                         <button onclick="openUploadModal()" class="text-blue-400 hover:text-blue-300 text-sm font-medium">
-                            + Importer votre premier document
+                            + Importer
                         </button>
                     </div>
                 `
@@ -568,12 +768,12 @@
                 const date = formatDate(doc.created_at)
 
                 return `
-                    <div class="document-card glass-card rounded-xl p-4 border border-blue-500/20 hover:border-blue-400/50" onclick="openDocument('${doc.file_url}', '${doc.name}')">
+                    <div class="document-card glass-card rounded-xl p-3 lg:p-4 border border-blue-500/20 hover:border-blue-400/50" onclick="openDocument('${doc.file_url}', '${doc.name}')">
                         <div class="flex items-start justify-between mb-3">
-                            <div class="w-12 h-12 ${fileIcon.bg} rounded-xl flex items-center justify-center ${fileIcon.color} border ${fileIcon.border}">
-                                <i class="fas ${fileIcon.icon} text-xl"></i>
+                            <div class="w-10 h-10 lg:w-12 lg:h-12 ${fileIcon.bg} rounded-xl flex items-center justify-center ${fileIcon.color} border ${fileIcon.border} flex-shrink-0">
+                                <i class="fas ${fileIcon.icon} text-lg lg:text-xl"></i>
                             </div>
-                            <button class="text-blue-400/60 hover:text-blue-300 p-1" onclick="event.stopPropagation(); deleteDocument('${doc.id}')">
+                            <button class="text-blue-400/60 hover:text-blue-300 p-1 touch-target" onclick="event.stopPropagation(); deleteDocument('${doc.id}')">
                                 <i class="fas fa-trash text-sm"></i>
                             </button>
                         </div>
@@ -588,7 +788,7 @@
             }).join('')
         }
 
-        // Mettre à jour les statistiques
+        // Update stats
         function updateStats() {
             const totalDocs = currentDocuments.length
             const totalSize = currentDocuments.reduce((sum, doc) => sum + (doc.file_size || 0), 0)
@@ -597,12 +797,18 @@
 
             document.getElementById('totalDocs').textContent = totalDocs
             document.getElementById('docCount').textContent = totalDocs
+            document.getElementById('mobileDocCount').textContent = totalDocs
+            
             document.getElementById('storagePercent').textContent = Math.round(percentUsed) + '%'
+            document.getElementById('mobileStoragePercent').textContent = Math.round(percentUsed) + '%'
+            
             document.getElementById('storageBar').style.width = percentUsed + '%'
-            document.getElementById('storageText').textContent = `${totalSizeMB} MB sur ${MAX_STORAGE_MB} MB utilisés`
+            document.getElementById('mobileStorageBar').style.width = percentUsed + '%'
+            
+            document.getElementById('storageText').textContent = `${totalSizeMB} MB / ${MAX_STORAGE_MB} MB`
         }
 
-        // Upload de documents
+        // Upload
         async function uploadDocument() {
             const fileInput = document.getElementById("fileInput")
             const files = fileInput.files
@@ -612,134 +818,91 @@
                 return
             }
 
-            // Vérifier l'espace disponible
+            // Check storage
             const currentSize = currentDocuments.reduce((sum, doc) => sum + (doc.file_size || 0), 0)
             const newFilesSize = Array.from(files).reduce((sum, file) => sum + file.size, 0)
             const totalSizeMB = (currentSize + newFilesSize) / (1024 * 1024)
 
             if (totalSizeMB > MAX_STORAGE_MB) {
-                alert("Espace de stockage insuffisant. Limite: 100 MB")
+                alert("Espace insuffisant")
                 return
             }
 
-            // Afficher la progression
+            // Show progress
             document.getElementById('dropZone').classList.add('hidden')
             document.getElementById('uploadProgress').classList.remove('hidden')
 
             let successCount = 0
-            let errorCount = 0
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i]
-                
-                // Mettre à jour la progression
                 const progress = Math.round(((i + 0.5) / files.length) * 100)
                 document.getElementById('progressBar').style.width = progress + '%'
                 document.getElementById('progressPercent').textContent = progress + '%'
 
                 try {
-                    // Générer un nom de fichier unique
-                    const timestamp = Date.now()
-                    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-                    const fileName = `${timestamp}_${safeName}`
-
-                    // Upload vers Supabase Storage
-                    const { data: storageData, error: storageError } = await supabaseClient.storage
+                    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+                    
+                    const { error: storageError } = await supabaseClient.storage
                         .from("documents")
-                        .upload(fileName, file, {
-                            cacheControl: '3600',
-                            upsert: false
-                        })
+                        .upload(fileName, file)
 
                     if (storageError) throw storageError
 
-                    // Construire l'URL publique
                     const { data: urlData } = supabaseClient.storage
                         .from("documents")
                         .getPublicUrl(fileName)
 
-                    const fileUrl = urlData.publicUrl
-
-                    // Insérer dans la base de données
-                    const { error: dbError } = await supabaseClient
-                        .from("documents")
-                        .insert([{
-                            name: file.name,
-                            description: "Document importé",
-                            file_url: fileUrl,
-                            file_size: file.size,
-                            file_type: file.type,
-                            storage_path: fileName
-                        }])
-
-                    if (dbError) throw dbError
+                    await supabaseClient.from("documents").insert([{
+                        name: file.name,
+                        description: "Document importé",
+                        file_url: urlData.publicUrl,
+                        file_size: file.size,
+                        file_type: file.type,
+                        storage_path: fileName
+                    }])
 
                     successCount++
 
                 } catch (error) {
-                    console.error(`Erreur upload ${file.name}:`, error)
-                    errorCount++
+                    console.error(`Erreur ${file.name}:`, error)
                 }
 
-                // Progression finale pour ce fichier
-                const finalProgress = Math.round(((i + 1) / files.length) * 100)
-                document.getElementById('progressBar').style.width = finalProgress + '%'
-                document.getElementById('progressPercent').textContent = finalProgress + '%'
+                document.getElementById('progressBar').style.width = Math.round(((i + 1) / files.length) * 100) + '%'
             }
 
-            // Afficher le succès
             document.getElementById('uploadProgress').classList.add('hidden')
             document.getElementById('uploadSuccess').classList.remove('hidden')
 
-            // Recharger les documents
             await loadDocuments()
 
-            // Message final
-            if (errorCount > 0) {
-                console.warn(`${successCount} succès, ${errorCount} erreurs`)
-            }
-
-            // Reset après 2 secondes
             setTimeout(() => {
                 closeUploadModal()
                 document.getElementById('uploadSuccess').classList.add('hidden')
                 document.getElementById('dropZone').classList.remove('hidden')
                 fileInput.value = ''
-            }, 2000)
+            }, 1500)
         }
 
-        // Supprimer un document
+        // Delete
         async function deleteDocument(docId) {
             if (!confirm('Supprimer ce document ?')) return
 
             try {
                 const doc = currentDocuments.find(d => d.id === docId)
-                if (!doc) return
-
-                // Supprimer du storage
-                if (doc.storage_path) {
-                    await supabaseClient.storage
-                        .from("documents")
-                        .remove([doc.storage_path])
+                if (doc?.storage_path) {
+                    await supabaseClient.storage.from("documents").remove([doc.storage_path])
                 }
 
-                // Supprimer de la base
-                const { error } = await supabaseClient
-                    .from("documents")
-                    .delete()
-                    .eq("id", docId)
-
-                if (error) throw error
-
+                await supabaseClient.from("documents").delete().eq("id", docId)
                 await loadDocuments()
 
             } catch (error) {
-                console.error("Erreur suppression:", error)
                 alert("Erreur lors de la suppression")
             }
         }
 
-        // Ouvrir un document
+        // Open document
         function openDocument(url, name) {
             window.open(url, '_blank')
         }
@@ -747,7 +910,6 @@
         // Helpers
         function getFileIcon(filename) {
             const ext = filename.split('.').pop().toLowerCase()
-            
             const icons = {
                 pdf: { icon: 'fa-file-pdf', color: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-400/30' },
                 doc: { icon: 'fa-file-word', color: 'text-blue-400', bg: 'bg-blue-500/20', border: 'border-blue-400/30' },
@@ -758,32 +920,30 @@
                 jpeg: { icon: 'fa-file-image', color: 'text-purple-400', bg: 'bg-purple-500/20', border: 'border-purple-400/30' },
                 png: { icon: 'fa-file-image', color: 'text-purple-400', bg: 'bg-purple-500/20', border: 'border-purple-400/30' }
             }
-
             return icons[ext] || { icon: 'fa-file', color: 'text-gray-400', bg: 'bg-gray-500/20', border: 'border-gray-400/30' }
         }
 
         function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes'
+            if (bytes === 0) return '0 B'
             const k = 1024
-            const sizes = ['Bytes', 'KB', 'MB', 'GB']
+            const sizes = ['B', 'KB', 'MB', 'GB']
             const i = Math.floor(Math.log(bytes) / Math.log(k))
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
         }
 
         function formatDate(dateString) {
             if (!dateString) return ''
             const date = new Date(dateString)
-            return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
         }
 
-        // Gestion de la modale
+        // Modal
         function openUploadModal() {
             document.getElementById('uploadModal').classList.remove('hidden')
             document.getElementById('uploadProgress').classList.add('hidden')
             document.getElementById('uploadSuccess').classList.add('hidden')
             document.getElementById('dropZone').classList.remove('hidden')
             document.getElementById('progressBar').style.width = '0%'
-            document.getElementById('progressPercent').textContent = '0%'
         }
 
         function closeUploadModal() {
@@ -803,7 +963,6 @@
         function handleDrop(e) {
             e.preventDefault()
             e.currentTarget.classList.remove('drag-over')
-            
             const files = e.dataTransfer.files
             if (files.length > 0) {
                 document.getElementById('fileInput').files = files
@@ -819,10 +978,10 @@
 
         // Notifications
         function toggleNotifications() {
-            alert('Notifications:\n\n• Validation requise: Contrat_Client_ABC.pdf\n• Upload terminé: 3 documents')
+            alert('Notifications:\n• Validation requise\n• 3 documents uploadés')
         }
 
-        // Raccourcis clavier
+        // Keyboard
         function setupKeyboardShortcuts() {
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -831,19 +990,16 @@
                 }
                 if (e.key === 'Escape') {
                     closeUploadModal()
+                    closeMobileSidebar()
                 }
             })
         }
 
-        // Fermer modale en cliquant à l'extérieur
+        // Close modal on outside
         window.onclick = function(event) {
             if (event.target.id === 'uploadModal') {
                 closeUploadModal()
             }
-        }
-
-        function showError(message) {
-            console.error(message)
         }
     </script>
 </body>
