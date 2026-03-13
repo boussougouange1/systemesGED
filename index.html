@@ -1346,43 +1346,9 @@
     <script>
         // Supabase config - REMPLACEZ PAR VOS VRAIES CLÉS EN PRODUCTION
         const supabaseUrl = "https://spgtflhprppeoidjguhs.supabase.co"
-        const supabaseKey = "sb_publishable_0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ"
+        const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE2NjY4MDIsImV4cCI6MjA1NzI0MjgwMn0.0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ"
         
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey)
-async function loadDocuments() {
-
-const { data, error } = await supabaseClient
-.from("documents")
-.select("*")
-.order("created_at", { ascending: false })
-
-if (error) {
-console.error(error)
-return
-}
-
-const container = document.getElementById("documentGrid")
-container.innerHTML = ""
-
-data.forEach(doc => {
-
-const item = document.createElement("div")
-
-item.innerHTML = `
-<div class="document-card">
-📄 ${doc.name}
-<br>
-<button onclick="openDocument('${doc.file_url}')">Ouvrir</button>
-</div>
-`
-
-container.appendChild(item)
-
-})
-
-}
-loadDocuments()
-</script>
         
         let currentDocuments = []
         const MAX_STORAGE_MB = 100
@@ -2267,4 +2233,3 @@ loadDocuments()
     </script>
 </body>
 </html>
-
