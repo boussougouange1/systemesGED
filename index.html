@@ -1361,7 +1361,7 @@ console.error(error)
 return
 }
 
-const container = document.getElementById("documentGrid")
+const container = document.getElementById("documentsList")
 container.innerHTML = ""
 
 data.forEach(doc => {
@@ -1383,6 +1383,7 @@ container.appendChild(item)
 }
 loadDocuments()
 </script>
+
         
         let currentDocuments = []
         const MAX_STORAGE_MB = 100
