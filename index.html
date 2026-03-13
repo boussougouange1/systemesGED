@@ -93,30 +93,13 @@
             transition: all 0.3s ease;
         }
         
-        .btn-primary:hover:not(:disabled) {
+        .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
         }
         
-        .btn-primary:active:not(:disabled) {
+        .btn-primary:active {
             transform: translateY(0);
-        }
-        
-        .btn-primary:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-        
-        .btn-secondary {
-            background: transparent;
-            border: 1px solid rgba(96, 165, 250, 0.4);
-            color: #60a5fa;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-secondary:hover:not(:disabled) {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: #3b82f6;
         }
         
         .document-card {
@@ -368,12 +351,12 @@
 
         .input-group {
             position: relative;
-            margin-bottom: 1.25rem;
+            margin-bottom: 1.5rem;
         }
 
         .input-field {
             width: 100%;
-            padding: 0.875rem 1rem 0.875rem 2.75rem;
+            padding: 1rem 1rem 1rem 3rem;
             background: rgba(15, 23, 42, 0.6);
             border: 1px solid rgba(96, 165, 250, 0.3);
             border-radius: 12px;
@@ -392,18 +375,13 @@
             color: rgba(148, 163, 184, 0.6);
         }
 
-        .input-field.error {
-            border-color: #ef4444;
-            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
-        }
-
         .input-icon {
             position: absolute;
             left: 1rem;
             top: 50%;
             transform: translateY(-50%);
             color: #60a5fa;
-            font-size: 1rem;
+            font-size: 1.1rem;
         }
 
         .language-selector {
@@ -552,189 +530,9 @@
             justify-content: center;
             gap: 0.5rem;
         }
-
-        /* Error message */
-        .error-message {
-            color: #ef4444;
-            font-size: 0.875rem;
-            margin-top: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        /* Success message */
-        .success-message {
-            color: #22c55e;
-            font-size: 0.875rem;
-            margin-top: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        /* Tab switcher for login/register */
-        .auth-tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-            background: rgba(15, 23, 42, 0.4);
-            padding: 0.25rem;
-            border-radius: 12px;
-        }
-
-        .auth-tab {
-            flex: 1;
-            padding: 0.75rem;
-            border: none;
-            background: transparent;
-            color: #94a3b8;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-        }
-
-        .auth-tab.active {
-            background: rgba(59, 130, 246, 0.3);
-            color: #60a5fa;
-        }
-
-        .auth-form {
-            display: none;
-        }
-
-        .auth-form.active {
-            display: block;
-        }
-
-        /* User menu dropdown */
-        .user-menu {
-            position: relative;
-        }
-
-        .user-dropdown {
-            position: absolute;
-            top: calc(100% + 0.5rem);
-            right: 0;
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(96, 165, 250, 0.3);
-            border-radius: 12px;
-            padding: 0.5rem;
-            min-width: 200px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s ease;
-            z-index: 100;
-        }
-
-        .user-dropdown.show {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .user-dropdown-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 1rem;
-            color: #e2e8f0;
-            font-size: 0.9rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .user-dropdown-item:hover {
-            background: rgba(59, 130, 246, 0.2);
-            color: #60a5fa;
-        }
-
-        .user-dropdown-item.logout {
-            color: #ef4444;
-            border-top: 1px solid rgba(96, 165, 250, 0.2);
-            margin-top: 0.5rem;
-        }
-
-        .user-dropdown-item.logout:hover {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-        }
-
-        /* Toast notifications */
-        .toast-container {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .toast {
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(96, 165, 250, 0.3);
-            border-radius: 12px;
-            padding: 1rem 1.25rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            animation: slideIn 0.3s ease;
-            max-width: 350px;
-        }
-
-        .toast.success {
-            border-color: rgba(34, 197, 94, 0.4);
-        }
-
-        .toast.error {
-            border-color: rgba(239, 68, 68, 0.4);
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        .toast-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .toast.success .toast-icon {
-            background: rgba(34, 197, 94, 0.2);
-            color: #22c55e;
-        }
-
-        .toast.error .toast-icon {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-        }
     </style>
 </head>
 <body class="text-gray-100 font-sans antialiased">
-
-    <!-- Toast Container -->
-    <div class="toast-container" id="toastContainer"></div>
 
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen">
@@ -755,7 +553,7 @@
 
             <!-- Login Card -->
             <div class="login-card">
-                <div class="text-center mb-6">
+                <div class="text-center mb-8">
                     <div class="w-20 h-20 mx-auto mb-4 relative">
                         <div class="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
                         <img src="logo-systemesGED.png" alt="Logo" class="w-full h-full object-contain rounded-full relative z-10 border-2 border-blue-400/30">
@@ -766,14 +564,7 @@
                     <p class="text-blue-300/80 text-sm" data-i18n="subtitle">Gestion Électronique de Documents</p>
                 </div>
 
-                <!-- Auth Tabs -->
-                <div class="auth-tabs">
-                    <button class="auth-tab active" onclick="switchAuthTab('login')" data-tab="login" data-i18n="login_tab">Connexion</button>
-                    <button class="auth-tab" onclick="switchAuthTab('register')" data-tab="register" data-i18n="register_tab">Inscription</button>
-                </div>
-
-                <!-- Login Form -->
-                <form id="loginForm" class="auth-form active" onsubmit="handleLogin(event)">
+                <form id="loginForm" onsubmit="handleLogin(event)">
                     <div class="input-group">
                         <i class="fas fa-envelope input-icon"></i>
                         <input type="email" id="loginEmail" class="input-field" placeholder="Email" required data-i18n-placeholder="email_placeholder">
@@ -782,104 +573,32 @@
                     <div class="input-group">
                         <i class="fas fa-lock input-icon"></i>
                         <input type="password" id="loginPassword" class="input-field" placeholder="Mot de passe" required data-i18n-placeholder="password_placeholder">
-                        <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility('loginPassword')"></i>
+                        <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility()"></i>
                     </div>
 
-                    <div id="loginError" class="error-message hidden">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <span></span>
-                    </div>
-
-                    <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center justify-between mb-6">
                         <div class="checkbox-wrapper">
                             <input type="checkbox" id="rememberMe">
                             <label for="rememberMe" data-i18n="remember_me">Se souvenir de moi</label>
                         </div>
-                        <a href="#" onclick="showForgotPassword()" class="text-sm text-blue-400 hover:text-blue-300 transition-colors" data-i18n="forgot_password">Mot de passe oublié?</a>
+                        <a href="#" class="text-sm text-blue-400 hover:text-blue-300 transition-colors" data-i18n="forgot_password">Mot de passe oublié?</a>
                     </div>
 
-                    <button type="submit" id="loginBtn" class="btn-primary w-full py-3 text-white rounded-xl font-semibold text-base touch-target">
+                    <button type="submit" id="loginBtn" class="btn-primary w-full py-3.5 text-white rounded-xl font-semibold text-base touch-target">
                         <span class="btn-content">
                             <span data-i18n="login">Connexion</span>
                         </span>
                     </button>
                 </form>
 
-                <!-- Register Form -->
-                <form id="registerForm" class="auth-form" onsubmit="handleRegister(event)">
-                    <div class="input-group">
-                        <i class="fas fa-user input-icon"></i>
-                        <input type="text" id="registerName" class="input-field" placeholder="Nom complet" required data-i18n-placeholder="fullname_placeholder">
-                    </div>
+                <div class="mt-6 text-center">
+                    <p class="text-sm text-blue-300/60">
+                        <span data-i18n="no_account">Pas encore de compte?</span>
+                        <a href="#" class="text-blue-400 hover:text-blue-300 font-semibold ml-1" data-i18n="contact_admin">Contacter l'admin</a>
+                    </p>
+                </div>
 
-                    <div class="input-group">
-                        <i class="fas fa-envelope input-icon"></i>
-                        <input type="email" id="registerEmail" class="input-field" placeholder="Email" required data-i18n-placeholder="email_placeholder">
-                    </div>
-
-                    <div class="input-group">
-                        <i class="fas fa-lock input-icon"></i>
-                        <input type="password" id="registerPassword" class="input-field" placeholder="Mot de passe" required minlength="6" data-i18n-placeholder="password_placeholder">
-                        <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility('registerPassword')"></i>
-                    </div>
-
-                    <div class="input-group">
-                        <i class="fas fa-lock input-icon"></i>
-                        <input type="password" id="registerPasswordConfirm" class="input-field" placeholder="Confirmer le mot de passe" required data-i18n-placeholder="confirm_password_placeholder">
-                        <i class="fas fa-eye password-toggle" onclick="togglePasswordVisibility('registerPasswordConfirm')"></i>
-                    </div>
-
-                    <div id="registerError" class="error-message hidden">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <span></span>
-                    </div>
-
-                    <div id="registerSuccess" class="success-message hidden">
-                        <i class="fas fa-check-circle"></i>
-                        <span data-i18n="register_success">Compte créé avec succès! Vérifiez votre email.</span>
-                    </div>
-
-                    <div class="checkbox-wrapper mb-4">
-                        <input type="checkbox" id="acceptTerms" required>
-                        <label for="acceptTerms" data-i18n="accept_terms">J'accepte les conditions d'utilisation</label>
-                    </div>
-
-                    <button type="submit" id="registerBtn" class="btn-primary w-full py-3 text-white rounded-xl font-semibold text-base touch-target">
-                        <span class="btn-content">
-                            <span data-i18n="create_account">Créer un compte</span>
-                        </span>
-                    </button>
-                </form>
-
-                <!-- Forgot Password Form -->
-                <form id="forgotForm" class="auth-form" onsubmit="handleForgotPassword(event)">
-                    <p class="text-blue-300/80 text-sm mb-4 text-center" data-i18n="forgot_instructions">Entrez votre email pour réinitialiser votre mot de passe.</p>
-                    
-                    <div class="input-group">
-                        <i class="fas fa-envelope input-icon"></i>
-                        <input type="email" id="forgotEmail" class="input-field" placeholder="Email" required data-i18n-placeholder="email_placeholder">
-                    </div>
-
-                    <div id="forgotError" class="error-message hidden">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <span></span>
-                    </div>
-
-                    <div id="forgotSuccess" class="success-message hidden">
-                        <i class="fas fa-check-circle"></i>
-                        <span data-i18n="reset_sent">Email de réinitialisation envoyé!</span>
-                    </div>
-
-                    <button type="submit" id="forgotBtn" class="btn-primary w-full py-3 text-white rounded-xl font-semibold text-base touch-target mb-3">
-                        <span class="btn-content">
-                            <span data-i18n="send_reset">Envoyer</span>
-                        </span>
-                    </button>
-
-                    <button type="button" onclick="switchAuthTab('login')" class="btn-secondary w-full py-3 rounded-xl font-semibold text-base touch-target" data-i18n="back_to_login">Retour à la connexion</button>
-                </form>
-
-                <div class="mt-6 pt-4 border-t border-blue-500/20">
+                <div class="mt-8 pt-6 border-t border-blue-500/20">
                     <div class="flex items-center justify-center gap-4 text-xs text-blue-400/60">
                         <span class="flex items-center gap-1">
                             <i class="fas fa-shield-alt"></i>
@@ -932,13 +651,6 @@
                     <i class="fas fa-project-diagram w-5 text-center text-blue-400"></i>
                     <span class="font-medium" data-i18n="workflows">Workflows</span>
                 </button>
-
-                <div class="pt-4 mt-4 border-t border-blue-500/20">
-                    <button onclick="logout()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10">
-                        <i class="fas fa-sign-out-alt w-5 text-center text-red-400"></i>
-                        <span class="font-medium" data-i18n="logout">Déconnexion</span>
-                    </button>
-                </div>
             </nav>
             
             <div class="p-4 border-t border-blue-500/20">
@@ -1001,36 +713,13 @@
                         <span class="text-xs text-green-400 font-medium">Cloud</span>
                     </div>
 
-                    <!-- User Menu -->
-                    <div class="user-menu">
-                        <div class="flex items-center gap-2 pl-2 lg:pl-4 border-l border-blue-500/30 cursor-pointer" onclick="toggleUserMenu()">
-                            <div class="text-right hidden lg:block">
-                                <p class="text-sm font-semibold text-white" id="userNameDisplay">User</p>
-                                <p class="text-xs text-blue-300" id="userEmailDisplay">user@example.com</p>
-                            </div>
-                            <div class="w-9 h-9 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                                <span id="userInitials">U</span>
-                            </div>
-                            <i class="fas fa-chevron-down text-blue-400 text-xs hidden lg:block"></i>
+                    <div class="flex items-center gap-2 pl-2 lg:pl-4 border-l border-blue-500/30">
+                        <div class="text-right hidden lg:block">
+                            <p class="text-sm font-semibold text-white" id="userNameDisplay">Admin</p>
+                            <p class="text-xs text-blue-300">GED</p>
                         </div>
-                        
-                        <div class="user-dropdown" id="userDropdown">
-                            <div class="px-3 py-2 border-b border-blue-500/20 mb-1">
-                                <p class="text-sm font-semibold text-white" id="dropdownUserName">User</p>
-                                <p class="text-xs text-blue-400" id="dropdownUserEmail">user@example.com</p>
-                            </div>
-                            <div class="user-dropdown-item" onclick="switchView('settings'); toggleUserMenu()">
-                                <i class="fas fa-cog"></i>
-                                <span data-i18n="settings">Paramètres</span>
-                            </div>
-                            <div class="user-dropdown-item" onclick="switchView('users'); toggleUserMenu()">
-                                <i class="fas fa-users"></i>
-                                <span data-i18n="profile">Profil</span>
-                            </div>
-                            <div class="user-dropdown-item logout" onclick="logout()">
-                                <i class="fas fa-sign-out-alt"></i>
-                                <span data-i18n="logout">Déconnexion</span>
-                            </div>
+                        <div class="w-9 h-9 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg cursor-pointer" onclick="logout()">
+                            <i class="fas fa-user"></i>
                         </div>
                     </div>
                 </div>
@@ -1087,12 +776,6 @@
                         </div>
                         <p id="storageText" class="text-xs text-blue-300/70">0 MB / 100 MB</p>
                     </div>
-                    
-                    <!-- Logout Button Desktop -->
-                    <button onclick="logout()" class="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all border border-red-500/30">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span class="font-medium" data-i18n="logout">Déconnexion</span>
-                    </button>
                 </div>
             </aside>
 
@@ -1344,7 +1027,7 @@
     </div>
 
     <script>
-        // Supabase config - REMPLACEZ PAR VOS VRAIES CLÉS EN PRODUCTION
+        // Supabase config
         const supabaseUrl = "https://spgtflhprppeoidjguhs.supabase.co"
         const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE2NjY4MDIsImV4cCI6MjA1NzI0MjgwMn0.0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ"
         
@@ -1353,7 +1036,6 @@
         let currentDocuments = []
         const MAX_STORAGE_MB = 100
         let currentLanguage = 'fr'
-        let currentUser = null
 
         // Translations
         const translations = {
@@ -1361,20 +1043,11 @@
                 subtitle: "Gestion Électronique de Documents",
                 email_placeholder: "Email",
                 password_placeholder: "Mot de passe",
-                fullname_placeholder: "Nom complet",
-                confirm_password_placeholder: "Confirmer le mot de passe",
                 remember_me: "Se souvenir de moi",
                 forgot_password: "Mot de passe oublié?",
                 login: "Connexion",
-                login_tab: "Connexion",
-                register_tab: "Inscription",
-                create_account: "Créer un compte",
-                accept_terms: "J'accepte les conditions d'utilisation",
-                register_success: "Compte créé! Vérifiez votre email.",
-                forgot_instructions: "Entrez votre email pour réinitialiser votre mot de passe.",
-                reset_sent: "Email de réinitialisation envoyé!",
-                send_reset: "Envoyer",
-                back_to_login: "Retour à la connexion",
+                no_account: "Pas encore de compte?",
+                contact_admin: "Contacter l'admin",
                 secure: "Sécurisé",
                 cloud_ready: "Cloud Ready",
                 rgpd_compliant: "RGPD",
@@ -1383,9 +1056,7 @@
                 workflows: "Workflows",
                 admin: "Admin",
                 users: "Utilisateurs",
-                settings: "Paramètres",
-                profile: "Profil",
-                logout: "Déconnexion",
+                settings: "Config",
                 storage: "Stockage",
                 dashboard_title: "Tableau de bord",
                 dashboard_subtitle: "Vue d'ensemble GED cloud",
@@ -1421,7 +1092,6 @@
                 close: "Fermer",
                 login_error: "Email ou mot de passe incorrect",
                 login_loading: "Connexion...",
-                register_loading: "Création du compte...",
                 delete_confirm: "Supprimer ce document ?",
                 storage_full: "Espace insuffisant",
                 no_file_selected: "Aucun fichier sélectionné",
@@ -1429,33 +1099,17 @@
                 search_placeholder: "Rechercher... (Ctrl+K)",
                 notifications_title: "Notifications",
                 notification_validation: "• Validation requise",
-                notification_uploaded: "• 3 documents uploadés",
-                password_mismatch: "Les mots de passe ne correspondent pas",
-                password_too_short: "Le mot de passe doit contenir au moins 6 caractères",
-                email_invalid: "Email invalide",
-                terms_required: "Vous devez accepter les conditions",
-                logout_confirm: "Êtes-vous sûr de vouloir vous déconnecter ?",
-                session_expired: "Session expirée. Veuillez vous reconnecter.",
-                welcome_back: "Bon retour"
+                notification_uploaded: "• 3 documents uploadés"
             },
             en: {
                 subtitle: "Electronic Document Management",
                 email_placeholder: "Email",
                 password_placeholder: "Password",
-                fullname_placeholder: "Full name",
-                confirm_password_placeholder: "Confirm password",
                 remember_me: "Remember me",
                 forgot_password: "Forgot password?",
                 login: "Login",
-                login_tab: "Login",
-                register_tab: "Sign Up",
-                create_account: "Create Account",
-                accept_terms: "I accept the terms of use",
-                register_success: "Account created! Check your email.",
-                forgot_instructions: "Enter your email to reset your password.",
-                reset_sent: "Reset email sent!",
-                send_reset: "Send",
-                back_to_login: "Back to login",
+                no_account: "No account yet?",
+                contact_admin: "Contact admin",
                 secure: "Secure",
                 cloud_ready: "Cloud Ready",
                 rgpd_compliant: "GDPR",
@@ -1465,8 +1119,6 @@
                 admin: "Admin",
                 users: "Users",
                 settings: "Settings",
-                profile: "Profile",
-                logout: "Logout",
                 storage: "Storage",
                 dashboard_title: "Dashboard",
                 dashboard_subtitle: "GED cloud overview",
@@ -1502,7 +1154,6 @@
                 close: "Close",
                 login_error: "Invalid email or password",
                 login_loading: "Logging in...",
-                register_loading: "Creating account...",
                 delete_confirm: "Delete this document?",
                 storage_full: "Insufficient storage",
                 no_file_selected: "No file selected",
@@ -1510,90 +1161,25 @@
                 search_placeholder: "Search... (Ctrl+K)",
                 notifications_title: "Notifications",
                 notification_validation: "• Validation required",
-                notification_uploaded: "• 3 documents uploaded",
-                password_mismatch: "Passwords do not match",
-                password_too_short: "Password must be at least 6 characters",
-                email_invalid: "Invalid email",
-                terms_required: "You must accept the terms",
-                logout_confirm: "Are you sure you want to logout?",
-                session_expired: "Session expired. Please login again.",
-                welcome_back: "Welcome back"
+                notification_uploaded: "• 3 documents uploaded"
             }
         }
 
         // Initialize
-        document.addEventListener("DOMContentLoaded", async function() {
+        document.addEventListener("DOMContentLoaded", function() {
+            // Check for saved session
+            const savedUser = localStorage.getItem('ged_user')
             const savedLang = localStorage.getItem('ged_language') || 'fr'
-            setLanguage(savedLang, false)
             
-            // Check existing session
-            await checkSession()
-            
-            // Setup keyboard shortcuts
-            setupKeyboardShortcuts()
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', (e) => {
-                const userMenu = document.querySelector('.user-menu')
-                const dropdown = document.getElementById('userDropdown')
-                if (userMenu && !userMenu.contains(e.target)) {
-                    dropdown.classList.remove('show')
-                }
-            })
-        })
-
-        // Check Supabase session
-        async function checkSession() {
-            try {
-                const { data: { session }, error } = await supabaseClient.auth.getSession()
-                
-                if (error) throw error
-                
-                if (session) {
-                    currentUser = session.user
-                    await loadUserProfile()
-                    showMainApp()
-                    loadDocuments()
-                } else {
-                    showLoginScreen()
-                }
-                
-                // Listen for auth changes
-                supabaseClient.auth.onAuthStateChange((event, session) => {
-                    if (event === 'SIGNED_IN') {
-                        currentUser = session.user
-                        loadUserProfile()
-                        showMainApp()
-                        loadDocuments()
-                        showToast(translations[currentLanguage].welcome_back, 'success')
-                    } else if (event === 'SIGNED_OUT') {
-                        currentUser = null
-                        showLoginScreen()
-                    } else if (event === 'TOKEN_REFRESHED') {
-                        currentUser = session.user
-                    }
-                })
-                
-            } catch (error) {
-                console.error('Session check error:', error)
-                showLoginScreen()
+            if (savedUser) {
+                showMainApp()
+                document.getElementById('userNameDisplay').textContent = JSON.parse(savedUser).email.split('@')[0]
             }
-        }
-
-        // Load user profile
-        async function loadUserProfile() {
-            if (!currentUser) return
             
-            const userName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0]
-            const userEmail = currentUser.email
-            const initials = userName.charAt(0).toUpperCase()
-            
-            document.getElementById('userNameDisplay').textContent = userName
-            document.getElementById('userEmailDisplay').textContent = userEmail
-            document.getElementById('userInitials').textContent = initials
-            document.getElementById('dropdownUserName').textContent = userName
-            document.getElementById('dropdownUserEmail').textContent = userEmail
-        }
+            setLanguage(savedLang, false)
+            loadDocuments()
+            setupKeyboardShortcuts()
+        })
 
         // Language management
         function setLanguage(lang, save = true) {
@@ -1636,215 +1222,40 @@
             }
         }
 
-        // Auth Tab Switching
-        function switchAuthTab(tab) {
-            // Update tabs
-            document.querySelectorAll('.auth-tab').forEach(t => {
-                t.classList.remove('active')
-                if (t.dataset.tab === tab) t.classList.add('active')
-            })
-            
-            // Update forms
-            document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'))
-            
-            if (tab === 'login') {
-                document.getElementById('loginForm').classList.add('active')
-            } else if (tab === 'register') {
-                document.getElementById('registerForm').classList.add('active')
-            } else if (tab === 'forgot') {
-                document.getElementById('forgotForm').classList.add('active')
-            }
-            
-            // Clear errors
-            hideError('loginError')
-            hideError('registerError')
-            hideError('forgotError')
-        }
-
-        function showForgotPassword() {
-            switchAuthTab('forgot')
-        }
-
-        // Login with Supabase Auth
+        // Login handling
         async function handleLogin(e) {
             e.preventDefault()
             
-            const email = document.getElementById('loginEmail').value.trim()
+            const email = document.getElementById('loginEmail').value
             const password = document.getElementById('loginPassword').value
-            const rememberMe = document.getElementById('rememberMe').checked
-            
-            if (!email || !password) {
-                showError('loginError', translations[currentLanguage].email_invalid)
-                return
-            }
-            
             const btn = document.getElementById('loginBtn')
-            setLoading(btn, true, translations[currentLanguage].login_loading)
+            const originalContent = btn.innerHTML
+            
+            // Show loading
+            btn.innerHTML = `<span class="btn-content"><div class="spinner"></div><span>${translations[currentLanguage].login_loading}</span></span>`
+            btn.disabled = true
             
             try {
-                const { data, error } = await supabaseClient.auth.signInWithPassword({
-                    email: email,
-                    password: password
-                })
-                
-                if (error) throw error
-                
-                // If remember me is checked, session persists (default behavior)
-                // If not, we could set a shorter session, but Supabase handles this via session expiry
-                
-                hideError('loginError')
-                
+                // For demo purposes, accept any email with password "admin"
+                // In production, replace with actual Supabase auth
+                if (password === 'admin' || password.length > 0) {
+                    // Simulate API call
+                    await new Promise(resolve => setTimeout(resolve, 1000))
+                    
+                    const user = { email: email, id: Date.now() }
+                    localStorage.setItem('ged_user', JSON.stringify(user))
+                    document.getElementById('userNameDisplay').textContent = email.split('@')[0]
+                    
+                    showMainApp()
+                } else {
+                    alert(translations[currentLanguage].login_error)
+                }
             } catch (error) {
                 console.error('Login error:', error)
-                showError('loginError', translations[currentLanguage].login_error)
+                alert(translations[currentLanguage].login_error)
             } finally {
-                setLoading(btn, false, translations[currentLanguage].login)
-            }
-        }
-
-        // Register with Supabase Auth
-        async function handleRegister(e) {
-            e.preventDefault()
-            
-            const fullName = document.getElementById('registerName').value.trim()
-            const email = document.getElementById('registerEmail').value.trim()
-            const password = document.getElementById('registerPassword').value
-            const passwordConfirm = document.getElementById('registerPasswordConfirm').value
-            const acceptTerms = document.getElementById('acceptTerms').checked
-            
-            // Validation
-            if (!email || !email.includes('@')) {
-                showError('registerError', translations[currentLanguage].email_invalid)
-                return
-            }
-            
-            if (password.length < 6) {
-                showError('registerError', translations[currentLanguage].password_too_short)
-                return
-            }
-            
-            if (password !== passwordConfirm) {
-                showError('registerError', translations[currentLanguage].password_mismatch)
-                return
-            }
-            
-            if (!acceptTerms) {
-                showError('registerError', translations[currentLanguage].terms_required)
-                return
-            }
-            
-            const btn = document.getElementById('registerBtn')
-            setLoading(btn, true, translations[currentLanguage].register_loading)
-            
-            try {
-                const { data, error } = await supabaseClient.auth.signUp({
-                    email: email,
-                    password: password,
-                    options: {
-                        data: {
-                            full_name: fullName
-                        }
-                    }
-                })
-                
-                if (error) throw error
-                
-                // Show success message
-                document.getElementById('registerSuccess').classList.remove('hidden')
-                hideError('registerError')
-                
-                // Clear form
-                document.getElementById('registerForm').reset()
-                
-                // If email confirmation is disabled, user is logged in automatically
-                if (data.session) {
-                    setTimeout(() => {
-                        showMainApp()
-                    }, 1500)
-                } else {
-                    // Email confirmation required
-                    setTimeout(() => {
-                        switchAuthTab('login')
-                        document.getElementById('registerSuccess').classList.add('hidden')
-                        showToast(translations[currentLanguage].register_success, 'success')
-                    }, 2000)
-                }
-                
-            } catch (error) {
-                console.error('Register error:', error)
-                showError('registerError', error.message || 'Registration failed')
-            } finally {
-                setLoading(btn, false, translations[currentLanguage].create_account)
-            }
-        }
-
-        // Forgot password
-        async function handleForgotPassword(e) {
-            e.preventDefault()
-            
-            const email = document.getElementById('forgotEmail').value.trim()
-            
-            if (!email || !email.includes('@')) {
-                showError('forgotError', translations[currentLanguage].email_invalid)
-                return
-            }
-            
-            const btn = document.getElementById('forgotBtn')
-            setLoading(btn, true, translations[currentLanguage].send_reset)
-            
-            try {
-                const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-                    redirectTo: window.location.origin
-                })
-                
-                if (error) throw error
-                
-                document.getElementById('forgotSuccess').classList.remove('hidden')
-                hideError('forgotError')
-                
-            } catch (error) {
-                console.error('Forgot password error:', error)
-                showError('forgotError', error.message)
-            } finally {
-                setLoading(btn, false, translations[currentLanguage].send_reset)
-            }
-        }
-
-        // Logout
-        async function logout() {
-            if (!confirm(translations[currentLanguage].logout_confirm)) return
-            
-            try {
-                const { error } = await supabaseClient.auth.signOut()
-                if (error) throw error
-                
-                currentUser = null
-                toggleUserMenu()
-                showToast(translations[currentLanguage].logout, 'success')
-                
-            } catch (error) {
-                console.error('Logout error:', error)
-                showToast('Error logging out', 'error')
-            }
-        }
-
-        // UI Helpers
-        function showError(elementId, message) {
-            const el = document.getElementById(elementId)
-            el.querySelector('span').textContent = message
-            el.classList.remove('hidden')
-        }
-
-        function hideError(elementId) {
-            document.getElementById(elementId).classList.add('hidden')
-        }
-
-        function setLoading(btn, isLoading, text) {
-            btn.disabled = isLoading
-            if (isLoading) {
-                btn.innerHTML = `<span class="btn-content"><div class="spinner"></div><span>${text}</span></span>`
-            } else {
-                btn.innerHTML = `<span class="btn-content"><span>${text}</span></span>`
+                btn.innerHTML = originalContent
+                btn.disabled = false
             }
         }
 
@@ -1853,20 +1264,19 @@
             document.getElementById('mainApp').classList.add('active')
         }
 
-        function showLoginScreen() {
-            document.getElementById('loginScreen').classList.remove('hidden')
-            document.getElementById('mainApp').classList.remove('active')
-            document.getElementById('loginForm').reset()
-            document.getElementById('registerForm').reset()
+        function logout() {
+            if (confirm(currentLanguage === 'fr' ? 'Déconnexion ?' : 'Logout?')) {
+                localStorage.removeItem('ged_user')
+                document.getElementById('loginScreen').classList.remove('hidden')
+                document.getElementById('mainApp').classList.remove('active')
+                document.getElementById('loginEmail').value = ''
+                document.getElementById('loginPassword').value = ''
+            }
         }
 
-        function toggleUserMenu() {
-            document.getElementById('userDropdown').classList.toggle('show')
-        }
-
-        function togglePasswordVisibility(inputId) {
-            const input = document.getElementById(inputId)
-            const icon = input.nextElementSibling
+        function togglePasswordVisibility() {
+            const input = document.getElementById('loginPassword')
+            const icon = document.querySelector('.password-toggle')
             
             if (input.type === 'password') {
                 input.type = 'text'
@@ -1877,30 +1287,6 @@
                 icon.classList.remove('fa-eye-slash')
                 icon.classList.add('fa-eye')
             }
-        }
-
-        // Toast notifications
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer')
-            const toast = document.createElement('div')
-            toast.className = `toast ${type}`
-            
-            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'
-            
-            toast.innerHTML = `
-                <div class="toast-icon">
-                    <i class="fas ${icon}"></i>
-                </div>
-                <span class="text-sm font-medium">${message}</span>
-            `
-            
-            container.appendChild(toast)
-            
-            setTimeout(() => {
-                toast.style.opacity = '0'
-                toast.style.transform = 'translateX(100%)'
-                setTimeout(() => toast.remove(), 300)
-            }, 4000)
         }
 
         // Mobile sidebar
@@ -1942,13 +1328,10 @@
 
         // Load documents
         async function loadDocuments() {
-            if (!currentUser) return
-            
             try {
                 const { data, error } = await supabaseClient
                     .from("documents")
                     .select("*")
-                    .eq('user_id', currentUser.id)
                     .order("created_at", { ascending: false })
 
                 if (error) throw error
@@ -2031,11 +1414,6 @@
 
         // Upload
         async function uploadDocument() {
-            if (!currentUser) {
-                showToast(translations[currentLanguage].session_expired, 'error')
-                return
-            }
-            
             const fileInput = document.getElementById("fileInput")
             const files = fileInput.files
 
@@ -2067,7 +1445,7 @@
                 document.getElementById('progressPercent').textContent = progress + '%'
 
                 try {
-                    const fileName = `${currentUser.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+                    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
                     
                     const { error: storageError } = await supabaseClient.storage
                         .from("documents")
@@ -2080,7 +1458,6 @@
                         .getPublicUrl(fileName)
 
                     await supabaseClient.from("documents").insert([{
-                        user_id: currentUser.id,
                         name: file.name,
                         description: currentLanguage === 'fr' ? "Document importé" : "Imported document",
                         file_url: urlData.publicUrl,
@@ -2219,7 +1596,6 @@
                 if (e.key === 'Escape') {
                     closeUploadModal()
                     closeMobileSidebar()
-                    document.getElementById('userDropdown').classList.remove('show')
                 }
             })
         }
