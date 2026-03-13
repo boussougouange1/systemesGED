@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SystemesGED - Gestion Électronique de Documents Cloud</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
@@ -1154,7 +1154,7 @@
                 const { data, error } = await supabaseClient
                     .from("documents")
                     .select("*, document_tags(tags(*))")
-                    .eq('owner_id', currentUser.id)
+                    .eq('user_id', currentUser.id)
                     .order("created_at", { ascending: false });
 
                 if (error) throw error;
@@ -1300,7 +1300,7 @@
                             file_size: file.size,
                             file_type: file.type,
                             storage_path: fileName,
-                            owner_id: currentUser.id,
+                            user_id: currentUser.id,
                             version_number: 1
                         }])
                         .select()
