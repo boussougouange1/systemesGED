@@ -91,6 +91,33 @@
         @media (max-width: 1023px) { .desktop-sidebar { display: none; } }
         @media (min-width: 1024px) { .mobile-menu-btn { display: none; } }
         
+        /* Logo Styles */
+        .logo-container {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .logo-glow {
+            position: absolute;
+            inset: -10px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, transparent 70%);
+            filter: blur(20px);
+            animation: pulse 3s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+        .logo-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            position: relative;
+            z-index: 10;
+            filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.3));
+        }
+        
         /* Login Styles */
         .login-container {
             min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -190,11 +217,10 @@
 
             <div class="login-card">
                 <div class="text-center mb-8">
-                    <div class="w-20 h-20 mx-auto mb-4 relative">
-                        <div class="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
-                        <div class="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-3xl font-bold text-white relative z-10 border-2 border-blue-400/30">
-                            GED
-                        </div>
+                    <!-- NOUVEAU LOGO -->
+                    <div class="w-24 h-24 mx-auto mb-4 relative logo-container">
+                        <div class="logo-glow"></div>
+                        <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img">
                     </div>
                     <h1 class="text-3xl font-bold mb-2">
                         <span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span>
@@ -253,8 +279,12 @@
         <!-- Mobile Sidebar -->
         <aside class="mobile-sidebar glass-panel border-r border-blue-500/20 flex flex-col" id="mobileSidebar">
             <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center font-bold text-white">GED</div>
+                <div class="flex items-center gap-3">
+                    <!-- NOUVEAU LOGO Mobile -->
+                    <div class="w-10 h-10 relative logo-container">
+                        <div class="logo-glow" style="inset: -5px; filter: blur(10px);"></div>
+                        <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img">
+                    </div>
                     <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
                 </div>
                 <button onclick="closeMobileSidebar()" class="p-2 text-blue-400 hover:text-white transition-colors"><i class="fas fa-times text-xl"></i></button>
@@ -318,7 +348,11 @@
                         <i class="fas fa-bars text-xl"></i>
                     </button>
                     <div class="hidden sm:flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/30">GED</div>
+                        <!-- NOUVEAU LOGO Header -->
+                        <div class="w-10 h-10 relative logo-container">
+                            <div class="logo-glow" style="inset: -5px; filter: blur(10px);"></div>
+                            <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img">
+                        </div>
                         <div>
                             <h1 class="text-xl font-bold tracking-tight">
                                 <span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span>
@@ -976,7 +1010,7 @@
                 files: "fichiers",
                 popular_tags: "Tags populaires",
                 documents_title: "Documents",
-                documents_subtitle: "Gestion et organisation",
+                documents_subtitle: "Management & organization",
                 import: "Importer",
                 filters: "Filtres",
                 all_types: "Tous types",
@@ -986,38 +1020,38 @@
                 this_month: "Ce mois",
                 shared_with_me: "Partagés avec moi",
                 no_shared_docs: "Aucun document partagé",
-                workflows_title: "Workflows de validation",
-                users_management: "Gestion des utilisateurs",
-                add_user: "Ajouter un utilisateur",
-                tags_management: "Gestion des tags",
-                settings_title: "Configuration",
-                general_settings: "Paramètres généraux",
+                workflows_title: "Validation Workflows",
+                users_management: "User Management",
+                add_user: "Add user",
+                tags_management: "Tags Management",
+                settings_title: "Settings",
+                general_settings: "General Settings",
                 notifications: "Notifications",
-                notif_desc: "Activer les notifications email",
-                ocr: "OCR Automatique",
-                ocr_desc: "Extraire le texte des PDF",
-                danger_zone: "Zone de danger",
-                delete_all: "Supprimer tous les documents",
-                upload_title: "Importer des documents",
-                drop_files: "Déposez vos fichiers ici",
-                or_browse: "ou cliquez pour parcourir",
+                notif_desc: "Enable email notifications",
+                ocr: "Automatic OCR",
+                ocr_desc: "Extract text from PDFs",
+                danger_zone: "Danger Zone",
+                delete_all: "Delete all documents",
+                upload_title: "Upload Documents",
+                drop_files: "Drop your files here",
+                or_browse: "or click to browse",
                 description: "Description",
-                uploading: "Téléchargement...",
-                upload_success: "Upload réussi !",
-                file_saved: "Votre document est sécurisé",
-                cancel: "Annuler",
-                upload: "Télécharger",
-                logout: "Déconnexion",
-                loading: "Chargement...",
+                uploading: "Uploading...",
+                upload_success: "Upload successful!",
+                file_saved: "Your document is secure",
+                cancel: "Cancel",
+                upload: "Upload",
+                logout: "Logout",
+                loading: "Loading...",
                 administration: "Administration",
                 tags: "Tags",
-                add: "Ajouter",
-                nav_home: "Accueil",
+                add: "Add",
+                nav_home: "Home",
                 nav_docs: "Docs",
-                nav_shared: "Partages",
-                nav_settings: "Param",
-                share: "Partager",
-                results_count: "documents trouvés"
+                nav_shared: "Shared",
+                nav_settings: "Sett.",
+                share: "Share",
+                results_count: "documents found"
             },
             en: {
                 subtitle: "Electronic Document Management",
@@ -1053,9 +1087,9 @@
                 files: "files",
                 popular_tags: "Popular tags",
                 documents_title: "Documents",
-                documents_subtitle: "Management & organization",
+                documents_subtitle: "Gestion et organisation",
                 import: "Import",
-                filters: "Filters",
+                filters: "Filtres",
                 all_types: "All types",
                 all_dates: "All dates",
                 today: "Today",
@@ -1063,38 +1097,38 @@
                 this_month: "This month",
                 shared_with_me: "Shared with me",
                 no_shared_docs: "No shared documents",
-                workflows_title: "Validation Workflows",
-                users_management: "User Management",
-                add_user: "Add user",
-                tags_management: "Tags Management",
-                settings_title: "Settings",
-                general_settings: "General Settings",
+                workflows_title: "Workflows de validation",
+                users_management: "Gestion des utilisateurs",
+                add_user: "Ajouter un utilisateur",
+                tags_management: "Gestion des tags",
+                settings_title: "Configuration",
+                general_settings: "Paramètres généraux",
                 notifications: "Notifications",
-                notif_desc: "Enable email notifications",
-                ocr: "Automatic OCR",
-                ocr_desc: "Extract text from PDFs",
-                danger_zone: "Danger Zone",
-                delete_all: "Delete all documents",
-                upload_title: "Upload Documents",
-                drop_files: "Drop your files here",
-                or_browse: "or click to browse",
+                notif_desc: "Activer les notifications email",
+                ocr: "OCR Automatique",
+                ocr_desc: "Extraire le texte des PDF",
+                danger_zone: "Zone de danger",
+                delete_all: "Supprimer tous les documents",
+                upload_title: "Importer des documents",
+                drop_files: "Déposez vos fichiers ici",
+                or_browse: "ou cliquez pour parcourir",
                 description: "Description",
-                uploading: "Uploading...",
-                upload_success: "Upload successful!",
-                file_saved: "Your document is secure",
-                cancel: "Cancel",
-                upload: "Upload",
-                logout: "Logout",
-                loading: "Loading...",
+                uploading: "Téléchargement...",
+                upload_success: "Upload réussi !",
+                file_saved: "Votre document est sécurisé",
+                cancel: "Annuler",
+                upload: "Télécharger",
+                logout: "Déconnexion",
+                loading: "Chargement...",
                 administration: "Administration",
                 tags: "Tags",
-                add: "Add",
-                nav_home: "Home",
+                add: "Ajouter",
+                nav_home: "Accueil",
                 nav_docs: "Docs",
-                nav_shared: "Shared",
-                nav_settings: "Sett.",
-                share: "Share",
-                results_count: "documents found"
+                nav_shared: "Partages",
+                nav_settings: "Param",
+                share: "Partager",
+                results_count: "documents trouvés"
             }
         };
 
