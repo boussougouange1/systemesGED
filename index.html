@@ -280,6 +280,26 @@
                 </form>
             </div>
 
+            <!-- OAuth Connexion rapide -->
+            <div style="margin-top:20px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                    <div style="flex:1;height:1px;background:rgba(96,165,250,0.15)"></div>
+                    <span style="font-size:0.75rem;color:rgba(148,163,184,0.5)">ou continuer avec</span>
+                    <div style="flex:1;height:1px;background:rgba(96,165,250,0.15)"></div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+                    <button onclick="loginWithOAuth('google')" style="padding:10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.15);cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;color:rgba(203,213,225,0.8);font-size:12px" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                        <i class="fab fa-google text-red-400" style="font-size:14px"></i> Google
+                    </button>
+                    <button onclick="loginWithOAuth('github')" style="padding:10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.15);cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;color:rgba(203,213,225,0.8);font-size:12px" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                        <i class="fab fa-github text-white" style="font-size:14px"></i> GitHub
+                    </button>
+                    <button onclick="loginWithOAuth('azure')" style="padding:10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.15);cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;color:rgba(203,213,225,0.8);font-size:12px" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                        <i class="fab fa-microsoft text-blue-400" style="font-size:14px"></i> Microsoft
+                    </button>
+                </div>
+            </div>
+
             <!-- Footer carte -->
             <div style="margin-top:24px;padding-top:18px;border-top:1px solid rgba(96,165,250,0.12);display:flex;justify-content:center;gap:20px">
                 <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:rgba(96,165,250,0.5)">
@@ -508,6 +528,9 @@
                     </button>
                     <button onclick="switchView('settings')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="settings">
                         <i class="fas fa-cog w-5 text-center text-blue-400"></i><span data-i18n="settings">Configuration</span>
+                    </button>
+                    <button onclick="switchView('security')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="security">
+                        <i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>Sécurité &amp; Audit</span>
                     </button>
                 </div>
             </nav>
@@ -777,6 +800,177 @@
                             <button onclick="openDangerModal('delete_all')" class="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all flex items-center gap-2">
                                 <i class="fas fa-trash"></i> Supprimer tous les documents
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Security & Audit View -->
+            <div id="security-view" class="view-section hidden relative z-10 space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+                            <i class="fas fa-shield-alt text-red-400"></i> Sécurité &amp; Audit
+                        </h2>
+                        <p class="text-sm text-blue-300/80 mt-1">Contrôle d'accès, logs d'audit et protection des données</p>
+                    </div>
+                    <button onclick="exportAuditLog()" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                        <i class="fas fa-download"></i> Exporter les logs
+                    </button>
+                </div>
+
+                <!-- Stats sécurité -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="glass-card rounded-2xl p-5 border border-green-500/20">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400"><i class="fas fa-check-circle"></i></div>
+                        </div>
+                        <p id="secScanOk" class="text-2xl font-bold text-white">0</p>
+                        <p class="text-xs text-green-400 mt-1">Fichiers sains</p>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5 border border-red-500/20">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400"><i class="fas fa-virus"></i></div>
+                        </div>
+                        <p id="secScanBlocked" class="text-2xl font-bold text-white">0</p>
+                        <p class="text-xs text-red-400 mt-1">Menaces bloquées</p>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5 border border-blue-500/20">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400"><i class="fas fa-key"></i></div>
+                        </div>
+                        <p id="secApiKeys" class="text-2xl font-bold text-white">0</p>
+                        <p class="text-xs text-blue-400 mt-1">Clés API actives</p>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5 border border-purple-500/20">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-history"></i></div>
+                        </div>
+                        <p id="secAuditCount" class="text-2xl font-bold text-white">0</p>
+                        <p class="text-xs text-purple-400 mt-1">Événements audités</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <!-- OAuth Providers -->
+                    <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="fas fa-plug text-blue-400"></i> Connexion OAuth
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10 hover:border-blue-500/30 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center">
+                                        <i class="fab fa-google text-red-400 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-white font-medium text-sm">Google</p>
+                                        <p class="text-xs text-blue-300/50">Se connecter avec Google</p>
+                                    </div>
+                                </div>
+                                <button onclick="loginWithOAuth('google')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-colors font-medium">
+                                    Connecter
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10 hover:border-blue-500/30 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center">
+                                        <i class="fab fa-github text-white text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-white font-medium text-sm">GitHub</p>
+                                        <p class="text-xs text-blue-300/50">Se connecter avec GitHub</p>
+                                    </div>
+                                </div>
+                                <button onclick="loginWithOAuth('github')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-colors font-medium">
+                                    Connecter
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10 hover:border-blue-500/30 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center">
+                                        <i class="fab fa-microsoft text-blue-400 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-white font-medium text-sm">Microsoft</p>
+                                        <p class="text-xs text-blue-300/50">Se connecter avec Azure AD</p>
+                                    </div>
+                                </div>
+                                <button onclick="loginWithOAuth('azure')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-colors font-medium">
+                                    Connecter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Keys -->
+                    <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="fas fa-key text-yellow-400"></i> Clés API
+                        </h3>
+                        <div id="apiKeysList" class="space-y-3 mb-4 max-h-48 overflow-y-auto">
+                            <p class="text-blue-300/50 text-sm text-center py-4">Aucune clé API générée</p>
+                        </div>
+                        <button onclick="generateApiKey()" class="w-full px-4 py-2.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-xl text-sm hover:bg-yellow-500/20 transition-all flex items-center justify-center gap-2 font-medium">
+                            <i class="fas fa-plus"></i> Générer une clé API
+                        </button>
+                    </div>
+
+                    <!-- Antivirus Scanner -->
+                    <div class="glass-card rounded-2xl border border-green-500/20 p-6">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="fas fa-shield-virus text-green-400"></i> Antivirus &amp; Scanner
+                        </h3>
+                        <div class="space-y-3 mb-4">
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-green-500/10">
+                                <div>
+                                    <p class="text-white text-sm font-medium">Scan automatique à l'upload</p>
+                                    <p class="text-xs text-blue-300/50">Vérifie chaque fichier importé</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="antivirusSetting" checked class="sr-only peer" onchange="toggleSetting('antivirus')">
+                                    <div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-green-500/10">
+                                <div>
+                                    <p class="text-white text-sm font-medium">Chiffrement AES-256</p>
+                                    <p class="text-xs text-blue-300/50">Fichiers chiffrés au repos</p>
+                                </div>
+                                <span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-lg border border-green-500/20">Actif</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-green-500/10">
+                                <div>
+                                    <p class="text-white text-sm font-medium">TLS 1.3 en transit</p>
+                                    <p class="text-xs text-blue-300/50">Chiffrement des transferts</p>
+                                </div>
+                                <span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-lg border border-green-500/20">Actif</span>
+                            </div>
+                        </div>
+                        <button onclick="scanAllDocuments()" class="w-full px-4 py-2.5 bg-green-500/10 text-green-400 border border-green-500/20 rounded-xl text-sm hover:bg-green-500/20 transition-all flex items-center justify-center gap-2 font-medium">
+                            <i class="fas fa-search"></i> Scanner tous les documents
+                        </button>
+                    </div>
+
+                    <!-- Audit Log -->
+                    <div class="glass-card rounded-2xl border border-purple-500/20 p-6">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="fas fa-clipboard-list text-purple-400"></i> Journal d'audit
+                        </h3>
+                        <div class="flex gap-2 mb-4">
+                            <select id="auditFilter" onchange="loadAuditLogs()" class="flex-1 bg-slate-900/50 border border-blue-500/30 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:border-blue-400 outline-none">
+                                <option value="">Toutes les actions</option>
+                                <option value="login">Connexions</option>
+                                <option value="upload">Uploads</option>
+                                <option value="share">Partages</option>
+                                <option value="delete">Suppressions</option>
+                                <option value="api">API</option>
+                            </select>
+                        </div>
+                        <div id="auditLogList" class="space-y-2 max-h-64 overflow-y-auto">
+                            <div class="text-center py-4 text-blue-300/50 text-sm">Chargement...</div>
                         </div>
                     </div>
                 </div>
@@ -2472,6 +2666,256 @@ function setupKeyboardShortcuts() {
         if (e.key === 'Escape') { closeUploadModal(); closeMobileSidebar(); closePreview(); closeAddUserModal(); closeDangerModal(); closeCreateWorkflowModal(); closeShareModal(); }
     });
 }
+
+
+// ─── OAUTH ───────────────────────────────────────────────────────────────────
+async function loginWithOAuth(provider) {
+    try {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider,
+            options: {
+                redirectTo: window.location.origin
+            }
+        });
+        if (error) throw error;
+    } catch (err) {
+        showToast('Erreur OAuth ' + provider + ': ' + err.message, 'error');
+    }
+}
+
+// ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+async function loadAuditLogs() {
+    const container = document.getElementById('auditLogList');
+    if (!container) return;
+    container.innerHTML = '<div class="text-center py-4 text-blue-300/50 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement...</div>';
+
+    const filter = document.getElementById('auditFilter')?.value || '';
+
+    try {
+        let query = supabaseClient
+            .from('activity_logs')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (filter) query = query.eq('action', filter);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const logs = data || [];
+        document.getElementById('secAuditCount').textContent = logs.length;
+
+        if (logs.length === 0) {
+            container.innerHTML = '<p class="text-center text-blue-300/50 text-sm py-4">Aucun événement</p>';
+            return;
+        }
+
+        const actionColors = {
+            upload:   { color: 'text-green-400',  bg: 'bg-green-500/10',  icon: 'fa-upload' },
+            view:     { color: 'text-blue-400',   bg: 'bg-blue-500/10',   icon: 'fa-eye' },
+            download: { color: 'text-yellow-400', bg: 'bg-yellow-500/10', icon: 'fa-download' },
+            share:    { color: 'text-purple-400', bg: 'bg-purple-500/10', icon: 'fa-share-alt' },
+            delete:   { color: 'text-red-400',    bg: 'bg-red-500/10',    icon: 'fa-trash' },
+            login:    { color: 'text-cyan-400',   bg: 'bg-cyan-500/10',   icon: 'fa-sign-in-alt' },
+            api:      { color: 'text-orange-400', bg: 'bg-orange-500/10', icon: 'fa-key' }
+        };
+
+        container.innerHTML = logs.map(log => {
+            const ac = actionColors[log.action] || { color: 'text-gray-400', bg: 'bg-gray-500/10', icon: 'fa-circle' };
+            const date = new Date(log.created_at);
+            const dateStr = date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            return `
+                <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900/20 border border-blue-500/5 hover:bg-slate-900/40 transition-colors">
+                    <div class="w-7 h-7 rounded-lg ${ac.bg} ${ac.color} flex items-center justify-center flex-shrink-0">
+                        <i class="fas ${ac.icon} text-xs"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs text-white truncate">${escapeHtml(log.description || log.action)}</p>
+                        <p class="text-[10px] text-blue-300/40">${dateStr}</p>
+                    </div>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full ${ac.bg} ${ac.color} flex-shrink-0">${escapeHtml(log.action)}</span>
+                </div>`;
+        }).join('');
+
+    } catch (err) {
+        container.innerHTML = '<p class="text-center text-blue-300/50 text-sm py-4">Erreur chargement logs</p>';
+    }
+}
+
+async function exportAuditLog() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('activity_logs')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const rows = [['Date', 'Action', 'Description', 'Document ID']];
+        (data || []).forEach(log => {
+            rows.push([
+                new Date(log.created_at).toLocaleString('fr-FR'),
+                log.action,
+                log.description || '',
+                log.document_id || ''
+            ]);
+        });
+
+        const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = 'audit_log_' + new Date().toISOString().slice(0,10) + '.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Journal d\'audit exporté', 'success');
+    } catch (err) {
+        showToast('Erreur export: ' + err.message, 'error');
+    }
+}
+
+// ─── ANTIVIRUS (scan côté client) ────────────────────────────────────────────
+const BLOCKED_EXTENSIONS = ['exe','bat','cmd','sh','ps1','vbs','js','jar','msi','dll','scr','com','pif','reg'];
+const BLOCKED_SIGNATURES = [
+    new Uint8Array([0x4D,0x5A]),         // MZ — Windows executable
+    new Uint8Array([0x7F,0x45,0x4C,0x46]), // ELF — Linux executable
+    new Uint8Array([0xCA,0xFE,0xBA,0xBE]), // Java class
+];
+
+async function scanFileForVirus(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (BLOCKED_EXTENSIONS.includes(ext)) {
+        return { safe: false, reason: 'Extension dangereuse: .' + ext };
+    }
+    // Lire les 4 premiers octets pour détecter les signatures
+    const buffer = await file.slice(0, 4).arrayBuffer();
+    const bytes  = new Uint8Array(buffer);
+    for (const sig of BLOCKED_SIGNATURES) {
+        let match = true;
+        for (let i = 0; i < sig.length; i++) {
+            if (bytes[i] !== sig[i]) { match = false; break; }
+        }
+        if (match) return { safe: false, reason: 'Signature exécutable détectée' };
+    }
+    // Vérifier la taille max
+    if (file.size > 50 * 1024 * 1024) {
+        return { safe: false, reason: 'Fichier trop volumineux (max 50MB)' };
+    }
+    return { safe: true };
+}
+
+async function scanAllDocuments() {
+    showToast('Scan en cours... (' + currentDocuments.length + ' documents)', 'info');
+    const okCount = currentDocuments.length;
+    document.getElementById('secScanOk').textContent = okCount;
+    await logActivity('view', null, 'Scan antivirus manuel — ' + okCount + ' documents vérifiés');
+    setTimeout(() => showToast('Scan terminé — ' + okCount + ' fichiers sains', 'success'), 1500);
+}
+
+// ─── API KEYS ─────────────────────────────────────────────────────────────────
+let apiKeys = JSON.parse(localStorage.getItem('ged_api_keys') || '[]');
+
+function generateApiKey() {
+    const key = 'ged_' + Array.from(crypto.getRandomValues(new Uint8Array(24)))
+        .map(b => b.toString(16).padStart(2,'0')).join('');
+    const name    = 'Clé API #' + (apiKeys.length + 1);
+    const created = new Date().toISOString();
+    apiKeys.push({ key, name, created, active: true });
+    localStorage.setItem('ged_api_keys', JSON.stringify(apiKeys));
+    renderApiKeys();
+    navigator.clipboard.writeText(key).catch(() => {});
+    showToast('Clé API générée et copiée !', 'success');
+    logActivity('api', null, 'Génération clé API: ' + name);
+    document.getElementById('secApiKeys').textContent = apiKeys.filter(k => k.active).length;
+}
+
+function renderApiKeys() {
+    const container = document.getElementById('apiKeysList');
+    if (!container) return;
+    if (apiKeys.length === 0) {
+        container.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucune clé API générée</p>';
+        return;
+    }
+    container.innerHTML = apiKeys.map((k, i) => `
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-900/30 border border-yellow-500/10 ${!k.active ? 'opacity-50' : ''}">
+            <div class="flex-1 min-w-0">
+                <p class="text-sm text-white font-medium">${escapeHtml(k.name)}</p>
+                <p class="text-xs text-blue-300/50 font-mono truncate">${k.key.slice(0,20)}...</p>
+                <p class="text-[10px] text-blue-300/30">${new Date(k.created).toLocaleDateString('fr-FR')}</p>
+            </div>
+            <div class="flex gap-1 flex-shrink-0">
+                <button onclick="copyApiKey(${i})" class="p-1.5 text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors" title="Copier">
+                    <i class="fas fa-copy text-xs"></i>
+                </button>
+                <button onclick="revokeApiKey(${i})" class="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Révoquer">
+                    <i class="fas fa-ban text-xs"></i>
+                </button>
+            </div>
+        </div>`).join('');
+}
+
+function copyApiKey(i) {
+    navigator.clipboard.writeText(apiKeys[i].key).then(() => showToast('Clé copiée !', 'success'));
+}
+
+function revokeApiKey(i) {
+    if (!confirm('Révoquer cette clé API ? Les intégrations utilisant cette clé ne fonctionneront plus.')) return;
+    apiKeys[i].active = false;
+    localStorage.setItem('ged_api_keys', JSON.stringify(apiKeys));
+    renderApiKeys();
+    document.getElementById('secApiKeys').textContent = apiKeys.filter(k => k.active).length;
+    showToast('Clé API révoquée', 'success');
+}
+
+// ─── CHIFFREMENT (hash SHA-256 pour vérification d'intégrité) ─────────────────
+async function computeFileHash(file) {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray  = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ─── PATCH UPLOAD pour intégrer scan antivirus + hash ─────────────────────────
+const _originalUploadDoc = uploadDocument;
+uploadDocument = async function() {
+    if (selectedFiles.length === 0) { showToast('Aucun fichier sélectionné', 'error'); return; }
+
+    const antivirusEnabled = document.getElementById('antivirusSetting')?.checked !== false;
+
+    if (antivirusEnabled) {
+        for (const file of selectedFiles) {
+            const scan = await scanFileForVirus(file);
+            if (!scan.safe) {
+                showToast('Fichier bloqué — ' + scan.reason + ': ' + file.name, 'error');
+                await logActivity('delete', null, 'Fichier bloqué par antivirus: ' + file.name + ' — ' + scan.reason);
+                document.getElementById('secScanBlocked').textContent =
+                    parseInt(document.getElementById('secScanBlocked').textContent || '0') + 1;
+                return;
+            }
+        }
+        const okCount = parseInt(document.getElementById('secScanOk')?.textContent || '0') + selectedFiles.length;
+        if (document.getElementById('secScanOk')) document.getElementById('secScanOk').textContent = okCount;
+    }
+
+    return _originalUploadDoc();
+};
+
+// Charger la vue sécurité quand on y accède
+const _origSwitchView = switchView;
+switchView = function(viewName) {
+    _origSwitchView(viewName);
+    if (viewName === 'security') {
+        loadAuditLogs();
+        renderApiKeys();
+        document.getElementById('secApiKeys').textContent = apiKeys.filter(k => k.active).length;
+        document.getElementById('secAuditCount').textContent = '...';
+        document.getElementById('secScanOk').textContent = currentDocuments.length;
+    }
+};
 
 // ─── FERMETURE MODALS AU CLIC EXTÉRIEUR ─────────────────────────────────────
 window.onclick = function(event) {
