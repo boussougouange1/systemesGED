@@ -414,7 +414,22 @@
             <button onclick="switchView('shared'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="shared">
                 <i class="fas fa-share-alt w-5 text-center text-blue-400"></i><span data-i18n="shared">Partagés</span>
             </button>
-            <div class="pt-4 mt-4 border-t border-blue-500/20">
+            <div class="pt-3 mt-3 border-t border-blue-500/20">
+                <p class="px-4 text-xs font-bold text-cyan-400/70 uppercase tracking-wider mb-2">Fonctionnalités</p>
+                <button onclick="switchView('search'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="search">
+                    <i class="fas fa-search w-5 text-center text-cyan-400"></i><span>Recherche avancée</span>
+                </button>
+                <button onclick="switchView('versioning'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="versioning">
+                    <i class="fas fa-code-branch w-5 text-center text-cyan-400"></i><span>Versioning</span>
+                </button>
+                <button onclick="switchView('logs'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="logs">
+                    <i class="fas fa-terminal w-5 text-center text-cyan-400"></i><span>Logs système</span>
+                </button>
+                <button onclick="switchView('rbac'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="rbac">
+                    <i class="fas fa-user-shield w-5 text-center text-cyan-400"></i><span>RBAC / Rôles</span>
+                </button>
+            </div>
+            <div class="pt-3 mt-3 border-t border-blue-500/20">
                 <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Administration</p>
                 <button onclick="switchView('users'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="users">
                     <i class="fas fa-users w-5 text-center text-blue-400"></i><span data-i18n="users">Utilisateurs</span>
@@ -467,10 +482,45 @@
                 </div>
             </div>
             <div class="flex items-center gap-3">
-                <button onclick="toggleNotifications()" class="relative p-2 text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 rounded-lg transition-all">
-                    <i class="fas fa-bell text-lg"></i>
-                    <span id="notifBadge" class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse hidden"></span>
-                </button>
+                <div class="relative" id="notifWrap">
+                    <button onclick="toggleNotifications()" class="relative p-2 text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 rounded-lg transition-all">
+                        <i class="fas fa-bell text-lg"></i>
+                        <span id="notifBadge" class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    </button>
+                    <!-- Notification panel -->
+                    <div id="notifPanel" class="hidden absolute right-0 mt-2 w-80 z-50" style="top:100%">
+                        <div class="glass-card rounded-2xl border border-blue-500/30 shadow-2xl overflow-hidden" style="background:rgba(10,18,50,0.97)">
+                            <div class="flex items-center justify-between px-4 py-3 border-b border-blue-500/20">
+                                <span class="text-white font-bold text-sm flex items-center gap-2"><i class="fas fa-bell text-blue-400"></i> Notifications <span class="ml-1 px-1.5 py-0.5 bg-red-500/80 text-white text-[10px] rounded-full">3</span></span>
+                                <button onclick="markAllNotifRead()" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Tout lire</button>
+                            </div>
+                            <div class="divide-y divide-blue-500/10 max-h-72 overflow-y-auto">
+                                <div class="px-4 py-3 hover:bg-blue-500/5 cursor-pointer flex gap-3 items-start transition-all">
+                                    <div class="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 flex-shrink-0 mt-0.5"><i class="fas fa-upload text-xs"></i></div>
+                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Upload réussi</p><p class="text-xs text-blue-300/60">Contrat_2026.pdf — scan OK ✓</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 5 min</p></div>
+                                    <span class="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0 mt-2"></span>
+                                </div>
+                                <div class="px-4 py-3 hover:bg-blue-500/5 cursor-pointer flex gap-3 items-start transition-all">
+                                    <div class="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 flex-shrink-0 mt-0.5"><i class="fas fa-share-alt text-xs"></i></div>
+                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Document partagé</p><p class="text-xs text-blue-300/60">Rapport_Q1.xlsx partagé avec vous</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 30 min</p></div>
+                                    <span class="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0 mt-2"></span>
+                                </div>
+                                <div class="px-4 py-3 hover:bg-yellow-500/5 cursor-pointer flex gap-3 items-start transition-all bg-yellow-500/3">
+                                    <div class="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center text-yellow-400 flex-shrink-0 mt-0.5"><i class="fas fa-shield-alt text-xs"></i></div>
+                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Alerte sécurité</p><p class="text-xs text-blue-300/60">Tentative d'accès bloquée — IP: 45.12.88.3</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 1h</p></div>
+                                    <span class="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0 mt-2"></span>
+                                </div>
+                                <div class="px-4 py-3 hover:bg-blue-500/5 cursor-pointer flex gap-3 items-start transition-all">
+                                    <div class="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 flex-shrink-0 mt-0.5"><i class="fas fa-project-diagram text-xs"></i></div>
+                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Workflow approuvé</p><p class="text-xs text-blue-300/60">Validation contrat_prestation terminée</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 2h</p></div>
+                                </div>
+                            </div>
+                            <div class="px-4 py-3 border-t border-blue-500/20 text-center">
+                                <button onclick="switchView('security');closeNotifPanel()" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Voir l'audit complet →</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="flex items-center gap-3 pl-3 border-l border-blue-500/30">
                     <div class="text-right hidden lg:block">
                         <p class="text-sm font-semibold text-white" id="userNameDisplay">Admin</p>
@@ -518,7 +568,22 @@
                     <i class="fas fa-project-diagram w-5 text-center text-blue-400"></i><span data-i18n="workflows">Workflows</span>
                     <span id="workflowCount" class="ml-auto bg-orange-500/20 text-orange-300 text-xs px-2 py-1 rounded-full">0</span>
                 </button>
-                <div class="pt-4 mt-4 border-t border-blue-500/20">
+                <div class="pt-3 mt-3 border-t border-blue-500/20">
+                    <p class="px-4 text-xs font-bold text-cyan-400/70 uppercase tracking-wider mb-2">Fonctionnalités</p>
+                    <button onclick="switchView('search')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="search">
+                        <i class="fas fa-search w-5 text-center text-cyan-400"></i><span>Recherche avancée</span>
+                    </button>
+                    <button onclick="switchView('versioning')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="versioning">
+                        <i class="fas fa-code-branch w-5 text-center text-cyan-400"></i><span>Versioning</span>
+                    </button>
+                    <button onclick="switchView('logs')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="logs">
+                        <i class="fas fa-terminal w-5 text-center text-cyan-400"></i><span>Logs système</span>
+                    </button>
+                    <button onclick="switchView('rbac')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="rbac">
+                        <i class="fas fa-user-shield w-5 text-center text-cyan-400"></i><span>RBAC / Rôles</span>
+                    </button>
+                </div>
+                <div class="pt-3 mt-3 border-t border-blue-500/20">
                     <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Administration</p>
                     <button onclick="switchView('users')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="users">
                         <i class="fas fa-users w-5 text-center text-blue-400"></i><span data-i18n="users">Utilisateurs</span>
@@ -972,6 +1037,274 @@
                         <div id="auditLogList" class="space-y-2 max-h-64 overflow-y-auto">
                             <div class="text-center py-4 text-blue-300/50 text-sm">Chargement...</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- ╔══════════════════════════════════════════╗ -->
+            <!-- ║  RECHERCHE AVANCÉE                       ║ -->
+            <!-- ╚══════════════════════════════════════════╝ -->
+            <div id="search-view" class="view-section hidden relative z-10 space-y-6">
+                <div>
+                    <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                        <i class="fas fa-search text-cyan-400"></i> Recherche avancée
+                    </h2>
+                    <p class="text-sm text-blue-300/80">Recherche plein texte sur noms, tags, descriptions et métadonnées</p>
+                </div>
+                <div class="glass-card rounded-2xl border border-cyan-500/25 p-5 space-y-4">
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400 text-lg"></i>
+                        <input type="text" id="advSearchInput" oninput="runAdvSearch()"
+                               placeholder="Nom de fichier, tag, description, auteur…"
+                               class="w-full pl-12 pr-4 py-4 bg-slate-900/60 border border-cyan-500/30 rounded-xl text-white text-base focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/15 outline-none transition-all placeholder-gray-500">
+                    </div>
+                    <div class="flex flex-wrap gap-3 items-center">
+                        <select id="advSearchType" onchange="runAdvSearch()" class="bg-slate-900/50 border border-cyan-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none cursor-pointer focus:border-cyan-400">
+                            <option value="">Tous types</option>
+                            <option value="pdf">PDF</option><option value="doc">Word</option>
+                            <option value="xls">Excel</option><option value="img">Images</option>
+                        </select>
+                        <select id="advSearchDate" onchange="runAdvSearch()" class="bg-slate-900/50 border border-cyan-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none cursor-pointer focus:border-cyan-400">
+                            <option value="">Toutes dates</option>
+                            <option value="today">Aujourd'hui</option>
+                            <option value="week">Cette semaine</option>
+                            <option value="month">Ce mois</option>
+                        </select>
+                        <button onclick="clearAdvSearch()" class="px-4 py-2 text-xs text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 transition-all flex items-center gap-1">
+                            <i class="fas fa-times"></i> Réinitialiser
+                        </button>
+                        <span id="advSearchCount" class="ml-auto text-sm text-blue-300/50 self-center"></span>
+                    </div>
+                </div>
+                <div id="advSearchResults">
+                    <div class="text-center py-20 text-blue-300/30">
+                        <i class="fas fa-search text-6xl mb-5 block opacity-10"></i>
+                        <p class="text-lg font-medium text-blue-300/50">Tapez pour rechercher</p>
+                        <p class="text-sm mt-2 text-blue-300/30">Résultats en temps réel sur tous vos documents</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ╔══════════════════════════════════════════╗ -->
+            <!-- ║  VERSIONING                              ║ -->
+            <!-- ╚══════════════════════════════════════════╝ -->
+            <div id="versioning-view" class="view-section hidden relative z-10 space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                            <i class="fas fa-code-branch text-cyan-400"></i> Versioning des documents
+                        </h2>
+                        <p class="text-sm text-blue-300/80">Historique complet — restaurez n'importe quelle version</p>
+                    </div>
+                </div>
+                <div class="glass-card rounded-xl border border-cyan-500/20 p-3 flex items-center gap-3">
+                    <i class="fas fa-search text-cyan-400 text-sm"></i>
+                    <input type="text" id="versionSearch" oninput="filterVersionDocs(this.value)" placeholder="Rechercher un document..."
+                           class="flex-1 bg-transparent text-white outline-none placeholder-gray-500 text-sm">
+                </div>
+                <div id="versionDocList" class="space-y-3">
+                    <!-- Card 1 -->
+                    <div class="glass-card rounded-2xl border border-cyan-500/20 overflow-hidden version-doc-item">
+                        <div class="flex items-center justify-between p-4 cursor-pointer hover:bg-cyan-500/5 transition-all group" onclick="toggleVersions('vd1')">
+                            <div class="flex items-center gap-4">
+                                <div class="w-11 h-11 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400 border border-red-400/25"><i class="fas fa-file-pdf text-lg"></i></div>
+                                <div>
+                                    <p class="text-white font-semibold text-sm">Contrat_Prestation_2026.pdf</p>
+                                    <p class="text-xs text-blue-300/50">3 versions · 15 mars 2026 · 2.4 MB</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-2.5 py-1 bg-green-500/20 text-green-400 border border-green-400/20 rounded-full text-xs font-bold">v3 active</span>
+                                <i class="fas fa-chevron-down text-blue-400 transition-transform duration-300" id="chev-vd1"></i>
+                            </div>
+                        </div>
+                        <div id="hist-vd1" class="hidden border-t border-cyan-500/10 divide-y divide-cyan-500/10">
+                            <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center text-xs font-bold border border-green-400/20">v3</span><div><p class="text-sm text-white">Version active</p><p class="text-xs text-blue-300/50">15 mars 2026 · admin · clause 12 ajoutée</p></div></div>
+                                <button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button>
+                            </div>
+                            <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v2</span><div><p class="text-sm text-gray-300">Révision sections 3 &amp; 5</p><p class="text-xs text-blue-300/50">10 mars 2026 · user@org.com</p></div></div>
+                                <div class="flex gap-2"><button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button><button onclick="restoreVersion('Contrat_Prestation_2026.pdf','v2')" class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs hover:bg-orange-500/30 transition-all"><i class="fas fa-undo mr-1"></i>Restaurer</button></div>
+                            </div>
+                            <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v1</span><div><p class="text-sm text-gray-300">Version initiale</p><p class="text-xs text-blue-300/50">1 mars 2026 · admin@org.com</p></div></div>
+                                <div class="flex gap-2"><button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button><button onclick="restoreVersion('Contrat_Prestation_2026.pdf','v1')" class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs hover:bg-orange-500/30 transition-all"><i class="fas fa-undo mr-1"></i>Restaurer</button></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Card 2 -->
+                    <div class="glass-card rounded-2xl border border-cyan-500/20 overflow-hidden version-doc-item">
+                        <div class="flex items-center justify-between p-4 cursor-pointer hover:bg-cyan-500/5 transition-all group" onclick="toggleVersions('vd2')">
+                            <div class="flex items-center gap-4">
+                                <div class="w-11 h-11 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 border border-green-400/25"><i class="fas fa-file-excel text-lg"></i></div>
+                                <div><p class="text-white font-semibold text-sm">Rapport_Q1_2026.xlsx</p><p class="text-xs text-blue-300/50">2 versions · 12 mars 2026 · 560 KB</p></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-2.5 py-1 bg-green-500/20 text-green-400 border border-green-400/20 rounded-full text-xs font-bold">v2 active</span>
+                                <i class="fas fa-chevron-down text-blue-400 transition-transform duration-300" id="chev-vd2"></i>
+                            </div>
+                        </div>
+                        <div id="hist-vd2" class="hidden border-t border-cyan-500/10 divide-y divide-cyan-500/10">
+                            <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center text-xs font-bold border border-green-400/20">v2</span><div><p class="text-sm text-white">Version active</p><p class="text-xs text-blue-300/50">12 mars 2026 · finance@org.com</p></div></div>
+                                <button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button>
+                            </div>
+                            <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v1</span><div><p class="text-sm text-gray-300">Données préliminaires</p><p class="text-xs text-blue-300/50">5 mars 2026 · admin@org.com</p></div></div>
+                                <div class="flex gap-2"><button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button><button onclick="restoreVersion('Rapport_Q1_2026.xlsx','v1')" class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs hover:bg-orange-500/30 transition-all"><i class="fas fa-undo mr-1"></i>Restaurer</button></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="noVersionMsg" class="hidden text-center py-14 text-blue-300/40">
+                        <i class="fas fa-code-branch text-5xl mb-4 block opacity-20"></i><p>Aucun document trouvé</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ╔══════════════════════════════════════════╗ -->
+            <!-- ║  LOGS SYSTÈME                            ║ -->
+            <!-- ╚══════════════════════════════════════════╝ -->
+            <div id="logs-view" class="view-section hidden relative z-10 space-y-5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                            <i class="fas fa-terminal text-cyan-400"></i> Logs système
+                        </h2>
+                        <p class="text-sm text-blue-300/80">Journal technique en temps réel</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="clearSysLogs()" class="px-4 py-2 glass-card border border-red-500/30 text-red-400 rounded-xl text-sm hover:bg-red-500/10 transition-all flex items-center gap-2"><i class="fas fa-trash-alt"></i> Vider</button>
+                        <button onclick="addSysLog()" class="btn-primary px-4 py-2 rounded-xl text-sm flex items-center gap-2"><i class="fas fa-sync-alt"></i> Actualiser</button>
+                    </div>
+                </div>
+                <!-- Filtres -->
+                <div class="flex flex-wrap gap-2" id="logFilterBtns">
+                    <button onclick="filterSysLogs(this,'all')"     class="syslog-filter active-log px-3 py-1.5 rounded-lg text-xs font-bold border bg-blue-500/20 text-blue-300 border-blue-500/30 transition-all">TOUS</button>
+                    <button onclick="filterSysLogs(this,'info')"    class="syslog-filter px-3 py-1.5 rounded-lg text-xs font-bold border bg-slate-700/50 text-gray-400 border-slate-600/30 hover:bg-blue-500/20 hover:text-blue-300 transition-all">INFO</button>
+                    <button onclick="filterSysLogs(this,'warn')"    class="syslog-filter px-3 py-1.5 rounded-lg text-xs font-bold border bg-slate-700/50 text-gray-400 border-slate-600/30 hover:bg-yellow-500/20 hover:text-yellow-300 transition-all">WARN</button>
+                    <button onclick="filterSysLogs(this,'error')"   class="syslog-filter px-3 py-1.5 rounded-lg text-xs font-bold border bg-slate-700/50 text-gray-400 border-slate-600/30 hover:bg-red-500/20 hover:text-red-300 transition-all">ERROR</button>
+                    <button onclick="filterSysLogs(this,'debug')"   class="syslog-filter px-3 py-1.5 rounded-lg text-xs font-bold border bg-slate-700/50 text-gray-400 border-slate-600/30 hover:bg-purple-500/20 hover:text-purple-300 transition-all">DEBUG</button>
+                    <button onclick="filterSysLogs(this,'security')" class="syslog-filter px-3 py-1.5 rounded-lg text-xs font-bold border bg-slate-700/50 text-gray-400 border-slate-600/30 hover:bg-orange-500/20 hover:text-orange-300 transition-all">SÉCU</button>
+                </div>
+                <!-- Console -->
+                <div id="sysLogConsole" class="glass-card rounded-2xl border border-cyan-500/15 p-4 font-mono text-xs space-y-1 max-h-[58vh] overflow-y-auto" style="background:rgba(2,5,18,0.9)">
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:35:00</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-green-300">Application démarrée — SystemesGED v3.0 ✓</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:55</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Supabase connecté — latence: 38ms</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:10</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Upload: Contrat_2026.pdf (2.4 MB) → storage OK</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:09</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Chiffrement AES-256 appliqué: Contrat_2026.pdf</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:08</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Antivirus scan: Contrat_2026.pdf — Sain ✓</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="warn"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:28:45</span><span class="text-yellow-400 w-14 flex-shrink-0 font-bold">[WARN]</span><span class="text-yellow-200">IP non reconnue: 45.12.88.3 — tentative connexion</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="security"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:55:12</span><span class="text-orange-400 w-14 flex-shrink-0 font-bold">[SÉCU]</span><span class="text-orange-200">RBAC: accès refusé guest@org.com → Confidentiel.pdf</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="error"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:40:00</span><span class="text-red-400 w-14 flex-shrink-0 font-bold">[ERROR]</span><span class="text-red-200">Storage timeout — retry #1 déclenché</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:40:03</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Storage reconnecté après retry — OK</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="debug"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:30:00</span><span class="text-purple-400 w-14 flex-shrink-0 font-bold">[DEBUG]</span><span class="text-purple-200">Index recherche mis à jour — 47 documents indexés</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="debug"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 12:05:00</span><span class="text-purple-400 w-14 flex-shrink-0 font-bold">[DEBUG]</span><span class="text-purple-200">Rotation clés chiffrement dans 87 jours</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 12:00:00</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Sauvegarde automatique — 47 documents archivés</span></div>
+                </div>
+            </div>
+
+            <!-- ╔══════════════════════════════════════════╗ -->
+            <!-- ║  RBAC                                    ║ -->
+            <!-- ╚══════════════════════════════════════════╝ -->
+            <div id="rbac-view" class="view-section hidden relative z-10 space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                            <i class="fas fa-user-shield text-cyan-400"></i> Contrôle d'accès (RBAC)
+                        </h2>
+                        <p class="text-sm text-blue-300/80">Gérez les rôles et les permissions par ressource</p>
+                    </div>
+                    <button onclick="showToast('Créer un rôle personnalisé — bientôt disponible','info')" class="btn-primary px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Nouveau rôle
+                    </button>
+                </div>
+                <!-- Rôles cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Admin -->
+                    <div class="glass-card rounded-2xl border border-red-500/25 p-5 space-y-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400 border border-red-400/25"><i class="fas fa-crown text-xl"></i></div>
+                            <div><h3 class="text-white font-bold">Administrateur</h3><p class="text-xs text-blue-300/50">Accès total</p></div>
+                        </div>
+                        <div class="space-y-1.5 text-xs">
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Lecture tous documents</div>
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Écriture / Modification</div>
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Suppression</div>
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Gestion utilisateurs</div>
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Logs &amp; Audit</div>
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Clés API &amp; OAuth</div>
+                        </div>
+                        <div class="pt-2 border-t border-red-500/10 flex items-center justify-between">
+                            <span class="px-2.5 py-1 bg-red-500/15 text-red-400 text-xs rounded-full border border-red-400/20 font-bold">1 utilisateur</span>
+                            <button onclick="showToast('Modifier le rôle Admin','info')" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Modifier →</button>
+                        </div>
+                    </div>
+                    <!-- Éditeur -->
+                    <div class="glass-card rounded-2xl border border-blue-500/25 p-5 space-y-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 border border-blue-400/25"><i class="fas fa-user-tie text-xl"></i></div>
+                            <div><h3 class="text-white font-bold">Éditeur</h3><p class="text-xs text-blue-300/50">Lecture + Écriture</p></div>
+                        </div>
+                        <div class="space-y-1.5 text-xs">
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Lecture tous documents</div>
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Écriture / Modification</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Suppression</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Gestion utilisateurs</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Logs &amp; Audit</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Clés API &amp; OAuth</div>
+                        </div>
+                        <div class="pt-2 border-t border-blue-500/10 flex items-center justify-between">
+                            <span class="px-2.5 py-1 bg-blue-500/15 text-blue-400 text-xs rounded-full border border-blue-400/20 font-bold">3 utilisateurs</span>
+                            <button onclick="showToast('Modifier le rôle Éditeur','info')" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Modifier →</button>
+                        </div>
+                    </div>
+                    <!-- Lecteur -->
+                    <div class="glass-card rounded-2xl border border-gray-500/20 p-5 space-y-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-gray-500/20 rounded-xl flex items-center justify-center text-gray-400 border border-gray-400/20"><i class="fas fa-eye text-xl"></i></div>
+                            <div><h3 class="text-white font-bold">Lecteur</h3><p class="text-xs text-blue-300/50">Lecture seule</p></div>
+                        </div>
+                        <div class="space-y-1.5 text-xs">
+                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Lecture docs partagés</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Écriture / Modification</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Suppression</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Gestion utilisateurs</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Logs &amp; Audit</div>
+                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Clés API &amp; OAuth</div>
+                        </div>
+                        <div class="pt-2 border-t border-gray-500/10 flex items-center justify-between">
+                            <span class="px-2.5 py-1 bg-gray-500/15 text-gray-400 text-xs rounded-full border border-gray-400/20 font-bold">5 utilisateurs</span>
+                            <button onclick="showToast('Modifier le rôle Lecteur','info')" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Modifier →</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Matrice permissions -->
+                <div class="glass-card rounded-2xl border border-cyan-500/15 overflow-hidden">
+                    <div class="px-5 py-4 border-b border-cyan-500/15">
+                        <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-table text-cyan-400"></i> Matrice des permissions</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-900/50">
+                                <tr>
+                                    <th class="p-3 text-left text-blue-300 font-semibold">Permission</th>
+                                    <th class="p-3 text-center text-red-400 font-semibold">Admin</th>
+                                    <th class="p-3 text-center text-blue-400 font-semibold">Éditeur</th>
+                                    <th class="p-3 text-center text-gray-400 font-semibold">Lecteur</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-blue-500/10">
+                                <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Lire les documents</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td></tr>
+                                <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Uploader des fichiers</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td></tr>
+                                <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Supprimer des fichiers</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td></tr>
+                                <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Gérer les utilisateurs</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td></tr>
+                                <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Voir les logs &amp; audit</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td></tr>
+                                <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Créer des workflows</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td></tr>
+                                <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Gérer les clés API</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -2628,8 +2961,158 @@ function toggleViewMode() {
 }
 
 function toggleNotifications() {
-    showToast('Aucune notification en attente', 'info');
+    const p = document.getElementById('notifPanel');
+    if (p) p.classList.toggle('hidden');
 }
+function closeNotifPanel() { document.getElementById('notifPanel')?.classList.add('hidden'); }
+function markAllNotifRead() {
+    document.querySelectorAll('#notifPanel .w-2.h-2').forEach(el => el.remove());
+    document.getElementById('notifPanel')?.classList.add('hidden');
+    showToast('Toutes les notifications lues', 'success');
+}
+// Fermer notif au clic extérieur
+document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('notifWrap');
+    const panel = document.getElementById('notifPanel');
+    if (panel && !panel.classList.contains('hidden') && wrap && !wrap.contains(e.target)) {
+        panel.classList.add('hidden');
+    }
+});
+
+// ─── RECHERCHE AVANCÉE ────────────────────────────────────────────────────────
+function runAdvSearch() {
+    const term = (document.getElementById('advSearchInput')?.value || '').toLowerCase().trim();
+    const type = document.getElementById('advSearchType')?.value || '';
+    const date = document.getElementById('advSearchDate')?.value || '';
+    const box  = document.getElementById('advSearchResults');
+    const cnt  = document.getElementById('advSearchCount');
+    if (!box) return;
+    if (!term && !type && !date) {
+        box.innerHTML = '<div class="text-center py-20 text-blue-300/30"><i class="fas fa-search text-6xl mb-5 block opacity-10"></i><p class="text-lg font-medium text-blue-300/50">Tapez pour rechercher</p></div>';
+        if (cnt) cnt.textContent = '';
+        return;
+    }
+    let res = [...currentDocuments];
+    if (term) res = res.filter(d => {
+        const n = (d.original_name || '').toLowerCase();
+        const desc = (d.description || '').toLowerCase();
+        const tags = (d.tags || []).join(' ').toLowerCase();
+        return n.includes(term) || desc.includes(term) || tags.includes(term);
+    });
+    if (type) res = res.filter(d => {
+        const ext = (d.original_name || '').split('.').pop().toLowerCase();
+        if (type === 'pdf') return ext === 'pdf';
+        if (type === 'doc') return ['doc','docx'].includes(ext);
+        if (type === 'xls') return ['xls','xlsx'].includes(ext);
+        if (type === 'img') return ['jpg','jpeg','png','gif','webp'].includes(ext);
+        return true;
+    });
+    if (date) {
+        const now = new Date();
+        res = res.filter(d => {
+            const c = new Date(d.created_at);
+            if (date === 'today') return c.toDateString() === now.toDateString();
+            if (date === 'week')  { const w = new Date(now); w.setDate(w.getDate()-7); return c >= w; }
+            if (date === 'month') { const m = new Date(now); m.setMonth(m.getMonth()-1); return c >= m; }
+            return true;
+        });
+    }
+    if (cnt) cnt.textContent = res.length + ' résultat(s)';
+    if (!res.length) {
+        box.innerHTML = '<div class="text-center py-16 text-blue-300/30"><i class="fas fa-search text-5xl mb-4 block opacity-10"></i><p>Aucun résultat</p></div>';
+        return;
+    }
+    box.innerHTML = '<div class="space-y-3">' + res.map(d => {
+        const ic = getFileIcon(d.original_name);
+        const tagsHtml = (d.tags || []).map(t => `<span class="tag text-[10px] px-2 py-0.5">#${escapeHtml(t)}</span>`).join('');
+        return `<div class="glass-card rounded-xl border border-cyan-500/15 p-4 flex items-center gap-4 hover:border-cyan-400/40 transition-all cursor-pointer group" onclick="openDocumentPreview('${d.id}')">
+            <div class="w-11 h-11 ${ic.bg} rounded-xl flex items-center justify-center ${ic.color} border ${ic.border} flex-shrink-0 group-hover:scale-105 transition-transform"><i class="fas ${ic.icon} text-lg"></i></div>
+            <div class="flex-1 min-w-0">
+                <p class="text-white font-semibold text-sm truncate">${escapeHtml(d.original_name)}</p>
+                <p class="text-xs text-blue-300/50">${formatFileSize(d.file_size||0)} · ${formatDate(d.created_at)}</p>
+                <div class="flex flex-wrap gap-1 mt-1">${tagsHtml}</div>
+            </div>
+            <div class="flex gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onclick="event.stopPropagation();openDocumentPreview('${d.id}')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30"><i class="fas fa-eye mr-1"></i>Voir</button>
+                <button onclick="event.stopPropagation();downloadDocument('${d.id}')" class="px-3 py-1.5 bg-slate-700/50 text-gray-400 rounded-lg text-xs hover:bg-slate-600/50"><i class="fas fa-download"></i></button>
+            </div>
+        </div>`;
+    }).join('') + '</div>';
+}
+function clearAdvSearch() {
+    const el = document.getElementById('advSearchInput');
+    if (el) el.value = '';
+    const t = document.getElementById('advSearchType'); if (t) t.value = '';
+    const d = document.getElementById('advSearchDate'); if (d) d.value = '';
+    runAdvSearch();
+}
+
+// ─── VERSIONING ───────────────────────────────────────────────────────────────
+function toggleVersions(id) {
+    const hist = document.getElementById('hist-' + id);
+    const chev = document.getElementById('chev-' + id);
+    if (!hist) return;
+    hist.classList.toggle('hidden');
+    if (chev) chev.style.transform = hist.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+function filterVersionDocs(val) {
+    const v = val.toLowerCase();
+    let any = false;
+    document.querySelectorAll('.version-doc-item').forEach(card => {
+        const name = card.querySelector('p.text-white')?.textContent.toLowerCase() || '';
+        const show = !v || name.includes(v);
+        card.style.display = show ? '' : 'none';
+        if (show) any = true;
+    });
+    const msg = document.getElementById('noVersionMsg');
+    if (msg) msg.classList.toggle('hidden', any);
+}
+function restoreVersion(docName, version) {
+    if (!confirm('Restaurer ' + docName + ' en ' + version + ' ?')) return;
+    showToast('Version ' + version + ' de "' + docName + '" restaurée avec succès', 'success');
+    logActivity('upload', null, 'Restauration ' + version + ': ' + docName);
+}
+
+// ─── LOGS SYSTÈME ─────────────────────────────────────────────────────────────
+function filterSysLogs(btn, level) {
+    document.querySelectorAll('.syslog-filter').forEach(b => {
+        b.classList.remove('bg-blue-500/20','text-blue-300','border-blue-500/30','active-log');
+        b.classList.add('bg-slate-700/50','text-gray-400','border-slate-600/30');
+    });
+    btn.classList.add('bg-blue-500/20','text-blue-300','border-blue-500/30','active-log');
+    btn.classList.remove('bg-slate-700/50','text-gray-400','border-slate-600/30');
+    document.querySelectorAll('#sysLogConsole .syslog-row').forEach(row => {
+        row.style.display = (level === 'all' || row.dataset.lv === level) ? '' : 'none';
+    });
+}
+function clearSysLogs() {
+    if (!confirm('Vider tous les logs système ?')) return;
+    const c = document.getElementById('sysLogConsole');
+    if (c) c.innerHTML = '<div class="text-blue-300/30 text-center py-10 font-mono">// Logs vidés — ' + new Date().toLocaleString('fr-FR') + '</div>';
+    showToast('Logs système vidés', 'success');
+}
+function addSysLog() {
+    const c = document.getElementById('sysLogConsole');
+    if (!c) return;
+    const ts = new Date().toLocaleString('fr-FR').replace(',','');
+    const row = document.createElement('div');
+    row.className = 'syslog-row flex gap-3 py-0.5';
+    row.dataset.lv = 'info';
+    row.innerHTML = `<span class="text-gray-600 flex-shrink-0 w-36">${ts}</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Actualisation manuelle — ${currentDocuments.length} docs en base</span>`;
+    c.appendChild(row);
+    c.scrollTop = c.scrollHeight;
+    showToast('Logs actualisés', 'info');
+}
+
+// ─── PATCH switchView pour les nouvelles vues ─────────────────────────────────
+const _origSW2 = switchView;
+switchView = function(viewName) {
+    _origSW2(viewName);
+    if (viewName === 'search') {
+        // focus sur l'input
+        setTimeout(() => document.getElementById('advSearchInput')?.focus(), 100);
+    }
+};
 
 // ─── DRAG & DROP ─────────────────────────────────────────────────────────────
 function handleDragOver(e)  { e.preventDefault(); e.currentTarget.classList.add('border-blue-400','bg-blue-500/10'); }
