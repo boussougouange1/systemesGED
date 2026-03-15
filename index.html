@@ -1720,7 +1720,7 @@
     </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // ─── CONFIGURATION SUPABASE ──────────────────────────────────────────────────
 // IMPORTANT : remplacez ces valeurs par vos vraies clés depuis votre dashboard Supabase.
 // En production, idéalement servez cette page depuis un backend qui injecte ces valeurs
@@ -1780,44 +1780,17 @@ document.addEventListener("DOMContentLoaded", async function() {
     const savedLang = localStorage.getItem('ged_language') || 'fr';
     setLanguage(savedLang, false);
 
-    try {
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        if (error) throw error;
-
-        if (session && session.user) {
-            currentUser = session.user;
-            await loadUserProfile();
-            showMainApp();
-            await loadAllData();
-            checkFirstRun();
-        } else {
-            // Pas de session — afficher le login proprement
-            document.getElementById('loginScreen').style.display = '';
-        }
-    } catch (err) {
-        console.warn('Session check failed:', err.message);
-        document.getElementById('loginScreen').style.display = '';
-        await supabaseClient.auth.signOut().catch(() => {});
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+        currentUser = session.user;
+        await loadUserProfile();
+        showMainApp();
+        await loadAllData();
+        checkFirstRun();
     }
 
     setupKeyboardShortcuts();
     setupRealtimeSubscription();
-
-    // Écouter les changements d'auth (OAuth redirect)
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session && !currentUser) {
-            currentUser = session.user;
-            await loadUserProfile();
-            showMainApp();
-            await loadAllData();
-            checkFirstRun();
-        }
-        if (event === 'SIGNED_OUT') {
-            currentUser = null;
-            document.getElementById('loginScreen').classList.remove('hidden');
-            document.getElementById('mainApp').classList.add('hidden');
-        }
-    });
 });
 
 function checkFirstRun() {
@@ -1874,25 +1847,6 @@ async function handleLogin(e) {
     const email    = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
     const btn      = document.getElementById('loginBtn');
-
-    // Rate limiting : max 5 tentatives / 30s
-    const rlKey  = 'ged_login_attempts';
-    const rlTime = 'ged_login_lockout';
-    const lockout = parseInt(localStorage.getItem(rlTime) || '0');
-    if (lockout && Date.now() < lockout) {
-        const secs = Math.ceil((lockout - Date.now()) / 1000);
-        showToast(`Trop de tentatives. Réessayez dans ${secs}s`, 'error');
-        return;
-    }
-    const attempts = parseInt(localStorage.getItem(rlKey) || '0') + 1;
-    localStorage.setItem(rlKey, attempts);
-    if (attempts >= 5) {
-        localStorage.setItem(rlTime, Date.now() + 30000);
-        localStorage.setItem(rlKey, '0');
-        showToast('5 tentatives échouées — veuillez attendre 30 secondes', 'error');
-        return;
-    }
-
     btn.innerHTML  = '<span class="flex items-center justify-center gap-2"><div class="spinner"></div><span>Connexion...</span></span>';
     btn.disabled   = true;
 
@@ -1900,17 +1854,16 @@ async function handleLogin(e) {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
         currentUser = data.user;
-        localStorage.setItem('ged_login_attempts', '0');
         await loadUserProfile();
         showToast('Connexion réussie !', 'success');
         showMainApp();
         await loadAllData();
         checkFirstRun();
     } catch (error) {
-        const msg = error.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect' : error.message;
+        const msg = error.message === 'Invalid login credentials' ? 'Identifiants incorrects' : error.message;
         showToast(msg, 'error');
     } finally {
-        btn.innerHTML = '<span class="flex items-center justify-center gap-2"><i class="fas fa-sign-in-alt"></i><span>Se connecter</span></span>';
+        btn.innerHTML = '<span class="btn-content flex items-center justify-center gap-2"><span data-i18n="login">Connexion</span></span>';
         btn.disabled = false;
     }
 }
@@ -1996,7 +1949,7 @@ function showMainApp() {
     app.style.display = '';
 }
 
-async async function logout() {
+async function logout() {
     await supabaseClient.auth.signOut();
     currentUser = null; currentDocuments = []; currentWorkflows = [];
     document.getElementById('loginScreen').classList.remove('hidden');
