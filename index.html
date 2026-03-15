@@ -113,7 +113,6 @@
         .danger-confirm-input { width: 100%; padding: 0.75rem 1rem; background: rgba(15,23,42,0.8); border: 1px solid rgba(239,68,68,0.5); border-radius: 8px; color: white; outline: none; margin-top: 8px; }
         .danger-confirm-input:focus { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
     </style>
-<base target="_blank">
 </head>
 <body class="text-gray-100 font-sans antialiased">
 
@@ -129,13 +128,16 @@
         <div class="login-branding-circuits"></div>
         <div style="position:relative;z-index:10;width:100%;max-width:380px">
 
-            <!-- Logo unique (l'image contient déjà le texte SystemesGED) -->
+            <!-- Logo grand format -->
             <div class="text-center mb-10">
-                <div class="w-48 h-48 mx-auto mb-6 relative logo-container">
-                    <div class="logo-glow" style="inset:-20px;filter:blur(25px);opacity:0.8;"></div>
-                    <img src="logo systemesGED.png" alt="SystemesGED" class="logo-img" style="filter:drop-shadow(0 0 30px rgba(59,130,246,0.4));">
+                <div class="w-32 h-32 mx-auto mb-5 relative logo-container">
+                    <div class="logo-glow" style="inset:-16px"></div>
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img">
                 </div>
-                <!-- Le texte est dans l'image, pas besoin de le répéter ici -->
+                <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">
+                    SYSTEMES<span class="gradient-text">GED</span>
+                </h1>
+                <p style="color:rgba(147,197,253,0.7);font-size:0.9rem">Gestion Électronique de Documents Cloud</p>
             </div>
 
             <!-- Features -->
@@ -197,12 +199,13 @@
 
         <div class="login-card">
 
-            <!-- Logo mobile (affiché seulement sur mobile) - Image uniquement -->
-            <div class="lg:hidden text-center mb-8">
-                <div class="w-28 h-28 mx-auto mb-4 relative logo-container">
-                    <div class="logo-glow" style="inset:-10px;filter:blur(20px);"></div>
-                    <img src="logo systemesGED.png" alt="SystemesGED" class="logo-img">
+            <!-- Logo mobile (affiché seulement sur mobile) -->
+            <div class="lg:hidden text-center mb-6">
+                <div class="w-20 h-20 mx-auto mb-3 relative logo-container">
+                    <div class="logo-glow"></div>
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img">
                 </div>
+                <h1 style="font-size:1.5rem;font-weight:800;color:white">SYSTEMES<span class="gradient-text">GED</span></h1>
             </div>
 
             <!-- Tabs Connexion / Inscription -->
@@ -390,7 +393,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 relative logo-container">
                     <div class="logo-glow" style="inset:-5px;filter:blur(10px);"></div>
-                    <img src="logo systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
                 </div>
                 <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
             </div>
