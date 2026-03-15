@@ -325,7 +325,7 @@
                             <div class="p-2">
                                 <div class="px-4 py-2 border-b border-blue-500/20 mb-2">
                                     <p class="text-sm font-semibold text-white" id="dropdownUserName">Admin</p>
-                                    <p class="text-xs text-blue-400" id="dropdownUserEmail">admin@example.com</p>
+                                    <p class="text-xs text-blue-400" id="dropdownUserEmail"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="93f2f7fefafdd3f6ebf2fee3fff6bdf0fcfe">[email&#160;protected]</a></p>
                                 </div>
                                 <button onclick="switchView('settings')" class="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-500/10 text-sm text-gray-300 transition-colors">
                                     <i class="fas fa-cog mr-2"></i> Paramètres
@@ -508,17 +508,47 @@
             <!-- Shared View -->
             <div id="shared-view" class="view-section hidden space-y-6 relative z-10">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <h2 class="text-2xl font-bold text-white">Partagés avec moi</h2>
-                    <button onclick="showToast('Fonctionnalité de partage entrant en développement','info')" class="btn-primary px-4 py-2 rounded-lg text-sm">
-                        <i class="fas fa-share mr-2"></i> Partager un document
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Documents partagés</h2>
+                        <p class="text-sm text-blue-300/80">Reçus et envoyés</p>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex gap-2 border-b border-blue-500/20 pb-0">
+                    <button onclick="switchSharedTab('received')" id="tab-received"
+                            class="px-5 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px transition-all">
+                        <i class="fas fa-inbox mr-2"></i>Reçus
+                    </button>
+                    <button onclick="switchSharedTab('sent')" id="tab-sent"
+                            class="px-5 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px hover:text-blue-400 transition-all">
+                        <i class="fas fa-paper-plane mr-2"></i>Envoyés
                     </button>
                 </div>
-                <div class="glass-card rounded-2xl border border-blue-500/20 p-8 text-center" id="sharedEmptyState">
-                    <div class="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400 border border-blue-400/20"><i class="fas fa-share-alt text-3xl"></i></div>
-                    <p class="text-blue-300 mb-2">Aucun document partagé pour le moment</p>
-                    <p class="text-sm text-blue-400/60">Les documents partagés par d'autres utilisateurs apparaîtront ici</p>
+
+                <!-- Reçus -->
+                <div id="shared-received" class="space-y-4">
+                    <div class="glass-card rounded-2xl border border-blue-500/20 p-8 text-center" id="sharedEmptyState">
+                        <div class="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400 border border-blue-400/20">
+                            <i class="fas fa-inbox text-3xl"></i>
+                        </div>
+                        <p class="text-blue-300 mb-2">Aucun document reçu pour le moment</p>
+                        <p class="text-sm text-blue-400/60">Les documents partagés avec vous apparaîtront ici</p>
+                    </div>
+                    <div id="sharedList" class="doc-grid hidden"></div>
                 </div>
-                <div id="sharedList" class="doc-grid hidden"></div>
+
+                <!-- Envoyés -->
+                <div id="shared-sent" class="hidden space-y-3" >
+                    <div class="glass-card rounded-2xl border border-blue-500/20 p-8 text-center" id="sentEmptyState">
+                        <div class="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-400 border border-purple-400/20">
+                            <i class="fas fa-paper-plane text-3xl"></i>
+                        </div>
+                        <p class="text-blue-300 mb-2">Aucun partage envoyé</p>
+                        <p class="text-sm text-blue-400/60">Partagez un document depuis la section Documents</p>
+                    </div>
+                    <div id="sentSharesList" class="space-y-3 hidden"></div>
+                </div>
             </div>
 
             <!-- Workflows View -->
@@ -731,6 +761,123 @@
     </div>
 </div>
 
+<!-- ===== SHARE DOCUMENT MODAL ===== -->
+<div id="shareModal" class="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card rounded-2xl border border-purple-500/30 w-full max-w-lg shadow-2xl shadow-purple-500/20">
+        <div class="p-6 border-b border-purple-500/20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 border border-purple-400/30">
+                    <i class="fas fa-share-alt"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">Partager le document</h2>
+                    <p class="text-xs text-purple-300/70" id="shareDocName">—</p>
+                </div>
+            </div>
+            <button onclick="closeShareModal()" class="text-blue-400 hover:text-white p-2 hover:bg-blue-500/10 rounded-lg transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <div class="p-6 space-y-5">
+            <!-- Email destinataire -->
+            <div>
+                <label class="block text-sm font-medium text-blue-300 mb-2">
+                    <i class="fas fa-envelope mr-2"></i>Email du destinataire
+                </label>
+                <input type="email" id="shareEmail" placeholder="exemple@email.com"
+                       class="w-full bg-slate-900/50 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 outline-none transition-all"
+                       oninput="validateShareForm()">
+            </div>
+
+            <!-- Permission -->
+            <div>
+                <label class="block text-sm font-medium text-blue-300 mb-2">
+                    <i class="fas fa-shield-alt mr-2"></i>Permission
+                </label>
+                <div class="grid grid-cols-3 gap-3">
+                    <label class="cursor-pointer">
+                        <input type="radio" name="sharePermission" value="view" checked class="sr-only peer">
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
+                            <i class="fas fa-eye text-blue-400 peer-checked:text-purple-400 block mb-1 text-lg"></i>
+                            <span class="text-xs text-gray-300">Lecture</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="sharePermission" value="download" class="sr-only peer">
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
+                            <i class="fas fa-download text-blue-400 block mb-1 text-lg"></i>
+                            <span class="text-xs text-gray-300">Téléchargement</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="sharePermission" value="edit" class="sr-only peer">
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
+                            <i class="fas fa-edit text-blue-400 block mb-1 text-lg"></i>
+                            <span class="text-xs text-gray-300">Édition</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Durée de vie -->
+            <div>
+                <label class="block text-sm font-medium text-blue-300 mb-2">
+                    <i class="fas fa-clock mr-2"></i>Durée de validité du lien
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="cursor-pointer">
+                        <input type="radio" name="shareDuration" value="1" class="sr-only peer">
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
+                            <span class="text-white font-bold block">1 jour</span>
+                            <span class="text-xs text-blue-300/60">Expire demain</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="shareDuration" value="7" checked class="sr-only peer">
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
+                            <span class="text-white font-bold block">7 jours</span>
+                            <span class="text-xs text-blue-300/60">Recommandé</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="shareDuration" value="30" class="sr-only peer">
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
+                            <span class="text-white font-bold block">30 jours</span>
+                            <span class="text-xs text-blue-300/60">1 mois</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="shareDuration" value="0" class="sr-only peer">
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
+                            <span class="text-white font-bold block">Illimité</span>
+                            <span class="text-xs text-blue-300/60">Pas d'expiration</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Partages actifs sur ce document -->
+            <div id="activeSharesList" class="hidden">
+                <label class="block text-sm font-medium text-blue-300 mb-2">
+                    <i class="fas fa-users mr-2"></i>Partages actifs
+                </label>
+                <div id="activeSharesContent" class="space-y-2 max-h-32 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-blue-500/20 flex gap-3">
+            <button onclick="closeShareModal()" class="flex-1 px-4 py-3 text-blue-300 hover:bg-blue-500/10 rounded-xl transition-colors border border-blue-500/30 font-medium">
+                Annuler
+            </button>
+            <button onclick="submitShare()" id="shareBtn" disabled
+                    class="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <i class="fas fa-paper-plane"></i> Envoyer le partage
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- ===== ADD USER MODAL ===== -->
 <div id="addUserModal" class="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="glass-card rounded-2xl border border-blue-500/30 w-full max-w-md p-6">
@@ -785,7 +932,7 @@
 </div>
 
 <!-- ===== JAVASCRIPT ===== -->
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // ─── CONFIGURATION SUPABASE ──────────────────────────────────────────────────
 // IMPORTANT : remplacez ces valeurs par vos vraies clés depuis votre dashboard Supabase.
 // En production, idéalement servez cette page depuis un backend qui injecte ces valeurs
@@ -1681,32 +1828,289 @@ async function addUser() {
     closeAddUserModal();
 }
 
+// ─── PARTAGE DOCUMENTS ───────────────────────────────────────────────────────
+let currentShareDocId = null;
+
+function openShareModal(docId) {
+    const doc = currentDocuments.find(d => d.id === docId);
+    if (!doc) return;
+    currentShareDocId = docId;
+    document.getElementById('shareDocName').textContent = doc.name;
+    document.getElementById('shareEmail').value = '';
+    document.getElementById('shareBtn').disabled = true;
+    // Reset sélections
+    document.querySelector('input[name="sharePermission"][value="view"]').checked = true;
+    document.querySelector('input[name="shareDuration"][value="7"]').checked = true;
+    document.getElementById('activeSharesList').classList.add('hidden');
+    loadActiveShares(docId);
+    document.getElementById('shareModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => document.getElementById('shareEmail').focus(), 100);
+}
+
+function closeShareModal() {
+    document.getElementById('shareModal').classList.add('hidden');
+    document.body.style.overflow = '';
+    currentShareDocId = null;
+}
+
+function validateShareForm() {
+    const email = document.getElementById('shareEmail').value.trim();
+    const valid  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    document.getElementById('shareBtn').disabled = !valid;
+}
+
+async function loadActiveShares(docId) {
+    try {
+        const { data, error } = await supabaseClient
+            .from('shared_documents')
+            .select('*')
+            .eq('document_id', docId)
+            .eq('shared_by', currentUser.id)
+            .order('created_at', { ascending: false });
+
+        if (error || !data || data.length === 0) return;
+
+        const container = document.getElementById('activeSharesContent');
+        const now = new Date();
+
+        container.innerHTML = data.map(s => {
+            const expired  = s.expires_at && new Date(s.expires_at) < now;
+            const expLabel = s.expires_at
+                ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at))
+                : 'Illimité';
+            const permIcons = { view: 'fa-eye', download: 'fa-download', edit: 'fa-edit' };
+            return `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 flex-shrink-0">
+                            <i class="fas fa-user text-xs"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm text-white truncate">${escapeHtml(s.shared_with_email)}</p>
+                            <p class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'}">${expLabel}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <i class="fas ${permIcons[s.permission] || 'fa-eye'} text-purple-400 text-xs"></i>
+                        <button onclick="revokeShare('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-1 rounded transition-colors" title="Révoquer">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </div>
+                </div>`;
+        }).join('');
+
+        document.getElementById('activeSharesList').classList.remove('hidden');
+    } catch (err) { console.error(err); }
+}
+
+async function submitShare() {
+    const email      = document.getElementById('shareEmail').value.trim();
+    const permission = document.querySelector('input[name="sharePermission"]:checked')?.value || 'view';
+    const duration   = parseInt(document.querySelector('input[name="shareDuration"]:checked')?.value || '7');
+
+    if (!email || !currentShareDocId) return;
+
+    const btn = document.getElementById('shareBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div> Envoi...';
+
+    try {
+        // Calculer la date d'expiration
+        let expiresAt = null;
+        if (duration > 0) {
+            expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString();
+        }
+
+        // Chercher si l'email correspond à un utilisateur existant
+        const { data: profileData } = await supabaseClient
+            .from('users_profiles')
+            .select('id')
+            .eq('email', email)
+            .single();
+
+        const { error } = await supabaseClient.from('shared_documents').insert({
+            document_id:        currentShareDocId,
+            shared_by:          currentUser.id,
+            shared_with_email:  email,
+            shared_with:        profileData?.id || null,
+            permission,
+            expires_at:         expiresAt
+        });
+
+        if (error) throw error;
+
+        // Générer le lien signé à envoyer
+        const doc = currentDocuments.find(d => d.id === currentShareDocId);
+        if (doc?.storage_path) {
+            const seconds = duration > 0 ? duration * 86400 : 604800;
+            const { data: urlData } = await supabaseClient.storage
+                .from('documents')
+                .createSignedUrl(doc.storage_path, seconds);
+
+            if (urlData?.signedUrl) {
+                await navigator.clipboard.writeText(urlData.signedUrl).catch(() => {});
+            }
+        }
+
+        await logActivity('share', currentShareDocId, `Document partagé avec ${email}`);
+        showToast(`Document partagé avec ${email} !`, 'success');
+
+        // Rafraîchir la liste des partages actifs
+        loadActiveShares(currentShareDocId);
+        document.getElementById('shareEmail').value = '';
+        btn.disabled = true;
+
+    } catch (err) {
+        showToast('Erreur partage: ' + err.message, 'error');
+    } finally {
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Envoyer le partage';
+        btn.disabled  = false;
+    }
+}
+
+async function revokeShare(shareId) {
+    if (!confirm('Révoquer ce partage ?')) return;
+    try {
+        const { error } = await supabaseClient.from('shared_documents').delete().eq('id', shareId);
+        if (error) throw error;
+        showToast('Partage révoqué', 'success');
+        loadActiveShares(currentShareDocId);
+    } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
+}
+
+// shareDocument() appelé depuis les cartes document
+async function shareDocument(docId) {
+    openShareModal(docId);
+}
+
 // ─── SHARED ──────────────────────────────────────────────────────────────────
+function switchSharedTab(tab) {
+    const received = document.getElementById('shared-received');
+    const sent     = document.getElementById('shared-sent');
+    const tabR     = document.getElementById('tab-received');
+    const tabS     = document.getElementById('tab-sent');
+
+    if (tab === 'received') {
+        received.classList.remove('hidden'); sent.classList.add('hidden');
+        tabR.classList.add('text-blue-400','border-blue-400');
+        tabR.classList.remove('text-gray-400','border-transparent');
+        tabS.classList.add('text-gray-400','border-transparent');
+        tabS.classList.remove('text-blue-400','border-blue-400');
+    } else {
+        sent.classList.remove('hidden'); received.classList.add('hidden');
+        tabS.classList.add('text-blue-400','border-blue-400');
+        tabS.classList.remove('text-gray-400','border-transparent');
+        tabR.classList.add('text-gray-400','border-transparent');
+        tabR.classList.remove('text-blue-400','border-blue-400');
+        loadSentShares();
+    }
+}
+
 async function loadSharedDocuments() {
     const emptyState = document.getElementById('sharedEmptyState');
     const list       = document.getElementById('sharedList');
 
     try {
+        const { data: myProfile } = await supabaseClient
+            .from('users_profiles').select('email').eq('id', currentUser.id).single();
+
+        const email = myProfile?.email || currentUser.email;
+
         const { data, error } = await supabaseClient
             .from('shared_documents')
             .select('*, documents(*)')
-            .eq('shared_with', currentUser.id);
+            .eq('shared_with_email', email)
+            .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
 
         if (error) throw error;
 
-        const shared = data || [];
+        const shared = (data || []).filter(s => s.documents);
         document.getElementById('sharedCount').textContent = shared.length;
 
         if (shared.length === 0) {
             emptyState.classList.remove('hidden'); list.classList.add('hidden');
         } else {
             emptyState.classList.add('hidden'); list.classList.remove('hidden');
-            list.innerHTML = shared.map(s => createDocCard(s.documents)).join('');
+            list.innerHTML = shared.map(s => {
+                const doc = s.documents;
+                const fileIcon = getFileIcon(doc.name);
+                const permLabel = { view:'Lecture', download:'Téléchargement', edit:'Édition' }[s.permission] || 'Lecture';
+                const expLabel  = s.expires_at ? 'Expire le ' + formatDate(s.expires_at) : 'Illimité';
+                return `
+                    <div class="document-card glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="window.open('${escapeHtml(doc.file_url)}','_blank')">
+                        <div class="flex items-start gap-3 mb-3">
+                            <div class="w-12 h-12 ${fileIcon.bg} rounded-xl flex items-center justify-center ${fileIcon.color} border ${fileIcon.border} flex-shrink-0">
+                                <i class="fas ${fileIcon.icon} text-xl"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-bold text-white truncate">${escapeHtml(doc.name)}</h4>
+                                <p class="text-xs text-purple-300/70">${permLabel} • ${expLabel}</p>
+                            </div>
+                        </div>
+                        <div class="text-xs text-blue-400/60 border-t border-blue-500/10 pt-2">
+                            Partagé le ${formatDate(s.created_at)}
+                        </div>
+                    </div>`;
+            }).join('');
         }
     } catch {
         emptyState.classList.remove('hidden'); list.classList.add('hidden');
-        document.getElementById('sharedCount').textContent = '0';
     }
+}
+
+async function loadSentShares() {
+    const emptyState = document.getElementById('sentEmptyState');
+    const list       = document.getElementById('sentSharesList');
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('shared_documents')
+            .select('*, documents(name, file_type)')
+            .eq('shared_by', currentUser.id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        const shares = data || [];
+
+        if (shares.length === 0) {
+            emptyState.classList.remove('hidden'); list.classList.add('hidden');
+        } else {
+            emptyState.classList.add('hidden'); list.classList.remove('hidden');
+            const now = new Date();
+            list.innerHTML = shares.map(s => {
+                const expired   = s.expires_at && new Date(s.expires_at) < now;
+                const expLabel  = s.expires_at ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at)) : 'Illimité';
+                const permIcons = { view:'fa-eye', download:'fa-download', edit:'fa-edit' };
+                return `
+                    <div class="glass-card rounded-xl p-4 border ${expired ? 'border-red-500/20' : 'border-purple-500/20'} flex items-center gap-4">
+                        <div class="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 border border-purple-400/20 flex-shrink-0">
+                            <i class="fas fa-user text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold text-white truncate">${escapeHtml(s.shared_with_email)}</p>
+                            <p class="text-xs text-blue-300/60 truncate">${escapeHtml(s.documents?.name || 'Document supprimé')}</p>
+                            <p class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'}">${expLabel}</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <i class="fas ${permIcons[s.permission] || 'fa-eye'} text-purple-400 text-sm"></i>
+                            <button onclick="revokeShareFromList('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-500/10 transition-colors" title="Révoquer">
+                                <i class="fas fa-ban text-sm"></i>
+                            </button>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+    } catch (err) { console.error(err); }
+}
+
+async function revokeShareFromList(shareId) {
+    if (!confirm('Révoquer ce partage ?')) return;
+    try {
+        await supabaseClient.from('shared_documents').delete().eq('id', shareId);
+        showToast('Partage révoqué', 'success');
+        loadSentShares();
+    } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
 }
 
 // ─── RECHERCHE & FILTRES ─────────────────────────────────────────────────────
@@ -1875,7 +2279,7 @@ function setupKeyboardShortcuts() {
     document.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); document.getElementById('globalSearch')?.focus(); }
         if ((e.ctrlKey || e.metaKey) && e.key === 'u') { e.preventDefault(); openUploadModal(); }
-        if (e.key === 'Escape') { closeUploadModal(); closeMobileSidebar(); closePreview(); closeAddUserModal(); closeDangerModal(); closeCreateWorkflowModal(); }
+        if (e.key === 'Escape') { closeUploadModal(); closeMobileSidebar(); closePreview(); closeAddUserModal(); closeDangerModal(); closeCreateWorkflowModal(); closeShareModal(); }
     });
 }
 
@@ -1885,8 +2289,8 @@ window.onclick = function(event) {
     if (event.target === document.getElementById('previewModal'))        closePreview();
     if (event.target === document.getElementById('addUserModal'))        closeAddUserModal();
     if (event.target === document.getElementById('dangerModal'))         closeDangerModal();
+    if (event.target === document.getElementById('shareModal'))          closeShareModal();
     if (event.target === document.getElementById('createWorkflowModal')) closeCreateWorkflowModal();
-    if (event.target === document.getElementById('onboardingModal'))     { /* bloquer fermeture accidentelle */ }
 };
 </script>
 </body>
