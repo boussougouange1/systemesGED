@@ -56,15 +56,11 @@
         @media (min-width: 1024px) { .bottom-nav { display: none; } }
         @media (max-width: 1023px) { .desktop-sidebar { display: none; } }
         @media (min-width: 1024px) { .mobile-menu-btn { display: none; } }
-        
-        /* NOUVEAU LOGO STYLES */
         .logo-container { position: relative; display: inline-flex; align-items: center; justify-content: center; }
-        .logo-glow { position: absolute; inset: -20px; background: radial-gradient(circle, rgba(59,130,246,0.3) 0%, transparent 70%); filter: blur(20px); animation: pulse 3s ease-in-out infinite; }
-        .logo-svg { width: 100%; height: 100%; filter: drop-shadow(0 0 30px rgba(59,130,246,0.4)); animation: float 6s ease-in-out infinite; }
+        .logo-glow { position: absolute; inset: -10px; background: radial-gradient(circle, rgba(59,130,246,0.4) 0%, transparent 70%); filter: blur(20px); animation: pulse 3s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
-        
-        /* ── LOGIN PAGE REDESIGN ─────────────────────────────────── */
+        .logo-img { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 10; filter: drop-shadow(0 0 20px rgba(59,130,246,0.3)); }
+        /* ── LOGIN PAGE ─────────────────────────────────── */
         .login-page { min-height: 100vh; display: flex; overflow: hidden; }
         .login-branding { display: none; flex-direction: column; justify-content: center; align-items: center; width: 45%; padding: 3rem; position: relative; overflow: hidden; background: linear-gradient(160deg, #0c1a4e 0%, #1a3a8f 50%, #0c1a4e 100%); }
         @media (min-width: 1024px) { .login-branding { display: flex; } }
@@ -124,50 +120,22 @@
 <!-- Toast Container -->
 <div id="toastContainer" class="toast-container"></div>
 
-<!-- ===== LOGIN SCREEN REDESIGN ===== -->
+<!-- ===== LOGIN SCREEN ===== -->
 <div id="loginScreen" class="">
 <div class="login-page">
 
-    <!-- Panneau gauche — Branding avec SEUL logo -->
+    <!-- Panneau gauche — Branding -->
     <div class="login-branding">
         <div class="login-branding-circuits"></div>
         <div style="position:relative;z-index:10;width:100%;max-width:380px">
 
-            <!-- UNIQUE LOGO SystemesGED -->
-            <div class="text-center mb-8">
-                <div class="w-28 h-28 mx-auto mb-6 relative logo-container">
-                    <div class="logo-glow"></div>
-                    <svg class="logo-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Forme de document stylisée -->
-                        <path d="M30 15 L50 5 L80 5 L80 85 L20 85 L20 25 Z" fill="url(#grad1)" opacity="0.9"/>
-                        <path d="M30 15 L30 25 L20 25 L50 5 L30 15" fill="url(#grad2)" opacity="0.6"/>
-                        <!-- Lignes de texte symboliques -->
-                        <rect x="35" y="40" width="30" height="4" rx="2" fill="rgba(255,255,255,0.8)"/>
-                        <rect x="35" y="50" width="25" height="4" rx="2" fill="rgba(255,255,255,0.6)"/>
-                        <rect x="35" y="60" width="35" height="4" rx="2" fill="rgba(255,255,255,0.4)"/>
-                        <!-- Cercle de validation -->
-                        <circle cx="75" cy="75" r="15" fill="url(#grad3)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
-                        <path d="M70 75 L73 78 L80 71" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                        <defs>
-                            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
-                            </linearGradient>
-                            <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" style="stop-color:#93c5fd;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
-                            </linearGradient>
-                            <radialGradient id="grad3" cx="50%" cy="50%" r="50%">
-                                <stop offset="0%" style="stop-color:#34d399;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
-                            </radialGradient>
-                        </defs>
-                    </svg>
+            <!-- Logo unique (l'image contient déjà le texte SystemesGED) -->
+            <div class="text-center mb-10">
+                <div class="w-48 h-48 mx-auto mb-6 relative logo-container">
+                    <div class="logo-glow" style="inset:-20px;filter:blur(25px);opacity:0.8;"></div>
+                    <img src="logo systemesGED.png" alt="SystemesGED" class="logo-img" style="filter:drop-shadow(0 0 30px rgba(59,130,246,0.4));">
                 </div>
-                <h1 style="font-size:2.2rem;font-weight:800;color:white;margin-bottom:8px;letter-spacing:-1px">
-                    SYSTEMES<span class="gradient-text">GED</span>
-                </h1>
-                <p style="color:rgba(147,197,253,0.7);font-size:1rem;letter-spacing:0.5px">Gestion Électronique de Documents Cloud</p>
+                <!-- Le texte est dans l'image, pas besoin de le répéter ici -->
             </div>
 
             <!-- Features -->
@@ -218,7 +186,7 @@
         </div>
     </div>
 
-    <!-- Panneau droit — Formulaire (SANS logo redondant) -->
+    <!-- Panneau droit — Formulaire -->
     <div class="login-form-panel">
 
         <!-- Sélecteur langue -->
@@ -228,6 +196,14 @@
         </div>
 
         <div class="login-card">
+
+            <!-- Logo mobile (affiché seulement sur mobile) - Image uniquement -->
+            <div class="lg:hidden text-center mb-8">
+                <div class="w-28 h-28 mx-auto mb-4 relative logo-container">
+                    <div class="logo-glow" style="inset:-10px;filter:blur(20px);"></div>
+                    <img src="logo systemesGED.png" alt="SystemesGED" class="logo-img">
+                </div>
+            </div>
 
             <!-- Tabs Connexion / Inscription -->
             <div style="display:flex;gap:6px;padding:6px;background:rgba(0,0,0,0.3);border-radius:14px;margin-bottom:24px;border:1px solid rgba(96,165,250,0.1)">
@@ -412,9 +388,9 @@
     <aside class="mobile-sidebar glass-panel border-r border-blue-500/20 flex flex-col" id="mobileSidebar">
         <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <!-- Logo mobile simplifié -->
-                <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-file-alt text-white text-sm"></i>
+                <div class="w-10 h-10 relative logo-container">
+                    <div class="logo-glow" style="inset:-5px;filter:blur(10px);"></div>
+                    <img src="logo systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
                 </div>
                 <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
             </div>
@@ -470,9 +446,9 @@
                     <i class="fas fa-bars text-xl"></i>
                 </button>
                 <div class="hidden sm:flex items-center gap-3">
-                    <!-- Logo header simplifié -->
-                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                        <i class="fas fa-file-alt text-white text-lg"></i>
+                    <div class="w-10 h-10 relative logo-container">
+                        <div class="logo-glow" style="inset:-5px;filter:blur(10px);"></div>
+                        <img src="logo systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
                     </div>
                     <div>
                         <h1 class="text-xl font-bold tracking-tight"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1>
