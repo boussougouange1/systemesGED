@@ -416,6 +416,12 @@
             </button>
             <div class="pt-3 mt-3 border-t border-blue-500/20">
                 <p class="px-4 text-xs font-bold text-cyan-400/70 uppercase tracking-wider mb-2">Fonctionnalités</p>
+                <button onclick="switchView('companies'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="companies">
+                    <i class="fas fa-building w-5 text-center text-yellow-400"></i><span>Entreprises</span>
+                </button>
+                <button onclick="switchView('billing'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing">
+                    <i class="fas fa-credit-card w-5 text-center text-green-400"></i><span>Abonnements</span>
+                </button>
                 <button onclick="switchView('search'); closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="search">
                     <i class="fas fa-search w-5 text-center text-cyan-400"></i><span>Recherche avancée</span>
                 </button>
@@ -570,6 +576,13 @@
                 </button>
                 <div class="pt-3 mt-3 border-t border-blue-500/20">
                     <p class="px-4 text-xs font-bold text-cyan-400/70 uppercase tracking-wider mb-2">Fonctionnalités</p>
+                    <button onclick="switchView('companies')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="companies">
+                        <i class="fas fa-building w-5 text-center text-yellow-400"></i><span>Entreprises</span>
+                        <span id="companyCount" class="ml-auto bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full">0</span>
+                    </button>
+                    <button onclick="switchView('billing')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing">
+                        <i class="fas fa-credit-card w-5 text-center text-green-400"></i><span>Abonnements</span>
+                    </button>
                     <button onclick="switchView('search')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="search">
                         <i class="fas fa-search w-5 text-center text-cyan-400"></i><span>Recherche avancée</span>
                     </button>
@@ -1125,11 +1138,11 @@
                                 <button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button>
                             </div>
                             <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
-                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v2</span><div><p class="text-sm text-gray-300">Révision sections 3 &amp; 5</p><p class="text-xs text-blue-300/50">10 mars 2026 · user@org.com</p></div></div>
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v2</span><div><p class="text-sm text-gray-300">Révision sections 3 &amp; 5</p><p class="text-xs text-blue-300/50">10 mars 2026 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="96e3e5f3e4d6f9e4f1b8f5f9fb">[email&#160;protected]</a></p></div></div>
                                 <div class="flex gap-2"><button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button><button onclick="restoreVersion('Contrat_Prestation_2026.pdf','v2')" class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs hover:bg-orange-500/30 transition-all"><i class="fas fa-undo mr-1"></i>Restaurer</button></div>
                             </div>
                             <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
-                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v1</span><div><p class="text-sm text-gray-300">Version initiale</p><p class="text-xs text-blue-300/50">1 mars 2026 · admin@org.com</p></div></div>
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v1</span><div><p class="text-sm text-gray-300">Version initiale</p><p class="text-xs text-blue-300/50">1 mars 2026 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="98f9fcf5f1f6d8f7eaffb6fbf7f5">[email&#160;protected]</a></p></div></div>
                                 <div class="flex gap-2"><button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button><button onclick="restoreVersion('Contrat_Prestation_2026.pdf','v1')" class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs hover:bg-orange-500/30 transition-all"><i class="fas fa-undo mr-1"></i>Restaurer</button></div>
                             </div>
                         </div>
@@ -1148,11 +1161,11 @@
                         </div>
                         <div id="hist-vd2" class="hidden border-t border-cyan-500/10 divide-y divide-cyan-500/10">
                             <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
-                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center text-xs font-bold border border-green-400/20">v2</span><div><p class="text-sm text-white">Version active</p><p class="text-xs text-blue-300/50">12 mars 2026 · finance@org.com</p></div></div>
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center text-xs font-bold border border-green-400/20">v2</span><div><p class="text-sm text-white">Version active</p><p class="text-xs text-blue-300/50">12 mars 2026 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e4828d8a858a8781a48b9683ca878b89">[email&#160;protected]</a></p></div></div>
                                 <button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button>
                             </div>
                             <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
-                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v1</span><div><p class="text-sm text-gray-300">Données préliminaires</p><p class="text-xs text-blue-300/50">5 mars 2026 · admin@org.com</p></div></div>
+                                <div class="flex items-center gap-3"><span class="w-8 h-8 bg-slate-700 text-gray-400 rounded-full flex items-center justify-center text-xs font-bold border border-gray-600">v1</span><div><p class="text-sm text-gray-300">Données préliminaires</p><p class="text-xs text-blue-300/50">5 mars 2026 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="3657525b5f58765944511855595b">[email&#160;protected]</a></p></div></div>
                                 <div class="flex gap-2"><button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</button><button onclick="restoreVersion('Rapport_Q1_2026.xlsx','v1')" class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs hover:bg-orange-500/30 transition-all"><i class="fas fa-undo mr-1"></i>Restaurer</button></div>
                             </div>
                         </div>
@@ -1196,7 +1209,7 @@
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:09</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Chiffrement AES-256 appliqué: Contrat_2026.pdf</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:08</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Antivirus scan: Contrat_2026.pdf — Sain ✓</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="warn"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:28:45</span><span class="text-yellow-400 w-14 flex-shrink-0 font-bold">[WARN]</span><span class="text-yellow-200">IP non reconnue: 45.12.88.3 — tentative connexion</span></div>
-                    <div class="syslog-row flex gap-3 py-0.5" data-lv="security"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:55:12</span><span class="text-orange-400 w-14 flex-shrink-0 font-bold">[SÉCU]</span><span class="text-orange-200">RBAC: accès refusé guest@org.com → Confidentiel.pdf</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="security"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:55:12</span><span class="text-orange-400 w-14 flex-shrink-0 font-bold">[SÉCU]</span><span class="text-orange-200">RBAC: accès refusé <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="385f4d5d4b4c78574a5f165b5755">[email&#160;protected]</a> → Confidentiel.pdf</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="error"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:40:00</span><span class="text-red-400 w-14 flex-shrink-0 font-bold">[ERROR]</span><span class="text-red-200">Storage timeout — retry #1 déclenché</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:40:03</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Storage reconnecté après retry — OK</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="debug"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 13:30:00</span><span class="text-purple-400 w-14 flex-shrink-0 font-bold">[DEBUG]</span><span class="text-purple-200">Index recherche mis à jour — 47 documents indexés</span></div>
@@ -1305,6 +1318,279 @@
                                 <tr class="hover:bg-blue-500/3 transition-colors"><td class="p-3 text-gray-300">Gérer les clés API</td><td class="p-3 text-center"><i class="fas fa-check text-green-400"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td><td class="p-3 text-center"><i class="fas fa-times text-red-400/40"></i></td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- ╔══════════════════════════════════════════════════════╗ -->
+            <!-- ║  ENTREPRISES — Multi-tenant management               ║ -->
+            <!-- ╚══════════════════════════════════════════════════════╝ -->
+            <div id="companies-view" class="view-section hidden relative z-10 space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                            <i class="fas fa-building text-yellow-400"></i> Gestion des entreprises
+                        </h2>
+                        <p class="text-sm text-blue-300/80">Architecture multi-tenant — chaque entreprise a son espace isolé</p>
+                    </div>
+                    <button onclick="openCreateCompanyModal()" class="btn-primary px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 font-semibold">
+                        <i class="fas fa-plus"></i> Nouvelle entreprise
+                    </button>
+                </div>
+
+                <!-- Architecture diagram -->
+                <div class="glass-card rounded-2xl border border-yellow-500/20 p-5">
+                    <h3 class="text-sm font-bold text-yellow-400 mb-3 flex items-center gap-2"><i class="fas fa-sitemap"></i> Architecture multi-tenant active</h3>
+                    <div class="flex items-start gap-4 overflow-x-auto pb-2">
+                        <div class="flex-shrink-0 text-center">
+                            <div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 border border-blue-400/30 mx-auto mb-2"><i class="fas fa-server text-xl"></i></div>
+                            <p class="text-xs text-blue-300 font-bold">SystemesGED</p>
+                            <p class="text-[10px] text-blue-400/50">Plateforme centrale</p>
+                        </div>
+                        <div class="flex-shrink-0 pt-6 text-blue-500/40"><i class="fas fa-arrow-right text-xl"></i></div>
+                        <div id="companyArchDiagram" class="flex gap-3">
+                            <div class="flex-shrink-0 text-center glass-card rounded-xl p-3 border border-blue-500/20">
+                                <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center text-green-400 border border-green-400/25 mx-auto mb-1"><i class="fas fa-building text-sm"></i></div>
+                                <p class="text-xs text-white font-semibold">Entreprise A</p>
+                                <p class="text-[10px] text-blue-300/50">Espace privé</p>
+                                <div class="flex flex-col gap-0.5 mt-1.5">
+                                    <span class="text-[9px] text-blue-300/40">👤 Utilisateurs</span>
+                                    <span class="text-[9px] text-blue-300/40">📁 Documents</span>
+                                    <span class="text-[9px] text-blue-300/40">🗂 Dossiers</span>
+                                </div>
+                            </div>
+                            <div class="flex-shrink-0 text-center glass-card rounded-xl p-3 border border-blue-500/20">
+                                <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center text-purple-400 border border-purple-400/25 mx-auto mb-1"><i class="fas fa-building text-sm"></i></div>
+                                <p class="text-xs text-white font-semibold">Entreprise B</p>
+                                <p class="text-[10px] text-blue-300/50">Espace privé</p>
+                                <div class="flex flex-col gap-0.5 mt-1.5">
+                                    <span class="text-[9px] text-blue-300/40">👤 Utilisateurs</span>
+                                    <span class="text-[9px] text-blue-300/40">📁 Documents</span>
+                                    <span class="text-[9px] text-blue-300/40">🗂 Dossiers</span>
+                                </div>
+                            </div>
+                            <div class="flex-shrink-0 text-center glass-card rounded-xl p-3 border border-blue-500/20">
+                                <div class="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center text-orange-400 border border-orange-400/25 mx-auto mb-1"><i class="fas fa-building text-sm"></i></div>
+                                <p class="text-xs text-white font-semibold">Entreprise C</p>
+                                <p class="text-[10px] text-blue-300/50">Espace privé</p>
+                                <div class="flex flex-col gap-0.5 mt-1.5">
+                                    <span class="text-[9px] text-blue-300/40">👤 Utilisateurs</span>
+                                    <span class="text-[9px] text-blue-300/40">📁 Documents</span>
+                                    <span class="text-[9px] text-blue-300/40">🗂 Dossiers</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-yellow-500/10 flex items-center gap-2 text-xs text-yellow-400/70">
+                        <i class="fas fa-lock text-xs"></i>
+                        <span>Isolation garantie par <code class="bg-slate-900/50 px-1 rounded">WHERE company_id = user.company_id</code> sur chaque requête SQL</span>
+                    </div>
+                </div>
+
+                <!-- Stats rapides -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="glass-card rounded-2xl p-5 border border-yellow-500/20 text-center">
+                        <p id="statsCompanyCount" class="text-3xl font-bold text-white">0</p>
+                        <p class="text-xs text-yellow-400 mt-1">Entreprises actives</p>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5 border border-blue-500/20 text-center">
+                        <p id="statsUserCount" class="text-3xl font-bold text-white">0</p>
+                        <p class="text-xs text-blue-400 mt-1">Utilisateurs total</p>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5 border border-green-500/20 text-center">
+                        <p id="statsDocCount" class="text-3xl font-bold text-white">0</p>
+                        <p class="text-xs text-green-400 mt-1">Documents stockés</p>
+                    </div>
+                    <div class="glass-card rounded-2xl p-5 border border-purple-500/20 text-center">
+                        <p id="statsMRR" class="text-3xl font-bold text-white">0$</p>
+                        <p class="text-xs text-purple-400 mt-1">Revenus mensuels (MRR)</p>
+                    </div>
+                </div>
+
+                <!-- Liste des entreprises -->
+                <div class="glass-card rounded-2xl border border-yellow-500/15 overflow-hidden">
+                    <div class="px-5 py-4 border-b border-yellow-500/15 flex items-center justify-between">
+                        <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-list text-yellow-400"></i> Toutes les entreprises</h3>
+                        <button onclick="loadCompanies()" class="text-xs text-blue-400 hover:text-blue-300 transition-colors"><i class="fas fa-sync-alt mr-1"></i>Actualiser</button>
+                    </div>
+                    <div id="companiesList" class="divide-y divide-yellow-500/10">
+                        <div class="p-8 text-center text-blue-300/40">
+                            <i class="fas fa-building text-4xl mb-3 block opacity-20"></i>
+                            <p>Chargement des entreprises...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bouton SQL Schema -->
+                <div class="glass-card rounded-2xl border border-cyan-500/20 p-5">
+                    <h3 class="text-white font-bold mb-3 flex items-center gap-2"><i class="fas fa-database text-cyan-400"></i> Schéma base de données multi-tenant</h3>
+                    <p class="text-sm text-blue-300/70 mb-4">Script SQL à exécuter dans votre dashboard Supabase pour activer l'architecture multi-tenant.</p>
+                    <button onclick="showSqlSchema()" class="btn-primary px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 font-semibold">
+                        <i class="fas fa-code"></i> Voir le script SQL
+                    </button>
+                </div>
+            </div>
+
+            <!-- ╔══════════════════════════════════════════════════════╗ -->
+            <!-- ║  ABONNEMENTS / BILLING                               ║ -->
+            <!-- ╚══════════════════════════════════════════════════════╝ -->
+            <div id="billing-view" class="view-section hidden relative z-10 space-y-6">
+                <div>
+                    <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                        <i class="fas fa-credit-card text-green-400"></i> Abonnements & Facturation
+                    </h2>
+                    <p class="text-sm text-blue-300/80">Plans Stripe — paiement sécurisé par carte ou facture</p>
+                </div>
+
+                <!-- Plan actuel -->
+                <div id="currentPlanCard" class="glass-card rounded-2xl border border-green-500/30 p-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 border border-green-400/30">
+                                <i class="fas fa-check-circle text-2xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs text-green-400 font-bold uppercase tracking-widest mb-1">Plan actuel</p>
+                                <h3 id="currentPlanName" class="text-2xl font-bold text-white">Business</h3>
+                                <p id="currentPlanPrice" class="text-green-400 font-semibold">49$ CAD / mois</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-2 text-sm text-blue-300/70">
+                            <span><i class="fas fa-hdd mr-2 text-blue-400"></i> <span id="currentPlanStorage">100 GB</span> de stockage</span>
+                            <span><i class="fas fa-users mr-2 text-blue-400"></i> <span id="currentPlanUsers">Illimité</span> utilisateurs</span>
+                            <span><i class="fas fa-calendar-alt mr-2 text-blue-400"></i> Prochain paiement: <span id="nextBillingDate">—</span></span>
+                        </div>
+                        <button onclick="showToast('Portail Stripe en cours d\'intégration','info')" class="px-5 py-2.5 glass-card border border-green-500/30 text-green-400 rounded-xl text-sm hover:bg-green-500/10 transition-all font-medium">
+                            <i class="fas fa-external-link-alt mr-2"></i>Gérer via Stripe
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Plans disponibles -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <!-- Starter -->
+                    <div class="glass-card rounded-2xl border border-blue-500/25 p-6 space-y-4 relative">
+                        <div class="text-center">
+                            <p class="text-xs text-blue-400 font-bold uppercase tracking-widest mb-2">Starter</p>
+                            <div class="flex items-end justify-center gap-1 mb-1">
+                                <span class="text-4xl font-extrabold text-white">19$</span>
+                                <span class="text-blue-300/60 mb-1">CAD/mois</span>
+                            </div>
+                            <p class="text-xs text-blue-300/50">Idéal pour les PME</p>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> 20 GB stockage</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> 5 utilisateurs</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Documents illimités</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Chiffrement AES-256</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Support email</div>
+                            <div class="flex items-center gap-2 text-gray-300/30"><i class="fas fa-times text-red-400/40 text-xs"></i> RBAC avancé</div>
+                            <div class="flex items-center gap-2 text-gray-300/30"><i class="fas fa-times text-red-400/40 text-xs"></i> API Access</div>
+                        </div>
+                        <button onclick="selectPlan('starter', 19)" class="w-full py-2.5 glass-card border border-blue-500/30 text-blue-400 rounded-xl text-sm hover:bg-blue-500/10 transition-all font-medium">
+                            Sélectionner
+                        </button>
+                    </div>
+
+                    <!-- Business (recommandé) -->
+                    <div class="glass-card rounded-2xl border border-purple-500/40 p-6 space-y-4 relative" style="box-shadow:0 0 30px rgba(139,92,246,0.2)">
+                        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                            <span class="px-4 py-1 bg-purple-500 text-white text-xs font-bold rounded-full shadow-lg shadow-purple-500/50">⭐ RECOMMANDÉ</span>
+                        </div>
+                        <div class="text-center pt-2">
+                            <p class="text-xs text-purple-400 font-bold uppercase tracking-widest mb-2">Business</p>
+                            <div class="flex items-end justify-center gap-1 mb-1">
+                                <span class="text-4xl font-extrabold text-white">49$</span>
+                                <span class="text-blue-300/60 mb-1">CAD/mois</span>
+                            </div>
+                            <p class="text-xs text-blue-300/50">Cabinets &amp; entreprises</p>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> 100 GB stockage</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Utilisateurs illimités</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Documents illimités</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Chiffrement AES-256</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> RBAC avancé</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> API Access</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Support prioritaire</div>
+                        </div>
+                        <button onclick="selectPlan('business', 49)" class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-purple-500/30">
+                            Sélectionner
+                        </button>
+                    </div>
+
+                    <!-- Enterprise -->
+                    <div class="glass-card rounded-2xl border border-yellow-500/25 p-6 space-y-4 relative">
+                        <div class="text-center">
+                            <p class="text-xs text-yellow-400 font-bold uppercase tracking-widest mb-2">Enterprise</p>
+                            <div class="flex items-end justify-center gap-1 mb-1">
+                                <span class="text-4xl font-extrabold text-white">99$</span>
+                                <span class="text-blue-300/60 mb-1">CAD/mois</span>
+                            </div>
+                            <p class="text-xs text-blue-300/50">Grandes organisations</p>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Stockage illimité</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Utilisateurs illimités</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Documents illimités</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Chiffrement AES-256</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> RBAC avancé</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> API Access</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> SSO / SAML</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> SLA garanti 99.9%</div>
+                            <div class="flex items-center gap-2 text-gray-300"><i class="fas fa-check text-green-400 text-xs"></i> Support dédié 24/7</div>
+                        </div>
+                        <button onclick="selectPlan('enterprise', 99)" class="w-full py-2.5 glass-card border border-yellow-500/30 text-yellow-400 rounded-xl text-sm hover:bg-yellow-500/10 transition-all font-medium">
+                            Contacter les ventes
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Projection revenus -->
+                <div class="glass-card rounded-2xl border border-green-500/20 p-6">
+                    <h3 class="text-white font-bold mb-5 flex items-center gap-2"><i class="fas fa-chart-line text-green-400"></i> Projection de revenus (MRR)</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="glass-card rounded-xl border border-blue-500/20 p-4 text-center">
+                            <p class="text-xs text-blue-300/60 mb-2">5 entreprises Business</p>
+                            <p class="text-2xl font-bold text-white">245$</p>
+                            <p class="text-xs text-green-400 mt-1">/ mois</p>
+                        </div>
+                        <div class="glass-card rounded-xl border border-purple-500/20 p-4 text-center">
+                            <p class="text-xs text-blue-300/60 mb-2">20 entreprises Business</p>
+                            <p class="text-2xl font-bold text-white">980$</p>
+                            <p class="text-xs text-green-400 mt-1">/ mois</p>
+                        </div>
+                        <div class="glass-card rounded-xl border border-yellow-500/20 p-4 text-center">
+                            <p class="text-xs text-blue-300/60 mb-2">50 entreprises mixtes</p>
+                            <p class="text-2xl font-bold text-white">3 200$</p>
+                            <p class="text-xs text-green-400 mt-1">/ mois</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-3 rounded-xl bg-green-500/5 border border-green-500/15 text-sm text-green-400/80 flex items-start gap-2">
+                        <i class="fas fa-lightbulb mt-0.5 flex-shrink-0"></i>
+                        <span>Clients cibles : cabinets comptables, cabinets juridiques, PME, construction, cabinets médicaux. Ils ont tous beaucoup de documents à gérer.</span>
+                    </div>
+                </div>
+
+                <!-- Historique factures -->
+                <div class="glass-card rounded-2xl border border-blue-500/20 overflow-hidden">
+                    <div class="px-5 py-4 border-b border-blue-500/20">
+                        <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-receipt text-blue-400"></i> Historique des factures</h3>
+                    </div>
+                    <div class="divide-y divide-blue-500/10" id="invoicesList">
+                        <div class="flex items-center justify-between px-5 py-3 hover:bg-blue-500/5 transition-all">
+                            <div><p class="text-sm text-white font-medium">Facture #INV-2026-03</p><p class="text-xs text-blue-300/50">15 mars 2026 · Plan Business</p></div>
+                            <div class="flex items-center gap-3"><span class="text-white font-bold">49$ CAD</span><span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold">Payée</span><button class="px-3 py-1.5 glass-card border border-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/10 transition-all"><i class="fas fa-download mr-1"></i>PDF</button></div>
+                        </div>
+                        <div class="flex items-center justify-between px-5 py-3 hover:bg-blue-500/5 transition-all">
+                            <div><p class="text-sm text-white font-medium">Facture #INV-2026-02</p><p class="text-xs text-blue-300/50">15 fév. 2026 · Plan Business</p></div>
+                            <div class="flex items-center gap-3"><span class="text-white font-bold">49$ CAD</span><span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold">Payée</span><button class="px-3 py-1.5 glass-card border border-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/10 transition-all"><i class="fas fa-download mr-1"></i>PDF</button></div>
+                        </div>
+                        <div class="flex items-center justify-between px-5 py-3 hover:bg-blue-500/5 transition-all">
+                            <div><p class="text-sm text-white font-medium">Facture #INV-2026-01</p><p class="text-xs text-blue-300/50">15 jan. 2026 · Plan Starter</p></div>
+                            <div class="flex items-center gap-3"><span class="text-white font-bold">19$ CAD</span><span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold">Payée</span><button class="px-3 py-1.5 glass-card border border-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/10 transition-all"><i class="fas fa-download mr-1"></i>PDF</button></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1598,7 +1884,7 @@
 </div>
 
 <!-- ===== JAVASCRIPT ===== -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // ─── CONFIGURATION SUPABASE ──────────────────────────────────────────────────
 // IMPORTANT : remplacez ces valeurs par vos vraies clés depuis votre dashboard Supabase.
 // En production, idéalement servez cette page depuis un backend qui injecte ces valeurs
@@ -1610,6 +1896,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── ÉTAT GLOBAL ─────────────────────────────────────────────────────────────
 let currentUser      = null;
+let currentCompany   = null;   // ← MULTI-TENANT: entreprise active
 let currentDocuments = [];
 let currentTags      = [];
 let currentWorkflows = [];
@@ -1816,8 +2103,61 @@ async function loadUserProfile() {
     document.getElementById('dropdownUserEmail').textContent  = currentUser.email;
     document.getElementById('userAvatarInitial').textContent  = displayName.charAt(0).toUpperCase();
 
-    const { data } = await supabaseClient.from('users_profiles').select('role').eq('id', currentUser.id).single();
-    if (data) document.getElementById('userRoleDisplay').textContent = data.role || 'Utilisateur';
+    // ── MULTI-TENANT : charger profil + entreprise ────────────────────────────
+    try {
+        const { data: profile } = await supabaseClient
+            .from('users_profiles')
+            .select('role, company_id, companies(id, name, plan, storage_limit_mb)')
+            .eq('id', currentUser.id)
+            .single();
+
+        if (profile) {
+            document.getElementById('userRoleDisplay').textContent = profile.role || 'Utilisateur';
+            if (profile.companies) {
+                currentCompany = profile.companies;
+                renderCompanyBadge(profile.companies, profile.role);
+            }
+        }
+    } catch(_) {
+        // Table pas encore migrée — mode legacy OK
+        const { data } = await supabaseClient.from('users_profiles').select('role').eq('id', currentUser.id).single();
+        if (data) document.getElementById('userRoleDisplay').textContent = data.role || 'Utilisateur';
+    }
+}
+
+function renderCompanyBadge(company, role) {
+    // Badge entreprise dans le header
+    const nameEl = document.getElementById('userNameDisplay');
+    if (nameEl) nameEl.textContent = currentUser.email.split('@')[0];
+
+    // Badge plan dans la sidebar stockage
+    const planColors = { starter:'text-blue-400', business:'text-purple-400', enterprise:'text-yellow-400' };
+    const plan = (company.plan || 'starter').toLowerCase();
+    const storageLimit = company.storage_limit_mb || MAX_STORAGE_MB;
+
+    // Mettre à jour le plafond stockage
+    window.TENANT_STORAGE_MAX = storageLimit;
+
+    // Injecter badge entreprise dans la sidebar desktop
+    const sidebarBrand = document.querySelector('.desktop-sidebar .glass-card');
+    if (sidebarBrand) {
+        // Ajouter nom entreprise si pas déjà là
+        const existingBadge = document.getElementById('companyBadgeSidebar');
+        if (!existingBadge) {
+            const badge = document.createElement('div');
+            badge.id = 'companyBadgeSidebar';
+            badge.className = 'mt-3 pt-3 border-t border-blue-500/20';
+            badge.innerHTML = `
+                <div class="flex items-center gap-2 mb-1">
+                    <i class="fas fa-building text-blue-400 text-xs"></i>
+                    <span class="text-xs text-blue-300 font-semibold truncate">${escapeHtml(company.name)}</span>
+                </div>
+                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${planColors[plan] || 'text-blue-400'} bg-blue-500/10 border border-blue-500/20">
+                    Plan ${plan}
+                </span>`;
+            sidebarBrand.appendChild(badge);
+        }
+    }
 }
 
 function showMainApp() {
@@ -1881,12 +2221,19 @@ async function loadAllData() {
 // ─── DOCUMENTS ───────────────────────────────────────────────────────────────
 async function loadDocuments() {
     try {
-        const { data, error } = await supabaseClient
+        // MULTI-TENANT : filtrer par company_id si disponible, sinon fallback user_id
+        let query = supabaseClient
             .from('documents')
             .select('*, document_tags(tags(*))')
-            .eq('user_id', currentUser.id)
             .order('created_at', { ascending: false });
 
+        if (currentCompany) {
+            query = query.eq('company_id', currentCompany.id);
+        } else {
+            query = query.eq('user_id', currentUser.id);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
         currentDocuments = data || [];
         renderDocuments();
@@ -2087,6 +2434,7 @@ async function uploadDocument() {
                     file_type: file.type,
                     storage_path: fileName,
                     user_id: currentUser.id,
+                    company_id: currentCompany ? currentCompany.id : null,  // ← MULTI-TENANT
                     version_number: 1
                 }])
                 .select().single();
@@ -3400,15 +3748,389 @@ switchView = function(viewName) {
     }
 };
 
+
 // ─── FERMETURE MODALS AU CLIC EXTÉRIEUR ─────────────────────────────────────
 window.onclick = function(event) {
-    if (event.target === document.getElementById('uploadModal'))         closeUploadModal();
-    if (event.target === document.getElementById('previewModal'))        closePreview();
-    if (event.target === document.getElementById('addUserModal'))        closeAddUserModal();
-    if (event.target === document.getElementById('dangerModal'))         closeDangerModal();
-    if (event.target === document.getElementById('shareModal'))          closeShareModal();
-    if (event.target === document.getElementById('createWorkflowModal')) closeCreateWorkflowModal();
+    if (event.target === document.getElementById('uploadModal'))            closeUploadModal();
+    if (event.target === document.getElementById('previewModal'))           closePreview();
+    if (event.target === document.getElementById('addUserModal'))           closeAddUserModal();
+    if (event.target === document.getElementById('dangerModal'))            closeDangerModal();
+    if (event.target === document.getElementById('shareModal'))             closeShareModal();
+    if (event.target === document.getElementById('createWorkflowModal'))    closeCreateWorkflowModal();
+    if (event.target === document.getElementById('createCompanyModal'))     closeCreateCompanyModal();
+    if (event.target === document.getElementById('sqlSchemaModal'))         closeSqlSchemaModal();
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MULTI-TENANT — ENTREPRISES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let allCompanies = [];
+
+const PLAN_CONFIG = {
+    starter:    { price: 19,  storage_mb: 20480,   label: 'Starter',    color: 'text-blue-400',   bg: 'bg-blue-500/20',   border: 'border-blue-400/30' },
+    business:   { price: 49,  storage_mb: 102400,  label: 'Business',   color: 'text-purple-400', bg: 'bg-purple-500/20', border: 'border-purple-400/30' },
+    enterprise: { price: 99,  storage_mb: null,    label: 'Enterprise', color: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-400/30' },
+};
+
+async function loadCompanies() {
+    const container = document.getElementById('companiesList');
+    if (!container) return;
+    container.innerHTML = '<div class="p-8 text-center text-blue-300/40"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>Chargement...</div>';
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('companies')
+            .select('*, users_profiles(count)')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        allCompanies = data || [];
+
+        // Update stats
+        const count = document.getElementById('statsCompanyCount');
+        if (count) count.textContent = allCompanies.length;
+        const docCount = document.getElementById('statsDocCount');
+        if (docCount) docCount.textContent = currentDocuments.length;
+        const mrr = document.getElementById('statsMRR');
+        if (mrr) {
+            const total = allCompanies.reduce((s, c) => s + (PLAN_CONFIG[c.plan]?.price || 0), 0);
+            mrr.textContent = total + '$';
+        }
+        const cCount = document.getElementById('companyCount');
+        if (cCount) cCount.textContent = allCompanies.length;
+
+        if (!allCompanies.length) {
+            container.innerHTML = '<div class="p-8 text-center text-blue-300/40"><i class="fas fa-building text-4xl mb-3 block opacity-20"></i><p>Aucune entreprise créée</p><p class="text-xs mt-1">Cliquez sur "Nouvelle entreprise" pour commencer</p></div>';
+            return;
+        }
+
+        container.innerHTML = allCompanies.map(company => {
+            const plan = PLAN_CONFIG[company.plan] || PLAN_CONFIG.starter;
+            const storagePct = company.storage_used_mb && plan.storage_mb
+                ? Math.min(100, Math.round((company.storage_used_mb / plan.storage_mb) * 100)) : 0;
+            const userCount = company.users_profiles?.[0]?.count || 0;
+
+            return `<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-4 hover:bg-yellow-500/3 transition-all group">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 ${plan.bg} rounded-xl flex items-center justify-center ${plan.color} border ${plan.border} flex-shrink-0">
+                        <i class="fas fa-building text-lg"></i>
+                    </div>
+                    <div>
+                        <p class="text-white font-semibold">${escapeHtml(company.name)}</p>
+                        <p class="text-xs text-blue-300/50">${escapeHtml(company.email || '—')} · Créée ${formatDate(company.created_at)}</p>
+                        <div class="flex items-center gap-3 mt-1">
+                            <span class="text-[10px] ${plan.color} font-bold uppercase">${plan.label}</span>
+                            <span class="text-[10px] text-blue-300/50">${userCount} utilisateur(s)</span>
+                            <div class="flex items-center gap-1 text-[10px] text-blue-300/50">
+                                <div class="w-16 bg-slate-900/50 rounded-full h-1 overflow-hidden">
+                                    <div class="bg-blue-500 h-1 rounded-full" style="width:${storagePct}%"></div>
+                                </div>
+                                ${storagePct}% stockage
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    <span class="px-3 py-1 ${plan.bg} ${plan.color} border ${plan.border} rounded-full text-xs font-bold">${plan.price}$/mois</span>
+                    <button onclick="switchToCompany('${escapeHtml(company.id)}')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all font-medium">
+                        <i class="fas fa-sign-in-alt mr-1"></i>Accéder
+                    </button>
+                    <button onclick="editCompany('${escapeHtml(company.id)}')" class="px-3 py-1.5 glass-card border border-blue-500/20 text-gray-400 rounded-lg text-xs hover:bg-blue-500/10 transition-all">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+    } catch (err) {
+        container.innerHTML = `<div class="p-8 text-center text-red-400/60"><i class="fas fa-exclamation-circle text-2xl mb-2 block"></i>Table 'companies' non trouvée — exécutez le script SQL d'abord.<br><button onclick="showSqlSchema()" class="mt-3 px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg text-xs border border-cyan-500/20 hover:bg-cyan-500/30 transition-all">Voir le SQL</button></div>`;
+    }
+}
+
+async function switchToCompany(companyId) {
+    const company = allCompanies.find(c => c.id === companyId);
+    if (!company) return;
+    currentCompany = company;
+    renderCompanyBadge(company, 'admin');
+    await loadDocuments();
+    switchView('dashboard');
+    showToast(`Espace "${company.name}" activé`, 'success');
+}
+
+function editCompany(companyId) {
+    showToast('Modification d\'entreprise — disponible bientôt', 'info');
+}
+
+// Créer une entreprise
+function openCreateCompanyModal() {
+    document.getElementById('createCompanyModal').classList.remove('hidden');
+}
+function closeCreateCompanyModal() {
+    document.getElementById('createCompanyModal').classList.add('hidden');
+    document.getElementById('ccName').value = '';
+    document.getElementById('ccEmail').value = '';
+}
+
+async function saveNewCompany() {
+    const name  = document.getElementById('ccName').value.trim();
+    const email = document.getElementById('ccEmail').value.trim();
+    const plan  = document.getElementById('ccPlan').value;
+
+    if (!name) { showToast('Nom de l\'entreprise requis', 'error'); return; }
+
+    const btn = document.getElementById('saveCompanyBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner inline-block mr-2"></div>Création...';
+
+    try {
+        const storageMb = PLAN_CONFIG[plan]?.storage_mb || 20480;
+        const { data, error } = await supabaseClient
+            .from('companies')
+            .insert([{ name, email: email || null, plan, storage_limit_mb: storageMb, created_by: currentUser.id }])
+            .select().single();
+
+        if (error) throw error;
+        allCompanies.unshift(data);
+        closeCreateCompanyModal();
+        await loadCompanies();
+        showToast(`Entreprise "${name}" créée avec succès !`, 'success');
+        logActivity('upload', null, `Entreprise créée: ${name} (Plan: ${plan})`);
+    } catch (err) {
+        showToast('Erreur création: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check mr-2"></i>Créer l\'entreprise';
+    }
+}
+
+// Plan selection (Billing)
+function selectPlan(plan, price) {
+    showToast(`Plan ${plan} à ${price}$/mois — Redirection Stripe en cours...`, 'info');
+    setTimeout(() => showToast('Intégration Stripe : ajoutez votre clé publishable dans la config', 'warning'), 1500);
+}
+
+// ─── SQL SCHEMA MODAL ─────────────────────────────────────────────────────────
+function showSqlSchema() {
+    document.getElementById('sqlSchemaModal').classList.remove('hidden');
+}
+function closeSqlSchemaModal() {
+    document.getElementById('sqlSchemaModal').classList.add('hidden');
+}
+function copySqlSchema() {
+    const sql = document.getElementById('sqlSchemaCode').textContent;
+    navigator.clipboard.writeText(sql).then(() => showToast('Script SQL copié !', 'success'));
+}
+
+// ─── PATCH switchView pour les nouvelles vues ─────────────────────────────────
+const _origSW2 = switchView;
+switchView = function(viewName) {
+    _origSW2(viewName);
+    if (viewName === 'companies') loadCompanies();
+    if (viewName === 'billing')   renderBillingCurrentPlan();
+    if (viewName === 'search')    setTimeout(() => document.getElementById('advSearchInput')?.focus(), 100);
+};
+
+function renderBillingCurrentPlan() {
+    const plan = currentCompany?.plan || 'business';
+    const cfg  = PLAN_CONFIG[plan] || PLAN_CONFIG.business;
+    const nameEl  = document.getElementById('currentPlanName');
+    const priceEl = document.getElementById('currentPlanPrice');
+    const storEl  = document.getElementById('currentPlanStorage');
+    if (nameEl)  nameEl.textContent  = cfg.label;
+    if (priceEl) priceEl.textContent = cfg.price + '$ CAD / mois';
+    if (storEl)  storEl.textContent  = cfg.storage_mb ? Math.round(cfg.storage_mb / 1024) + ' GB' : 'Illimité';
+    const nextDate = new Date(); nextDate.setMonth(nextDate.getMonth() + 1);
+    const nextEl = document.getElementById('nextBillingDate');
+    if (nextEl) nextEl.textContent = nextDate.toLocaleDateString('fr-FR');
+}
+
 </script>
+
+<!-- ===== CREATE COMPANY MODAL ===== -->
+<div id="createCompanyModal" class="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card rounded-2xl border border-yellow-500/30 w-full max-w-md shadow-2xl shadow-yellow-500/10">
+        <div class="p-6 border-b border-yellow-500/20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-400 border border-yellow-400/30">
+                    <i class="fas fa-building"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white">Nouvelle entreprise</h3>
+            </div>
+            <button onclick="closeCreateCompanyModal()" class="text-blue-400 hover:text-white p-2 hover:bg-blue-500/10 rounded-lg transition-colors"><i class="fas fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-blue-300 mb-1.5">Nom de l'entreprise <span class="text-red-400">*</span></label>
+                <input type="text" id="ccName" placeholder="Ex: Cabinet Comptable Martin"
+                       class="w-full bg-slate-900/50 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/15 outline-none transition-all placeholder-gray-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-blue-300 mb-1.5">Email de contact</label>
+                <input type="email" id="ccEmail" placeholder="contact@entreprise.com"
+                       class="w-full bg-slate-900/50 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/15 outline-none transition-all placeholder-gray-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-blue-300 mb-1.5">Plan d'abonnement</label>
+                <select id="ccPlan" class="w-full bg-slate-900/50 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:border-yellow-400 outline-none cursor-pointer">
+                    <option value="starter">Starter — 19$ CAD/mois (20 GB)</option>
+                    <option value="business" selected>Business — 49$ CAD/mois (100 GB)</option>
+                    <option value="enterprise">Enterprise — 99$ CAD/mois (Illimité)</option>
+                </select>
+            </div>
+            <div class="p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/15 text-xs text-yellow-400/70 flex items-start gap-2">
+                <i class="fas fa-info-circle mt-0.5 flex-shrink-0"></i>
+                <span>Chaque entreprise a son espace isolé. Les données ne sont jamais partagées entre entreprises (<code>company_id</code> sur chaque enregistrement).</span>
+            </div>
+        </div>
+        <div class="p-6 border-t border-yellow-500/20 flex gap-3">
+            <button onclick="closeCreateCompanyModal()" class="flex-1 px-4 py-3 text-blue-300 hover:bg-blue-500/10 rounded-xl transition-colors border border-blue-500/30 font-medium">Annuler</button>
+            <button id="saveCompanyBtn" onclick="saveNewCompany()" class="flex-1 px-4 py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-xl font-bold transition-all shadow-lg shadow-yellow-500/30 flex items-center justify-center gap-2">
+                <i class="fas fa-check mr-1"></i>Créer l'entreprise
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== SQL SCHEMA MODAL ===== -->
+<div id="sqlSchemaModal" class="fixed inset-0 bg-slate-900/97 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card rounded-2xl border border-cyan-500/30 w-full max-w-3xl shadow-2xl max-h-[90vh] flex flex-col">
+        <div class="p-5 border-b border-cyan-500/20 flex items-center justify-between flex-shrink-0">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2"><i class="fas fa-database text-cyan-400"></i> Script SQL — Architecture Multi-Tenant</h3>
+            <div class="flex gap-2">
+                <button onclick="copySqlSchema()" class="px-4 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-sm hover:bg-cyan-500/30 transition-all font-medium flex items-center gap-2">
+                    <i class="fas fa-copy"></i> Copier
+                </button>
+                <button onclick="closeSqlSchemaModal()" class="text-blue-400 hover:text-white p-2 hover:bg-blue-500/10 rounded-lg transition-colors"><i class="fas fa-times text-xl"></i></button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5">
+            <p class="text-sm text-blue-300/70 mb-4">Copiez et exécutez ce script dans <strong class="text-white">Supabase → SQL Editor</strong> pour activer l'architecture multi-tenant.</p>
+            <pre id="sqlSchemaCode" class="text-xs font-mono text-green-300 bg-slate-950/80 rounded-xl p-5 overflow-x-auto border border-cyan-500/10 leading-relaxed whitespace-pre-wrap">-- ══════════════════════════════════════════════════════════
+-- SystemesGED — Architecture Multi-Tenant
+-- Exécuter dans Supabase SQL Editor
+-- ══════════════════════════════════════════════════════════
+
+-- 1. TABLE COMPANIES (entreprises / tenants)
+CREATE TABLE IF NOT EXISTS companies (
+    id                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name                TEXT NOT NULL,
+    email               TEXT,
+    plan                TEXT NOT NULL DEFAULT 'starter'
+                        CHECK (plan IN ('starter','business','enterprise')),
+    storage_limit_mb    INTEGER DEFAULT 20480,
+    storage_used_mb     INTEGER DEFAULT 0,
+    created_by          UUID REFERENCES auth.users(id),
+    stripe_customer_id  TEXT,
+    stripe_subscription_id TEXT,
+    is_active           BOOLEAN DEFAULT true,
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. AJOUTER company_id AUX TABLES EXISTANTES
+ALTER TABLE documents
+    ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+
+ALTER TABLE users_profiles
+    ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE SET NULL;
+
+-- 3. TABLES NOUVELLES
+
+-- Dossiers par entreprise
+CREATE TABLE IF NOT EXISTS folders (
+    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    company_id  UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    parent_id   UUID REFERENCES folders(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    created_by  UUID REFERENCES auth.users(id),
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Abonnements/Facturation
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    company_id          UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    plan                TEXT NOT NULL,
+    price_monthly_cad   NUMERIC(10,2),
+    status              TEXT DEFAULT 'active' CHECK (status IN ('active','cancelled','past_due','trialing')),
+    stripe_sub_id       TEXT,
+    current_period_start TIMESTAMPTZ,
+    current_period_end   TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. INDEXES CRITIQUES POUR LA PERFORMANCE
+CREATE INDEX IF NOT EXISTS idx_documents_company   ON documents(company_id);
+CREATE INDEX IF NOT EXISTS idx_users_company       ON users_profiles(company_id);
+CREATE INDEX IF NOT EXISTS idx_folders_company     ON folders(company_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_company ON subscriptions(company_id);
+
+-- 5. ROW LEVEL SECURITY — ISOLATION DES DONNÉES
+-- Chaque entreprise ne voit que SES propres données.
+
+ALTER TABLE companies    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE folders      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- Policy: un utilisateur ne voit que son entreprise
+CREATE POLICY "Users see own company" ON companies
+    FOR ALL USING (
+        id IN (
+            SELECT company_id FROM users_profiles
+            WHERE id = auth.uid()
+        )
+    );
+
+-- Policy: documents filtrés par company_id
+CREATE POLICY "Company data isolation" ON documents
+    FOR ALL USING (
+        company_id IN (
+            SELECT company_id FROM users_profiles
+            WHERE id = auth.uid()
+        )
+    );
+
+-- Policy: dossiers filtrés par company_id
+CREATE POLICY "Company folders isolation" ON folders
+    FOR ALL USING (
+        company_id IN (
+            SELECT company_id FROM users_profiles
+            WHERE id = auth.uid()
+        )
+    );
+
+-- 6. FONCTION TRIGGER pour updated_at
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER companies_updated_at
+    BEFORE UPDATE ON companies
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- 7. DONNÉES DE TEST (optionnel)
+-- INSERT INTO companies (name, email, plan, storage_limit_mb)
+-- VALUES
+--   ('Cabinet Martin Comptabilité', 'martin@cabinet.com', 'business', 102400),
+--   ('Étude Notariale Dupont', 'contact@dupont-notaire.ca', 'enterprise', NULL),
+--   ('PME Construction Leblanc', 'info@leblanc-construction.ca', 'starter', 20480);
+
+-- ══════════════════════════════════════════════════════════
+-- ✅ Après exécution :
+--    • Rechargez l'app et allez dans Entreprises
+--    • Créez votre première entreprise
+--    • Chaque document uploadé sera lié à company_id
+--    • Les RLS policies garantissent l'isolation
+-- ══════════════════════════════════════════════════════════</pre>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
