@@ -2946,7 +2946,13 @@ Message : ' + message + '
 ');
 
         await navigator.clipboard.writeText(signedUrl).catch(() => {});
-        window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + encodeURIComponent(body);
+        const mailLink1 = document.createElement('a');
+        mailLink1.href = 'mailto:' + email + '?subject=' + subject + '&body=' + encodeURIComponent(body);
+        mailLink1.target = '_blank';
+        mailLink1.rel = 'noopener';
+        document.body.appendChild(mailLink1);
+        mailLink1.click();
+        setTimeout(() => document.body.removeChild(mailLink1), 100);
 
         await logActivity('share', currentShareDocId, 'Document partagé avec ' + email + ' (' + (permLabels[permission] || 'Lecture') + ')');
         showToast('Email ouvert pour ' + email + ' — lien copié !', 'success');
@@ -3214,7 +3220,13 @@ async function resendShareEmail(shareId) {
             'SystemesGED v3.0 — ' + currentUser.email,
         ].join('\n');
 
-        window.location.href = 'mailto:' + data.shared_with_email + '?subject=' + subject + '&body=' + encodeURIComponent(bodyText);
+        const mailLink2 = document.createElement('a');
+        mailLink2.href = 'mailto:' + data.shared_with_email + '?subject=' + subject + '&body=' + encodeURIComponent(bodyText);
+        mailLink2.target = '_blank';
+        mailLink2.rel = 'noopener';
+        document.body.appendChild(mailLink2);
+        mailLink2.click();
+        setTimeout(() => document.body.removeChild(mailLink2), 100);
         showToast('Email de rappel ouvert !', 'success');
     } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
 }
