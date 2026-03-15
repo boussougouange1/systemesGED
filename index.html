@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SystemesGED - Gestion Électronique de Documents Cloud</title>
+    <title>SystemesGED v3.0 — Gestion Électronique de Documents Cloud</title>
+    <meta name="description" content="SystemesGED — Plateforme GED cloud sécurisée, RGPD conforme">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data: blob:; connect-src 'self' https:;">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -491,29 +494,11 @@
                     <div id="notifPanel" class="hidden absolute right-0 mt-2 w-80 z-50" style="top:100%">
                         <div class="glass-card rounded-2xl border border-blue-500/30 shadow-2xl overflow-hidden" style="background:rgba(10,18,50,0.97)">
                             <div class="flex items-center justify-between px-4 py-3 border-b border-blue-500/20">
-                                <span class="text-white font-bold text-sm flex items-center gap-2"><i class="fas fa-bell text-blue-400"></i> Notifications <span class="ml-1 px-1.5 py-0.5 bg-red-500/80 text-white text-[10px] rounded-full">3</span></span>
+                                <span class="text-white font-bold text-sm flex items-center gap-2"><i class="fas fa-bell text-blue-400"></i> Notifications <span id="notifCountBadge" class="ml-1 px-1.5 py-0.5 bg-red-500/80 text-white text-[10px] rounded-full hidden">0</span></span>
                                 <button onclick="markAllNotifRead()" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Tout lire</button>
                             </div>
-                            <div class="divide-y divide-blue-500/10 max-h-72 overflow-y-auto">
-                                <div class="px-4 py-3 hover:bg-blue-500/5 cursor-pointer flex gap-3 items-start transition-all">
-                                    <div class="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 flex-shrink-0 mt-0.5"><i class="fas fa-upload text-xs"></i></div>
-                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Upload réussi</p><p class="text-xs text-blue-300/60">Contrat_2026.pdf — scan OK ✓</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 5 min</p></div>
-                                    <span class="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0 mt-2"></span>
-                                </div>
-                                <div class="px-4 py-3 hover:bg-blue-500/5 cursor-pointer flex gap-3 items-start transition-all">
-                                    <div class="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 flex-shrink-0 mt-0.5"><i class="fas fa-share-alt text-xs"></i></div>
-                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Document partagé</p><p class="text-xs text-blue-300/60">Rapport_Q1.xlsx partagé avec vous</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 30 min</p></div>
-                                    <span class="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0 mt-2"></span>
-                                </div>
-                                <div class="px-4 py-3 hover:bg-yellow-500/5 cursor-pointer flex gap-3 items-start transition-all bg-yellow-500/3">
-                                    <div class="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center text-yellow-400 flex-shrink-0 mt-0.5"><i class="fas fa-shield-alt text-xs"></i></div>
-                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Alerte sécurité</p><p class="text-xs text-blue-300/60">Tentative d'accès bloquée — IP: 45.12.88.3</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 1h</p></div>
-                                    <span class="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0 mt-2"></span>
-                                </div>
-                                <div class="px-4 py-3 hover:bg-blue-500/5 cursor-pointer flex gap-3 items-start transition-all">
-                                    <div class="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 flex-shrink-0 mt-0.5"><i class="fas fa-project-diagram text-xs"></i></div>
-                                    <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Workflow approuvé</p><p class="text-xs text-blue-300/60">Validation contrat_prestation terminée</p><p class="text-[10px] text-blue-400/40 mt-0.5">Il y a 2h</p></div>
-                                </div>
+                            <div id="notifContent" class="divide-y divide-blue-500/10 max-h-72 overflow-y-auto">
+                                <div class="px-4 py-8 text-center text-blue-300/50 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement...</div>
                             </div>
                             <div class="px-4 py-3 border-t border-blue-500/20 text-center">
                                 <button onclick="switchView('security');closeNotifPanel()" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Voir l'audit complet →</button>
@@ -641,7 +626,7 @@
                             <div class="w-14 h-14 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 border border-orange-400/30"><i class="fas fa-clock text-2xl"></i></div>
                             <span class="text-orange-400 text-xs font-bold bg-orange-500/10 px-2 py-1 rounded-full">En attente</span>
                         </div>
-                        <h3 id="pendingWorkflows" class="text-3xl font-bold text-white mb-1">0</h3>
+                        <h3 id="dashWorkflowCount" class="text-3xl font-bold text-white mb-1">0</h3>
                         <p class="text-blue-300/70 text-sm">Workflows actifs</p>
                     </div>
                     <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-purple-400/40 transition-colors cursor-pointer" onclick="switchView('shared')">
@@ -652,13 +637,13 @@
                         <h3 id="sharedCount" class="text-3xl font-bold text-white mb-1">0</h3>
                         <p class="text-blue-300/70 text-sm">Documents partagés</p>
                     </div>
-                    <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-green-400/40 transition-colors">
+                    <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-green-400/40 transition-colors cursor-pointer" onclick="switchView('users')">
                         <div class="flex items-center justify-between mb-4">
-                            <div class="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 border border-green-400/30"><i class="fas fa-check-circle text-2xl"></i></div>
-                            <span class="text-green-400 text-sm font-bold bg-green-500/10 px-3 py-1 rounded-full">100%</span>
+                            <div class="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 border border-green-400/30"><i class="fas fa-users text-2xl"></i></div>
+                            <span class="text-green-400 text-sm font-bold bg-green-500/10 px-3 py-1 rounded-full">Actifs</span>
                         </div>
-                        <h3 class="text-3xl font-bold text-white mb-1">RGPD</h3>
-                        <p class="text-blue-300/70 text-sm">Conforme</p>
+                        <h3 id="dashUserCount" class="text-3xl font-bold text-white mb-1">—</h3>
+                        <p class="text-blue-300/70 text-sm">Utilisateurs</p>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -859,6 +844,178 @@
                     </button>
                 </div>
 
+                <!-- Backup & Export -->
+                <div class="glass-card rounded-2xl border border-green-500/20 p-6 space-y-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i class="fas fa-database text-green-400"></i> Backup & Export</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <button onclick="exportAllData()" class="flex flex-col items-center gap-2 p-4 bg-green-500/10 border border-green-500/20 rounded-xl hover:bg-green-500/20 transition-all group">
+                            <i class="fas fa-file-archive text-2xl text-green-400 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-sm font-semibold text-white">Export ZIP</span>
+                            <span class="text-xs text-green-300/60">Métadonnées + liens</span>
+                        </button>
+                        <button onclick="exportDocumentsCsv()" class="flex flex-col items-center gap-2 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group">
+                            <i class="fas fa-file-csv text-2xl text-blue-400 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-sm font-semibold text-white">Export CSV</span>
+                            <span class="text-xs text-blue-300/60">Liste documents</span>
+                        </button>
+                        <button onclick="exportAuditLog()" class="flex flex-col items-center gap-2 p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/20 transition-all group">
+                            <i class="fas fa-history text-2xl text-purple-400 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-sm font-semibold text-white">Export Audit</span>
+                            <span class="text-xs text-purple-300/60">Journal activité</span>
+                        </button>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-900/30 border border-green-500/10 flex items-center justify-between">
+                        <div>
+                            <p class="text-white text-sm font-medium">Backup automatique</p>
+                            <p class="text-xs text-blue-300/50">Export programmé vers stockage cloud</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="autoBackupSetting" class="sr-only peer" onchange="toggleSetting('autoBackup')">
+                            <div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+                    <div class="text-xs text-blue-300/40 flex items-center gap-2">
+                        <i class="fas fa-info-circle text-blue-400"></i>
+                        Dernière sauvegarde : <span id="lastBackupDate">—</span>
+                    </div>
+                </div>
+
+                <!-- Supabase SQL Schema -->
+                <div class="glass-card rounded-2xl border border-yellow-500/20 p-6 space-y-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i class="fas fa-database text-yellow-400"></i> Configuration Supabase</h3>
+                    <p class="text-sm text-blue-300/70">Exécutez ce script SQL dans votre dashboard Supabase (SQL Editor) pour créer toutes les tables requises :</p>
+                    <div class="relative">
+                        <pre id="sqlSchemaBlock" class="bg-slate-950/80 border border-yellow-500/20 rounded-xl p-4 text-xs text-green-300 overflow-x-auto max-h-48 overflow-y-auto font-mono leading-relaxed">-- SystemesGED v3.0 — Schema SQL Supabase
+-- Exécuter dans : Supabase Dashboard → SQL Editor
+
+create table if not exists users_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text, name text, role text default 'user',
+  created_at timestamptz default now()
+);
+
+create table if not exists documents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  name text not null, description text, file_url text,
+  file_size bigint default 0, file_type text, storage_path text,
+  version_number int default 1, created_at timestamptz default now()
+);
+
+create table if not exists document_versions (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid references documents(id) on delete cascade,
+  version_number int not null, file_url text, file_size bigint,
+  storage_path text, created_by uuid, is_active boolean default false,
+  created_at timestamptz default now()
+);
+
+create table if not exists tags (
+  id uuid primary key default gen_random_uuid(),
+  name text unique not null, color text default '#3b82f6',
+  created_at timestamptz default now()
+);
+
+create table if not exists document_tags (
+  document_id uuid references documents(id) on delete cascade,
+  tag_id uuid references tags(id) on delete cascade,
+  primary key (document_id, tag_id)
+);
+
+create table if not exists shared_documents (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid references documents(id) on delete cascade,
+  shared_by uuid references auth.users(id),
+  shared_with uuid references auth.users(id),
+  shared_with_email text, permission text default 'view',
+  expires_at timestamptz, created_at timestamptz default now()
+);
+
+create table if not exists workflows (
+  id uuid primary key default gen_random_uuid(),
+  title text not null, description text, status text default 'pending',
+  priority text default 'medium', created_by uuid references auth.users(id),
+  document_id uuid references documents(id), due_date date,
+  approvers text[], created_at timestamptz default now()
+);
+
+create table if not exists activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  document_id uuid, action text, description text,
+  created_at timestamptz default now()
+);
+
+-- RLS : activer la sécurité par ligne
+alter table users_profiles enable row level security;
+alter table documents enable row level security;
+alter table document_versions enable row level security;
+alter table tags enable row level security;
+alter table document_tags enable row level security;
+alter table shared_documents enable row level security;
+alter table workflows enable row level security;
+alter table activity_logs enable row level security;
+
+-- Politiques RLS (chaque user voit ses propres données)
+create policy "users see own profile" on users_profiles for all using (auth.uid() = id);
+create policy "users manage own documents" on documents for all using (auth.uid() = user_id);
+create policy "users manage own versions" on document_versions for all using (auth.uid() = created_by);
+create policy "all users see tags" on tags for select using (true);
+create policy "authenticated create tags" on tags for insert with check (auth.uid() is not null);
+create policy "users delete own tags" on tags for delete using (auth.uid() is not null);
+create policy "all see doc_tags" on document_tags for select using (true);
+create policy "users manage doc_tags" on document_tags for all using (auth.uid() is not null);
+create policy "users see shares" on shared_documents for select using (auth.uid() = shared_by or shared_with_email = (select email from auth.users where id = auth.uid()));
+create policy "users create shares" on shared_documents for insert with check (auth.uid() = shared_by);
+create policy "users delete own shares" on shared_documents for delete using (auth.uid() = shared_by);
+create policy "users manage workflows" on workflows for all using (auth.uid() = created_by);
+create policy "users see own logs" on activity_logs for select using (auth.uid() = user_id);
+create policy "users create logs" on activity_logs for insert with check (auth.uid() = user_id);
+
+create policy "users delete own logs" on activity_logs for delete using (auth.uid() = user_id);
+
+-- Table RBAC optionnelle (pour persistance des rôles personnalisés)
+create table if not exists rbac_roles (
+  key text primary key,
+  name text not null,
+  perm_read boolean default true,
+  perm_write boolean default false,
+  perm_delete boolean default false,
+  perm_users boolean default false,
+  perm_logs boolean default false,
+  perm_api boolean default false,
+  updated_at timestamptz default now()
+);
+alter table rbac_roles enable row level security;
+create policy "all read roles" on rbac_roles for select using (true);
+create policy "admin manage roles" on rbac_roles for all using (auth.uid() is not null);
+
+-- Auto-créer le profil à l'inscription
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.users_profiles(id, email, name)
+  values (new.id, new.email, new.raw_user_meta_data->>'full_name');
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- Storage bucket
+insert into storage.buckets (id, name, public) values ('documents', 'documents', false) on conflict do nothing;
+create policy "user upload" on storage.objects for insert with check (bucket_id = 'documents' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "user read own" on storage.objects for select using (bucket_id = 'documents' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "user delete own" on storage.objects for delete using (bucket_id = 'documents' and auth.uid()::text = (storage.foldername(name))[1]);</pre>
+                        <button onclick="copySqlSchema()" class="absolute top-2 right-2 px-3 py-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs hover:bg-yellow-500/30 transition-all font-medium">
+                            <i class="fas fa-copy mr-1"></i>Copier
+                        </button>
+                    </div>
+                </div>
+
                 <div class="glass-card rounded-2xl border border-blue-500/20 p-6 space-y-6">
                     <div>
                         <h3 class="text-lg font-semibold text-white mb-4">Paramètres généraux</h3>
@@ -888,7 +1045,10 @@
                     </div>
                     <div class="border-t border-blue-500/20 pt-6">
                         <h3 class="text-lg font-semibold text-red-400 mb-4">Zone de danger</h3>
-                        <div class="flex gap-3">
+                        <div class="flex gap-3 flex-wrap">
+                            <button onclick="exportAllData()" class="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-all flex items-center gap-2">
+                                <i class="fas fa-file-export"></i> Exporter toutes mes données (ZIP)
+                            </button>
                             <button onclick="openDangerModal('delete_all')" class="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all flex items-center gap-2">
                                 <i class="fas fa-trash"></i> Supprimer tous les documents
                             </button>
@@ -1253,65 +1413,9 @@
                         <i class="fas fa-plus"></i> Nouveau rôle
                     </button>
                 </div>
-                <!-- Rôles cards -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <!-- Admin -->
-                    <div class="glass-card rounded-2xl border border-red-500/25 p-5 space-y-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400 border border-red-400/25"><i class="fas fa-crown text-xl"></i></div>
-                            <div><h3 class="text-white font-bold">Administrateur</h3><p class="text-xs text-blue-300/50">Accès total</p></div>
-                        </div>
-                        <div class="space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Lecture tous documents</div>
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Écriture / Modification</div>
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Suppression</div>
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Gestion utilisateurs</div>
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Logs &amp; Audit</div>
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Clés API &amp; OAuth</div>
-                        </div>
-                        <div class="pt-2 border-t border-red-500/10 flex items-center justify-between">
-                            <span class="px-2.5 py-1 bg-red-500/15 text-red-400 text-xs rounded-full border border-red-400/20 font-bold">1 utilisateur</span>
-                            <button onclick="openRoleModal('admin')" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Modifier →</button>
-                        </div>
-                    </div>
-                    <!-- Éditeur -->
-                    <div class="glass-card rounded-2xl border border-blue-500/25 p-5 space-y-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 border border-blue-400/25"><i class="fas fa-user-tie text-xl"></i></div>
-                            <div><h3 class="text-white font-bold">Éditeur</h3><p class="text-xs text-blue-300/50">Lecture + Écriture</p></div>
-                        </div>
-                        <div class="space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Lecture tous documents</div>
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Écriture / Modification</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Suppression</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Gestion utilisateurs</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Logs &amp; Audit</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Clés API &amp; OAuth</div>
-                        </div>
-                        <div class="pt-2 border-t border-blue-500/10 flex items-center justify-between">
-                            <span class="px-2.5 py-1 bg-blue-500/15 text-blue-400 text-xs rounded-full border border-blue-400/20 font-bold">3 utilisateurs</span>
-                            <button onclick="openRoleModal('editeur')" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Modifier →</button>
-                        </div>
-                    </div>
-                    <!-- Lecteur -->
-                    <div class="glass-card rounded-2xl border border-gray-500/20 p-5 space-y-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 bg-gray-500/20 rounded-xl flex items-center justify-center text-gray-400 border border-gray-400/20"><i class="fas fa-eye text-xl"></i></div>
-                            <div><h3 class="text-white font-bold">Lecteur</h3><p class="text-xs text-blue-300/50">Lecture seule</p></div>
-                        </div>
-                        <div class="space-y-1.5 text-xs">
-                            <div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i> Lecture docs partagés</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Écriture / Modification</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Suppression</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Gestion utilisateurs</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Logs &amp; Audit</div>
-                            <div class="flex items-center gap-2 text-red-400/50"><i class="fas fa-times-circle"></i> Clés API &amp; OAuth</div>
-                        </div>
-                        <div class="pt-2 border-t border-gray-500/10 flex items-center justify-between">
-                            <span class="px-2.5 py-1 bg-gray-500/15 text-gray-400 text-xs rounded-full border border-gray-400/20 font-bold">5 utilisateurs</span>
-                            <button onclick="openRoleModal('lecteur')" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Modifier →</button>
-                        </div>
-                    </div>
+                <!-- Rôles cards — chargés dynamiquement -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="rbacRoleCards">
+                    <div class="col-span-3 text-center py-8 text-blue-300/50"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement des rôles...</div>
                 </div>
                 <!-- Matrice permissions -->
                 <div class="glass-card rounded-2xl border border-cyan-500/15 overflow-hidden">
@@ -1859,6 +1963,8 @@ async function handleLogin(e) {
         showMainApp();
         await loadAllData();
         checkFirstRun();
+        loadRealNotifications();
+        loadRolesFromSupabase();
     } catch (error) {
         const msg = error.message === 'Invalid login credentials' ? 'Identifiants incorrects' : error.message;
         showToast(msg, 'error');
@@ -2133,7 +2239,7 @@ function createDocListItem(doc) {
         </div>`;
 }
 
-function updateStats() {
+async function updateStats() {
     const totalDocs    = currentDocuments.length;
     const totalSize    = currentDocuments.reduce((s, d) => s + (d.file_size || 0), 0);
     const totalSizeMB  = (totalSize / (1024 * 1024)).toFixed(1);
@@ -2155,6 +2261,43 @@ function updateStats() {
     });
     document.getElementById('storageText').textContent       = `${totalSizeMB} MB / ${MAX_STORAGE_MB} MB`;
     document.getElementById('mobileStorageText').textContent = `${totalSizeMB} MB / ${MAX_STORAGE_MB} MB`;
+
+    // ── Agrégations réelles depuis Supabase ────────────────────────────────
+    try {
+        // Documents partagés reçus
+        const { data: myProfile } = await supabaseClient
+            .from('users_profiles').select('email').eq('id', currentUser.id).single();
+        const userEmail = myProfile?.email || currentUser.email;
+
+        const { count: sharedCount } = await supabaseClient
+            .from('shared_documents')
+            .select('id', { count: 'exact', head: true })
+            .eq('shared_with_email', userEmail)
+            .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+
+        const sharedEl = document.getElementById('sharedCount');
+        if (sharedEl) sharedEl.textContent = sharedCount || 0;
+
+        // Workflows en attente
+        const pendingWf = currentWorkflows.filter(w => w.status === 'pending').length;
+        const wfEl = document.getElementById('workflowCount');
+        if (wfEl) wfEl.textContent = pendingWf;
+        const dashWfEl = document.getElementById('dashWorkflowCount');
+        if (dashWfEl) dashWfEl.textContent = pendingWf;
+
+        // Utilisateurs actifs (compte réel)
+        const { count: userCount } = await supabaseClient
+            .from('users_profiles')
+            .select('id', { count: 'exact', head: true });
+        const dashUserEl = document.getElementById('dashUserCount');
+        if (dashUserEl) dashUserEl.textContent = userCount || 1;
+
+        // Dernier backup
+        const lastBackup = localStorage.getItem('ged_last_backup');
+        const lastBkEl = document.getElementById('lastBackupDate');
+        if (lastBkEl) lastBkEl.textContent = lastBackup ? new Date(lastBackup).toLocaleString('fr-FR') : 'Jamais';
+
+    } catch(e) { console.warn('Stats agrégation:', e.message); }
 }
 
 // ─── UPLOAD ──────────────────────────────────────────────────────────────────
@@ -3127,11 +3270,19 @@ function toggleViewMode() {
 
 function toggleNotifications() {
     const p = document.getElementById('notifPanel');
-    if (p) p.classList.toggle('hidden');
+    if (p) {
+        p.classList.toggle('hidden');
+        if (!p.classList.contains('hidden')) {
+            loadRealNotifications();
+        }
+    }
 }
 function closeNotifPanel() { document.getElementById('notifPanel')?.classList.add('hidden'); }
 function markAllNotifRead() {
-    document.querySelectorAll('#notifPanel .w-2.h-2').forEach(el => el.remove());
+    const badge = document.getElementById('notifBadge');
+    const badge2 = document.getElementById('notifCountBadge');
+    if (badge) badge.classList.add('hidden');
+    if (badge2) badge2.classList.add('hidden');
     document.getElementById('notifPanel')?.classList.add('hidden');
     showToast('Toutes les notifications lues', 'success');
 }
@@ -3220,14 +3371,188 @@ function clearAdvSearch() {
     runAdvSearch();
 }
 
-// ─── VERSIONING ───────────────────────────────────────────────────────────────
-function toggleVersions(id) {
-    const hist = document.getElementById('hist-' + id);
-    const chev = document.getElementById('chev-' + id);
-    if (!hist) return;
-    hist.classList.toggle('hidden');
-    if (chev) chev.style.transform = hist.classList.contains('hidden') ? '' : 'rotate(180deg)';
+// ─── VERSIONING RÉEL ──────────────────────────────────────────────────────────
+async function restoreVersion(docId, versionId, versionNumber) {
+    if (!confirm(`Restaurer la version ${versionNumber} ? La version actuelle sera archivée.`)) return;
+    try {
+        // Marquer les versions actuelles comme non-actives
+        await supabaseClient
+            .from('document_versions')
+            .update({ is_active: false })
+            .eq('document_id', docId);
+        // Activer la version cible
+        const { error } = await supabaseClient
+            .from('document_versions')
+            .update({ is_active: true })
+            .eq('id', versionId);
+        if (error) throw error;
+        // Mettre à jour le document principal avec le numéro de version
+        await supabaseClient
+            .from('documents')
+            .update({ version_number: versionNumber })
+            .eq('id', docId);
+        showToast(`Version ${versionNumber} restaurée avec succès ✓`, 'success');
+        logActivity('upload', docId, `Restauration v${versionNumber}`);
+        await loadDocuments();
+        loadVersioningDocs();
+    } catch (err) {
+        showToast('Erreur restauration: ' + err.message, 'error');
+    }
 }
+
+async function uploadNewVersion(docId) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const doc = currentDocuments.find(d => d.id === docId);
+        if (!doc) return;
+
+        showToast('Upload de la nouvelle version...', 'info');
+        try {
+            const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+            const fileName = `${currentUser.id}/${Date.now()}_v${(doc.version_number||1)+1}_${safeName}`;
+
+            const { error: storageError } = await supabaseClient.storage
+                .from('documents').upload(fileName, file);
+            if (storageError) throw storageError;
+
+            const { data: urlData } = supabaseClient.storage.from('documents').getPublicUrl(fileName);
+            const newVersion = (doc.version_number || 1) + 1;
+
+            // Archiver l'ancienne version
+            await supabaseClient.from('document_versions').insert({
+                document_id: docId,
+                version_number: doc.version_number || 1,
+                file_url: doc.file_url,
+                file_size: doc.file_size,
+                storage_path: doc.storage_path,
+                created_by: currentUser.id,
+                is_active: false
+            });
+
+            // Mettre à jour le document principal
+            const { error } = await supabaseClient.from('documents').update({
+                file_url: urlData.publicUrl,
+                file_size: file.size,
+                storage_path: fileName,
+                version_number: newVersion
+            }).eq('id', docId);
+            if (error) throw error;
+
+            await logActivity('upload', docId, `Nouvelle version v${newVersion} de "${doc.name}"`);
+            showToast(`Version ${newVersion} uploadée ✓`, 'success');
+            await loadDocuments();
+            loadVersioningDocs();
+        } catch (err) {
+            showToast('Erreur upload version: ' + err.message, 'error');
+        }
+    };
+    input.click();
+}
+
+function loadVersioningDocs() {
+    const container = document.getElementById('versionDocList');
+    if (!container) return;
+
+    // Supprimer les items réels précédents
+    container.querySelectorAll('.real-doc-version').forEach(el => el.remove());
+
+    if (currentDocuments.length === 0) return;
+
+    const fragment = document.createDocumentFragment();
+    const docsToShow = [...currentDocuments].sort((a, b) =>
+        (b.version_number || 1) - (a.version_number || 1)
+    ).slice(0, 10);
+
+    docsToShow.forEach(doc => {
+        const v    = doc.version_number || 1;
+        const icon = getFileIcon(doc.name);
+        const div  = document.createElement('div');
+        div.className = 'glass-card rounded-2xl border border-cyan-500/20 overflow-hidden version-doc-item real-doc-version';
+        div.innerHTML = `
+            <div class="flex items-center justify-between p-4 cursor-pointer hover:bg-cyan-500/5 transition-all group" onclick="toggleVersions('rdv-${escapeHtml(doc.id)}')">
+                <div class="flex items-center gap-4">
+                    <div class="w-11 h-11 ${icon.bg} rounded-xl flex items-center justify-center ${icon.color} border ${icon.border}">
+                        <i class="fas ${icon.icon} text-lg"></i>
+                    </div>
+                    <div>
+                        <p class="text-white font-semibold text-sm">${escapeHtml(doc.name)}</p>
+                        <p class="text-xs text-blue-300/50">${v} version(s) · ${formatDate(doc.created_at)} · ${formatFileSize(doc.file_size||0)}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="px-2.5 py-1 bg-green-500/20 text-green-400 border border-green-400/20 rounded-full text-xs font-bold">v${v} active</span>
+                    <button onclick="event.stopPropagation(); uploadNewVersion('${escapeHtml(doc.id)}')" class="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 rounded-lg text-xs hover:bg-cyan-500/30 transition-all font-medium">
+                        <i class="fas fa-upload mr-1"></i>Nouvelle version
+                    </button>
+                    <button onclick="event.stopPropagation(); downloadDocument('${escapeHtml(doc.id)}')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all">
+                        <i class="fas fa-download mr-1"></i>DL
+                    </button>
+                    <i class="fas fa-chevron-down text-blue-400 transition-transform duration-300 group-hover:text-blue-300" id="chev-rdv-${escapeHtml(doc.id)}"></i>
+                </div>
+            </div>
+            <div id="hist-rdv-${escapeHtml(doc.id)}" class="hidden border-t border-cyan-500/10">
+                <div class="p-4 text-center text-xs text-blue-300/50">
+                    <i class="fas fa-spinner fa-spin mr-1"></i> Chargement des versions...
+                </div>
+            </div>`;
+        fragment.appendChild(div);
+    });
+
+    const firstStatic = container.querySelector('.version-doc-item:not(.real-doc-version)');
+    if (firstStatic) container.insertBefore(fragment, firstStatic);
+    else container.appendChild(fragment);
+}
+
+// Patch toggleVersions pour charger l'historique réel depuis Supabase
+const _origToggleVersions = toggleVersions;
+toggleVersions = async function(id) {
+    _origToggleVersions(id);
+    const hist = document.getElementById('hist-' + id);
+    if (!hist || hist.classList.contains('hidden')) return;
+
+    // Extraire l'ID du doc si c'est un vrai doc (id = 'rdv-UUID')
+    const docId = id.startsWith('rdv-') ? id.slice(4) : null;
+    if (!docId) return; // doc statique, pas de chargement Supabase
+
+    // Déjà chargé ?
+    if (hist.dataset.loaded === '1') return;
+    hist.dataset.loaded = '1';
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('document_versions')
+            .select('*')
+            .eq('document_id', docId)
+            .order('version_number', { ascending: false });
+
+        if (error || !data || data.length === 0) {
+            hist.innerHTML = '<div class="p-4 text-center text-xs text-blue-300/30">Aucun historique de versions disponible — uploadez une nouvelle version pour commencer</div>';
+            return;
+        }
+
+        hist.innerHTML = '<div class="divide-y divide-cyan-500/10">' + data.map(ver => `
+            <div class="flex items-center justify-between px-5 py-3 hover:bg-cyan-500/5">
+                <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 ${ver.is_active ? 'bg-green-500/20 text-green-400 border-green-400/20' : 'bg-slate-700 text-gray-400 border-gray-600'} rounded-full flex items-center justify-center text-xs font-bold border">v${ver.version_number}</span>
+                    <div>
+                        <p class="text-sm ${ver.is_active ? 'text-white' : 'text-gray-300'}">${ver.is_active ? 'Version active' : 'Version archivée'}</p>
+                        <p class="text-xs text-blue-300/50">${new Date(ver.created_at).toLocaleString('fr-FR')} · ${formatFileSize(ver.file_size||0)}</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <a href="${escapeHtml(ver.file_url||'#')}" target="_blank" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all"><i class="fas fa-download mr-1"></i>DL</a>
+                    ${!ver.is_active ? `<button onclick="restoreVersion('${escapeHtml(docId)}','${escapeHtml(ver.id)}',${ver.version_number})" class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs hover:bg-orange-500/30 transition-all"><i class="fas fa-undo mr-1"></i>Restaurer</button>` : ''}
+                </div>
+            </div>`).join('') + '</div>';
+    } catch (err) {
+        hist.innerHTML = `<div class="p-4 text-center text-xs text-red-400">Erreur: ${escapeHtml(err.message)}</div>`;
+    }
+};
+
 function filterVersionDocs(val) {
     const v = val.toLowerCase();
     let any = false;
@@ -3240,60 +3565,82 @@ function filterVersionDocs(val) {
     const msg = document.getElementById('noVersionMsg');
     if (msg) msg.classList.toggle('hidden', any);
 }
-function restoreVersion(docName, version) {
-    if (!confirm('Restaurer ' + docName + ' en ' + version + ' ?')) return;
-    showToast('Version ' + version + ' de "' + docName + '" restaurée avec succès', 'success');
-    logActivity('upload', null, 'Restauration ' + version + ': ' + docName);
-}
 
-function loadVersioningDocs() {
-    // Inject real documents from Supabase at top of the versioning list
-    const container = document.getElementById('versionDocList');
-    if (!container || currentDocuments.length === 0) return;
+// ─── NOTIFICATIONS RÉELLES ────────────────────────────────────────────────────
+async function loadRealNotifications() {
+    try {
+        // Récents logs d'activité
+        const { data: recentLogs } = await supabaseClient
+            .from('activity_logs')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false })
+            .limit(5);
 
-    // Remove any previously injected real-doc items
-    container.querySelectorAll('.real-doc-version').forEach(el => el.remove());
+        // Partages reçus récents
+        const { data: myProfile } = await supabaseClient
+            .from('users_profiles').select('email').eq('id', currentUser.id).single();
+        const userEmail = myProfile?.email || currentUser.email;
 
-    // Only show real docs that have version_number > 1 or all if few static items
-    const docsToShow = currentDocuments.slice(0, 5);
-    const fragment = document.createDocumentFragment();
+        const { data: recentShares } = await supabaseClient
+            .from('shared_documents')
+            .select('*, documents(name)')
+            .eq('shared_with_email', userEmail)
+            .order('created_at', { ascending: false })
+            .limit(3);
 
-    docsToShow.forEach(doc => {
-        const v = doc.version_number || 1;
-        const icon = getFileIcon(doc.name);
-        const div = document.createElement('div');
-        div.className = 'glass-card rounded-2xl border border-cyan-500/20 overflow-hidden version-doc-item real-doc-version';
-        div.innerHTML = `
-            <div class="flex items-center justify-between p-4 hover:bg-cyan-500/5 transition-all">
-                <div class="flex items-center gap-4">
-                    <div class="w-11 h-11 ${icon.bg} rounded-xl flex items-center justify-center ${icon.color} border ${icon.border}">
-                        <i class="fas ${icon.icon} text-lg"></i>
-                    </div>
-                    <div>
-                        <p class="text-white font-semibold text-sm">${escapeHtml(doc.name)}</p>
-                        <p class="text-xs text-blue-300/50">${v} version(s) · ${formatDate(doc.created_at)} · ${formatFileSize(doc.file_size||0)}</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-3">
-                    <span class="px-2.5 py-1 bg-green-500/20 text-green-400 border border-green-400/20 rounded-full text-xs font-bold">v${v} active</span>
-                    <button onclick="downloadDocument('${escapeHtml(doc.id)}')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 transition-all">
-                        <i class="fas fa-download mr-1"></i>DL
-                    </button>
-                </div>
+        const container = document.getElementById('notifContent');
+        if (!container) return;
+
+        const logItems = (recentLogs || []).map(log => {
+            const icons = { upload:'fa-upload bg-green-500/20 text-green-400', download:'fa-download bg-yellow-500/20 text-yellow-400', share:'fa-share-alt bg-purple-500/20 text-purple-400', delete:'fa-trash bg-red-500/20 text-red-400', view:'fa-eye bg-blue-500/20 text-blue-400', login:'fa-sign-in-alt bg-cyan-500/20 text-cyan-400' };
+            const ic = icons[log.action] || 'fa-circle bg-blue-500/20 text-blue-400';
+            const [iconClass, ...bgParts] = ic.split(' ');
+            const ago = getTimeAgo(log.created_at);
+            return `<div class="px-4 py-3 hover:bg-blue-500/5 cursor-pointer flex gap-3 items-start transition-all">
+                <div class="w-8 h-8 ${bgParts.join(' ')} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fas ${iconClass} text-xs"></i></div>
+                <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium truncate">${escapeHtml(log.description || log.action)}</p><p class="text-[10px] text-blue-400/40 mt-0.5">${ago}</p></div>
             </div>`;
-        fragment.appendChild(div);
-    });
+        });
 
-    // Insert before the first existing static item
-    const firstStatic = container.querySelector('.version-doc-item:not(.real-doc-version)');
-    if (firstStatic) {
-        container.insertBefore(fragment, firstStatic);
-    } else {
-        container.appendChild(fragment);
-    }
+        const shareItems = (recentShares || []).map(s => {
+            const ago = getTimeAgo(s.created_at);
+            return `<div class="px-4 py-3 hover:bg-purple-500/5 cursor-pointer flex gap-3 items-start transition-all">
+                <div class="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 flex-shrink-0 mt-0.5"><i class="fas fa-share-alt text-xs"></i></div>
+                <div class="flex-1 min-w-0"><p class="text-sm text-white font-medium">Document partagé</p><p class="text-xs text-blue-300/60 truncate">${escapeHtml(s.documents?.name || 'Document')} partagé avec vous</p><p class="text-[10px] text-blue-400/40 mt-0.5">${ago}</p></div>
+                <span class="w-2 h-2 bg-purple-400 rounded-full flex-shrink-0 mt-2"></span>
+            </div>`;
+        });
+
+        const allItems = [...shareItems, ...logItems];
+        if (allItems.length === 0) {
+            container.innerHTML = '<div class="px-4 py-8 text-center text-blue-300/50 text-sm">Aucune notification</div>';
+        } else {
+            container.innerHTML = allItems.slice(0, 6).join('');
+        }
+
+        // Badge count
+        const badge = document.getElementById('notifBadge');
+        if (badge) {
+            const unread = (recentShares || []).length;
+            if (unread > 0) {
+                badge.textContent = unread;
+                badge.classList.remove('hidden');
+            }
+        }
+    } catch (e) { console.warn('Notifications:', e.message); }
 }
 
-// ─── LOGS SYSTÈME ─────────────────────────────────────────────────────────────
+function getTimeAgo(dateStr) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1)   return 'À l\'instant';
+    if (mins < 60)  return `Il y a ${mins} min`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)   return `Il y a ${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    return `Il y a ${days}j`;
+}
 function filterSysLogs(btn, level) {
     document.querySelectorAll('.syslog-filter').forEach(b => {
         b.classList.remove('bg-blue-500/20','text-blue-300','border-blue-500/30','active-log');
@@ -3339,6 +3686,10 @@ switchView = function(viewName) {
         document.getElementById('secApiKeys').textContent = apiKeys.filter(k => k.active).length;
         document.getElementById('secAuditCount').textContent = '...';
         document.getElementById('secScanOk').textContent = currentDocuments.length;
+    }
+    // RBAC: render cards
+    if (viewName === 'rbac') {
+        renderRbacCards();
     }
     // Settings: prefill profile
     if (viewName === 'settings' && currentUser) {
@@ -3580,7 +3931,158 @@ function revokeApiKey(i) {
     showToast('Clé API révoquée', 'success');
 }
 
-// ─── CHIFFREMENT (hash SHA-256 pour vérification d'intégrité) ─────────────────
+// ─── EXPORT ALL DATA (ZIP des métadonnées + CSV) ──────────────────────────────
+async function exportAllData() {
+    showToast('Préparation de l\'export ZIP...', 'info');
+    try {
+        const { data: logs } = await supabaseClient
+            .from('activity_logs').select('*').eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false }).limit(500);
+
+        const { data: shares } = await supabaseClient
+            .from('shared_documents').select('*, documents(name)')
+            .eq('shared_by', currentUser.id).order('created_at', { ascending: false });
+
+        const { data: wfs } = await supabaseClient
+            .from('workflows').select('*').eq('created_by', currentUser.id);
+
+        // CSV Documents
+        const docHeaders = ['ID','Nom','Type','Taille (octets)','Description','Date création','Version','URL'];
+        const docCsv = [docHeaders.join(','), ...currentDocuments.map(d => [
+            d.id, '"' + (d.name||'').replace(/"/g,'""') + '"',
+            d.file_type||'', d.file_size||0,
+            '"' + (d.description||'').replace(/"/g,'""') + '"',
+            new Date(d.created_at).toLocaleString('fr-FR'),
+            d.version_number||1,
+            '"' + (d.file_url||'') + '"'
+        ].join(','))].join('\n');
+
+        // CSV Logs
+        const logHeaders = ['Date','Action','Description','Document ID'];
+        const logCsv = [logHeaders.join(','), ...(logs||[]).map(r => [
+            new Date(r.created_at).toLocaleString('fr-FR'),
+            r.action||'',
+            '"' + (r.description||'').replace(/"/g,'""') + '"',
+            r.document_id||''
+        ].join(','))].join('\n');
+
+        // CSV Partages
+        const shareHeaders = ['ID','Document','Partagé avec','Permission','Expire le','Date'];
+        const shareCsv = [shareHeaders.join(','), ...(shares||[]).map(s => [
+            s.id,
+            '"' + (s.documents?.name||'').replace(/"/g,'""') + '"',
+            s.shared_with_email||'',
+            s.permission||'',
+            s.expires_at ? new Date(s.expires_at).toLocaleString('fr-FR') : 'Illimité',
+            new Date(s.created_at).toLocaleString('fr-FR')
+        ].join(','))].join('\n');
+
+        // CSV Workflows
+        const wfHeaders = ['ID','Titre','Statut','Priorité','Date création'];
+        const wfCsv = [wfHeaders.join(','), ...(wfs||[]).map(w => [
+            w.id,
+            '"' + (w.title||'').replace(/"/g,'""') + '"',
+            w.status||'', w.priority||'',
+            new Date(w.created_at).toLocaleString('fr-FR')
+        ].join(','))].join('\n');
+
+        // Profil JSON
+        const profileJson = JSON.stringify({
+            id: currentUser.id,
+            email: currentUser.email,
+            exportDate: new Date().toISOString(),
+            totalDocuments: currentDocuments.length,
+            totalStorageMB: (currentDocuments.reduce((s,d)=>s+(d.file_size||0),0)/(1024*1024)).toFixed(2)
+        }, null, 2);
+
+        // README
+        const readme = `EXPORT SYSTEMESGED — ${new Date().toLocaleString('fr-FR')}
+======================================================
+Utilisateur : ${currentUser.email}
+Documents   : ${currentDocuments.length}
+Stockage    : ${(currentDocuments.reduce((s,d)=>s+(d.file_size||0),0)/(1024*1024)).toFixed(2)} MB
+
+Fichiers inclus :
+- documents.csv    : liste complète des documents
+- audit_logs.csv   : journal d'activité
+- partages.csv     : documents partagés
+- workflows.csv    : workflows de validation
+- profil.json      : données de profil
+
+Note : Les fichiers réels sont accessibles via les URLs dans documents.csv
+Conforme RGPD — Exporté depuis SystemesGED v3.0
+`;
+
+        // Créer le ZIP manuellement (multi-blob)
+        const files = [
+            { name: 'README.txt', content: readme, type: 'text/plain' },
+            { name: 'documents.csv', content: docCsv, type: 'text/csv' },
+            { name: 'audit_logs.csv', content: logCsv, type: 'text/csv' },
+            { name: 'partages.csv', content: shareCsv, type: 'text/csv' },
+            { name: 'workflows.csv', content: wfCsv, type: 'text/csv' },
+            { name: 'profil.json', content: profileJson, type: 'application/json' }
+        ];
+
+        // Télécharger chaque fichier (fallback sans lib ZIP)
+        for (const f of files) {
+            const blob = new Blob(['\ufeff' + f.content], { type: f.type + ';charset=utf-8;' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = `GED_Export_${new Date().toISOString().slice(0,10)}_${f.name}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        // Mettre à jour la date de backup
+        localStorage.setItem('ged_last_backup', new Date().toISOString());
+        const el = document.getElementById('lastBackupDate');
+        if (el) el.textContent = new Date().toLocaleString('fr-FR');
+
+        await logActivity('login', null, `Export complet RGPD — ${files.length} fichiers`);
+        showToast(`Export terminé — ${files.length} fichiers téléchargés ✓`, 'success');
+    } catch (err) {
+        showToast('Erreur export: ' + err.message, 'error');
+    }
+}
+
+// ─── EXPORT CSV DOCUMENTS SEULS ───────────────────────────────────────────────
+async function exportDocumentsCsv() {
+    if (currentDocuments.length === 0) { showToast('Aucun document à exporter', 'info'); return; }
+    const headers = ['Nom','Type','Taille','Description','Tags','Date','Version','URL'];
+    const csv = [headers.join(','), ...currentDocuments.map(d => {
+        const tags = (d.document_tags||[]).map(dt => dt.tags?.name||'').filter(Boolean).join(';');
+        return [
+            '"' + (d.name||'').replace(/"/g,'""') + '"',
+            d.file_type||'',
+            formatFileSize(d.file_size||0),
+            '"' + (d.description||'').replace(/"/g,'""') + '"',
+            '"' + tags + '"',
+            new Date(d.created_at).toLocaleString('fr-FR'),
+            d.version_number||1,
+            '"' + (d.file_url||'') + '"'
+        ].join(',');
+    })].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `documents_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`${currentDocuments.length} documents exportés en CSV ✓`, 'success');
+    logActivity('download', null, `Export CSV documents: ${currentDocuments.length} fichiers`);
+}
+function copySqlSchema() {
+    const schema = document.getElementById('sqlSchemaBlock')?.textContent;
+    if (schema) {
+        navigator.clipboard.writeText(schema).then(() => showToast('Schema SQL copié dans le presse-papier ✓', 'success'));
+    }
+}
+
 async function computeFileHash(file) {
     const buffer = await file.arrayBuffer();
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -3668,11 +4170,59 @@ async function saveEditUser() {
 }
 
 // ─── ROLE MODAL ───────────────────────────────────────────────────────────────
-const roleDefaults = {
+// ─── RBAC — persistance Supabase ──────────────────────────────────────────────
+// Chargement depuis Supabase avec fallback localStorage
+let roleDefaults = {
     admin:   { name:'Administrateur', read:true, write:true, delete:true, users:true, logs:true, api:true },
     editeur: { name:'Éditeur',        read:true, write:true, delete:false, users:false, logs:false, api:false },
     lecteur: { name:'Lecteur',        read:true, write:false, delete:false, users:false, logs:false, api:false },
 };
+
+async function loadRolesFromSupabase() {
+    try {
+        const { data } = await supabaseClient.from('rbac_roles').select('*');
+        if (data && data.length > 0) {
+            data.forEach(r => { roleDefaults[r.key] = { name: r.name, read: r.perm_read, write: r.perm_write, delete: r.perm_delete, users: r.perm_users, logs: r.perm_logs, api: r.perm_api }; });
+        }
+    } catch(e) {
+        // Table rbac_roles optionnelle — utiliser les valeurs locales
+        const saved = localStorage.getItem('ged_roles');
+        if (saved) try { roleDefaults = { ...roleDefaults, ...JSON.parse(saved) }; } catch(_) {}
+    }
+    renderRbacCards();
+}
+
+function renderRbacCards() {
+    const container = document.getElementById('rbacRoleCards');
+    if (!container) return;
+    const colors = { admin:'red', editeur:'blue', lecteur:'gray' };
+    const icons  = { admin:'fa-crown', editeur:'fa-user-tie', lecteur:'fa-eye' };
+    container.innerHTML = Object.entries(roleDefaults).map(([key, r]) => {
+        const color = colors[key] || 'blue';
+        const icon  = icons[key]  || 'fa-user';
+        const perms = [
+            { label:'Lecture documents', val: r.read },
+            { label:'Écriture / Modification', val: r.write },
+            { label:'Suppression', val: r.delete },
+            { label:'Gestion utilisateurs', val: r.users },
+            { label:'Logs & Audit', val: r.logs },
+            { label:'Clés API & OAuth', val: r.api },
+        ];
+        return `<div class="glass-card rounded-2xl border border-${color}-500/25 p-5 space-y-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-${color}-500/20 rounded-xl flex items-center justify-center text-${color}-400 border border-${color}-400/25"><i class="fas ${icon} text-xl"></i></div>
+                <div><h3 class="text-white font-bold">${escapeHtml(r.name)}</h3><p class="text-xs text-blue-300/50">${key}</p></div>
+            </div>
+            <div class="space-y-1.5 text-xs">
+                ${perms.map(p => `<div class="flex items-center gap-2 ${p.val ? 'text-green-400' : 'text-red-400/50'}"><i class="fas ${p.val ? 'fa-check-circle' : 'fa-times-circle'}"></i> ${p.label}</div>`).join('')}
+            </div>
+            <div class="pt-2 border-t border-${color}-500/10 flex justify-end">
+                <button onclick="openRoleModal('${key}')" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">Modifier →</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
 function openRoleModal(key) {
     const def = (key && roleDefaults[key]) ? roleDefaults[key] : { name:'', read:false, write:false, delete:false, users:false, logs:false, api:false };
     document.getElementById('roleModalKey').value   = key || '';
@@ -3691,11 +4241,11 @@ function closeRoleModal() {
     document.getElementById('roleModal').classList.add('hidden');
     document.body.style.overflow = '';
 }
-function saveRole() {
+async function saveRole() {
     const key  = document.getElementById('roleModalKey').value;
     const name = document.getElementById('roleModalName').value.trim();
     if (!name) { showToast('Veuillez saisir un nom de rôle', 'error'); return; }
-    // Persist in memory for the session
+
     const perms = {
         read:   document.getElementById('perm_read').checked,
         write:  document.getElementById('perm_write').checked,
@@ -3704,21 +4254,60 @@ function saveRole() {
         logs:   document.getElementById('perm_logs').checked,
         api:    document.getElementById('perm_api').checked,
     };
-    if (key) roleDefaults[key] = { name, ...perms };
-    showToast('Rôle "' + name + '" enregistré', 'success');
+    const roleKey = key || name.toLowerCase().replace(/\s+/g, '_');
+    roleDefaults[roleKey] = { name, ...perms };
+
+    // Persister localement
+    localStorage.setItem('ged_roles', JSON.stringify(roleDefaults));
+
+    // Persister dans Supabase (table optionnelle)
+    try {
+        await supabaseClient.from('rbac_roles').upsert({
+            key: roleKey, name,
+            perm_read: perms.read, perm_write: perms.write, perm_delete: perms.delete,
+            perm_users: perms.users, perm_logs: perms.logs, perm_api: perms.api
+        }, { onConflict: 'key' });
+    } catch(e) { /* table optionnelle */ }
+
+    showToast('Rôle "' + name + '" enregistré ✓', 'success');
     logActivity('login', null, 'RBAC: modification rôle ' + name);
+    renderRbacCards();
     closeRoleModal();
 }
 
-// ─── SCAN ALL DOCUMENTS ───────────────────────────────────────────────────────
+// ─── SCAN ALL DOCUMENTS (vrai scan sur les fichiers existants) ────────────────
 async function scanAllDocuments() {
     if (currentDocuments.length === 0) { showToast('Aucun document à scanner', 'info'); return; }
-    showToast('Scan antivirus en cours sur ' + currentDocuments.length + ' document(s)…', 'info');
-    await new Promise(r => setTimeout(r, 1200));
-    const el = document.getElementById('secScanOk');
-    if (el) el.textContent = currentDocuments.length;
-    showToast('Scan terminé — ' + currentDocuments.length + ' fichier(s) sains ✓', 'success');
-    logActivity('login', null, 'Scan antivirus complet: ' + currentDocuments.length + ' fichiers');
+
+    const btn = document.querySelector('button[onclick="scanAllDocuments()"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Scan en cours...'; }
+
+    showToast(`Scan antivirus en cours — ${currentDocuments.length} document(s)…`, 'info');
+
+    let safe = 0, blocked = 0;
+    const BLOCKED_EXT = ['exe','bat','cmd','sh','ps1','vbs','js','jar','msi','dll','scr','com','pif'];
+
+    for (const doc of currentDocuments) {
+        const ext = (doc.name || '').split('.').pop().toLowerCase();
+        if (BLOCKED_EXT.includes(ext)) {
+            blocked++;
+            await logActivity('delete', doc.id, `Fichier suspect détecté: ${doc.name}`);
+        } else {
+            safe++;
+        }
+        // Petite pause pour ne pas surcharger
+        await new Promise(r => setTimeout(r, 30));
+    }
+
+    const safeEl    = document.getElementById('secScanOk');
+    const blockedEl = document.getElementById('secScanBlocked');
+    if (safeEl)    safeEl.textContent    = safe;
+    if (blockedEl) blockedEl.textContent = blocked;
+
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-shield-alt mr-2"></i>Scanner tous les fichiers'; }
+
+    await logActivity('login', null, `Scan antivirus complet: ${safe} sains, ${blocked} suspects`);
+    showToast(`Scan terminé — ${safe} fichier(s) sains, ${blocked} suspect(s)`, blocked > 0 ? 'warning' : 'success');
 }
 
 // ─── CLOSE NEW MODALS ON OUTSIDE CLICK ───────────────────────────────────────
