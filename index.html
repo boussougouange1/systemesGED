@@ -60,14 +60,30 @@
         .logo-glow { position: absolute; inset: -10px; background: radial-gradient(circle, rgba(59,130,246,0.4) 0%, transparent 70%); filter: blur(20px); animation: pulse 3s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
         .logo-img { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 10; filter: drop-shadow(0 0 20px rgba(59,130,246,0.3)); }
-        .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; position: relative; overflow: hidden; }
-        .login-bg-animation { position: absolute; inset: 0; overflow: hidden; }
-        .login-bg-animation::before { content: ''; position: absolute; width: 200%; height: 200%; background: radial-gradient(circle, rgba(59,130,246,0.1) 1px, transparent 1px); background-size: 50px 50px; animation: gridMove 20s linear infinite; }
-        @keyframes gridMove { 0% { transform: translate(0,0); } 100% { transform: translate(50px,50px); } }
-        .login-card { background: rgba(30,58,138,0.2); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(96,165,250,0.3); border-radius: 24px; padding: 2.5rem; width: 100%; max-width: 420px; position: relative; z-index: 10; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5), 0 0 50px rgba(59,130,246,0.2); }
-        .input-field { width: 100%; padding: 1rem 1rem 1rem 3rem; background: rgba(15,23,42,0.6); border: 1px solid rgba(96,165,250,0.3); border-radius: 12px; color: white; font-size: 0.95rem; transition: all 0.3s ease; }
-        .input-field:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.2); }
-        .input-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #60a5fa; font-size: 1.1rem; }
+        /* ── LOGIN PAGE ─────────────────────────────────── */
+        .login-page { min-height: 100vh; display: flex; overflow: hidden; }
+        .login-branding { display: none; flex-direction: column; justify-content: center; align-items: center; width: 45%; padding: 3rem; position: relative; overflow: hidden; background: linear-gradient(160deg, #0c1a4e 0%, #1a3a8f 50%, #0c1a4e 100%); }
+        @media (min-width: 1024px) { .login-branding { display: flex; } }
+        .login-branding::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 30% 50%, rgba(59,130,246,0.15) 0%, transparent 60%), radial-gradient(circle at 70% 20%, rgba(37,99,235,0.12) 0%, transparent 50%); }
+        .login-branding-circuits { position: absolute; inset: 0; overflow: hidden; opacity: 0.06; background-image: linear-gradient(rgba(96,165,250,1) 1px, transparent 1px), linear-gradient(90deg, rgba(96,165,250,1) 1px, transparent 1px); background-size: 40px 40px; animation: gridMove 25s linear infinite; }
+        .login-feature { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(96,165,250,0.15); margin-bottom: 12px; transition: all 0.3s; }
+        .login-feature:hover { background: rgba(255,255,255,0.1); border-color: rgba(96,165,250,0.35); transform: translateX(5px); }
+        .login-feature-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; }
+        .login-stat { text-align: center; padding: 14px 10px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(96,165,250,0.1); }
+        .login-form-panel { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; position: relative; overflow: hidden; }
+        .login-form-panel::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 80% 20%, rgba(59,130,246,0.08) 0%, transparent 50%); }
+        .login-card { background: rgba(12,20,56,0.75); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid rgba(96,165,250,0.25); border-radius: 28px; padding: 2.5rem; width: 100%; max-width: 440px; position: relative; z-index: 10; box-shadow: 0 32px 64px -16px rgba(0,0,0,0.6), 0 0 0 1px rgba(96,165,250,0.08), inset 0 1px 0 rgba(255,255,255,0.07); }
+        .login-tab { flex: 1; padding: 10px; text-align: center; font-size: 14px; font-weight: 500; border-radius: 10px; cursor: pointer; transition: all 0.25s; color: rgba(148,163,184,0.7); border: 1px solid transparent; }
+        .login-tab.active { background: rgba(37,99,235,0.3); color: #93c5fd; border-color: rgba(96,165,250,0.3); }
+        .input-field { width: 100%; padding: 0.95rem 1rem 0.95rem 3rem; background: rgba(8,15,40,0.7); border: 1px solid rgba(96,165,250,0.2); border-radius: 14px; color: white; font-size: 0.95rem; transition: all 0.3s ease; }
+        .input-field:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); background: rgba(8,15,40,0.9); }
+        .input-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #60a5fa; font-size: 1rem; }
+        .btn-login { width: 100%; padding: 1rem; border-radius: 14px; font-weight: 600; font-size: 1rem; background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%); box-shadow: 0 4px 20px rgba(37,99,235,0.5); transition: all 0.3s ease; color: white; }
+        .btn-login:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(37,99,235,0.65); }
+        .btn-login:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .auth-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+        .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: rgba(96,165,250,0.15); }
+        @keyframes gridMove { 0% { transform: translate(0,0); } 100% { transform: translate(40px,40px); } }
         .spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .toast-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
@@ -105,57 +121,180 @@
 
 <!-- ===== LOGIN SCREEN ===== -->
 <div id="loginScreen" class="">
-    <div class="login-container">
-        <div class="login-bg-animation"></div>
-        <div class="language-selector absolute top-4 right-4 flex gap-2 z-20">
-            <button class="lang-btn px-3 py-1 rounded-full border border-blue-500/30 bg-slate-900/60 text-sm hover:bg-blue-500/20 transition-colors" onclick="setLanguage('fr')" data-lang="fr">FR</button>
-            <button class="lang-btn px-3 py-1 rounded-full border border-blue-500/30 bg-slate-900/60 text-sm hover:bg-blue-500/20 transition-colors" onclick="setLanguage('en')" data-lang="en">EN</button>
-        </div>
-        <div class="login-card">
-            <div class="text-center mb-8">
-                <div class="w-24 h-24 mx-auto mb-4 relative logo-container">
-                    <div class="logo-glow"></div>
-                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'; this.parentElement.innerHTML += '<div style=\'width:96px;height:96px;background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:50%;display:flex;align-items:center;justify-content:center;\'><i class=\'fas fa-folder-open text-4xl text-white\'></i></div>'">
+<div class="login-page">
+
+    <!-- Panneau gauche — Branding -->
+    <div class="login-branding">
+        <div class="login-branding-circuits"></div>
+        <div style="position:relative;z-index:10;width:100%;max-width:380px">
+
+            <!-- Logo grand format -->
+            <div class="text-center mb-10">
+                <div class="w-32 h-32 mx-auto mb-5 relative logo-container">
+                    <div class="logo-glow" style="inset:-16px"></div>
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img">
                 </div>
-                <h1 class="text-3xl font-bold mb-2"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1>
-                <p class="text-blue-300/80 text-sm" data-i18n="subtitle">Gestion Électronique de Documents</p>
+                <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">
+                    SYSTEMES<span class="gradient-text">GED</span>
+                </h1>
+                <p style="color:rgba(147,197,253,0.7);font-size:0.9rem">Gestion Électronique de Documents Cloud</p>
             </div>
-            <form id="loginForm" onsubmit="handleLogin(event)">
-                <div class="input-group relative mb-4">
-                    <i class="fas fa-envelope input-icon"></i>
-                    <input type="email" id="loginEmail" class="input-field" placeholder="Email" required autocomplete="email">
+
+            <!-- Features -->
+            <div class="login-feature">
+                <div class="login-feature-icon" style="background:rgba(59,130,246,0.2);color:#60a5fa"><i class="fas fa-shield-alt"></i></div>
+                <div>
+                    <p style="color:white;font-weight:600;font-size:0.9rem">Sécurité maximale</p>
+                    <p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Chiffrement AES-256, RLS Supabase</p>
                 </div>
-                <div class="input-group relative mb-4">
-                    <i class="fas fa-lock input-icon"></i>
-                    <input type="password" id="loginPassword" class="input-field" placeholder="Mot de passe" required autocomplete="current-password">
-                    <i class="fas fa-eye password-toggle absolute right-3 top-1/2 -translate-y-1/2 text-blue-400 cursor-pointer hover:text-blue-300" onclick="togglePasswordVisibility()"></i>
-                </div>
-                <div class="flex items-center justify-between mb-6 text-sm">
-                    <label class="flex items-center gap-2 cursor-pointer text-blue-300/70 hover:text-blue-300 transition-colors">
-                        <input type="checkbox" id="rememberMe" class="rounded bg-slate-900/50 border-blue-500/30 text-blue-500 focus:ring-blue-500/20">
-                        <span data-i18n="remember_me">Se souvenir de moi</span>
-                    </label>
-                    <a href="#" onclick="showForgotPassword(event)" class="text-blue-400 hover:text-blue-300 transition-colors" data-i18n="forgot_password">Mot de passe oublié?</a>
-                </div>
-                <button type="submit" id="loginBtn" class="btn-primary w-full py-3.5 text-white rounded-xl font-semibold text-base">
-                    <span class="btn-content flex items-center justify-center gap-2">
-                        <span data-i18n="login">Connexion</span>
-                    </span>
-                </button>
-            </form>
-            <div class="mt-6 text-center">
-                <p class="text-sm text-blue-300/60">
-                    <span data-i18n="no_account">Pas encore de compte?</span>
-                    <a href="#" onclick="showRegister(event)" class="text-blue-400 hover:text-blue-300 font-semibold ml-1 transition-colors" data-i18n="register">S'inscrire</a>
-                </p>
             </div>
-            <div class="mt-8 pt-6 border-t border-blue-500/20 flex justify-center gap-4 text-xs text-blue-400/60">
-                <span class="flex items-center gap-1"><i class="fas fa-shield-alt"></i> Sécurisé</span>
-                <span class="flex items-center gap-1"><i class="fas fa-cloud"></i> Cloud</span>
-                <span class="flex items-center gap-1"><i class="fas fa-check-circle"></i> RGPD</span>
+            <div class="login-feature">
+                <div class="login-feature-icon" style="background:rgba(16,185,129,0.2);color:#34d399"><i class="fas fa-cloud-upload-alt"></i></div>
+                <div>
+                    <p style="color:white;font-weight:600;font-size:0.9rem">Stockage cloud</p>
+                    <p style="color:rgba(147,197,253,0.6);font-size:0.78rem">100 MB inclus, PDF, Word, Excel, Images</p>
+                </div>
+            </div>
+            <div class="login-feature">
+                <div class="login-feature-icon" style="background:rgba(139,92,246,0.2);color:#a78bfa"><i class="fas fa-share-alt"></i></div>
+                <div>
+                    <p style="color:white;font-weight:600;font-size:0.9rem">Partage sécurisé</p>
+                    <p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Liens avec expiration, contrôle d'accès</p>
+                </div>
+            </div>
+            <div class="login-feature">
+                <div class="login-feature-icon" style="background:rgba(249,115,22,0.2);color:#fb923c"><i class="fas fa-project-diagram"></i></div>
+                <div>
+                    <p style="color:white;font-weight:600;font-size:0.9rem">Workflows de validation</p>
+                    <p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Approbation multi-étapes, suivi en temps réel</p>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px">
+                <div class="login-stat">
+                    <p style="font-size:1.4rem;font-weight:800;color:#60a5fa">100%</p>
+                    <p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">RGPD</p>
+                </div>
+                <div class="login-stat">
+                    <p style="font-size:1.4rem;font-weight:800;color:#34d399">50MB</p>
+                    <p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Par fichier</p>
+                </div>
+                <div class="login-stat">
+                    <p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v3.0</p>
+                    <p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Panneau droit — Formulaire -->
+    <div class="login-form-panel">
+
+        <!-- Sélecteur langue -->
+        <div style="position:absolute;top:1.5rem;right:1.5rem;display:flex;gap:8px;z-index:20">
+            <button class="lang-btn px-3 py-1 rounded-full border border-blue-500/30 bg-slate-900/60 text-sm hover:bg-blue-500/20 transition-colors text-blue-300" onclick="setLanguage('fr')" data-lang="fr">FR</button>
+            <button class="lang-btn px-3 py-1 rounded-full border border-blue-500/30 bg-slate-900/60 text-sm hover:bg-blue-500/20 transition-colors text-blue-300" onclick="setLanguage('en')" data-lang="en">EN</button>
+        </div>
+
+        <div class="login-card">
+
+            <!-- Logo mobile (affiché seulement sur mobile) -->
+            <div class="lg:hidden text-center mb-6">
+                <div class="w-20 h-20 mx-auto mb-3 relative logo-container">
+                    <div class="logo-glow"></div>
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img">
+                </div>
+                <h1 style="font-size:1.5rem;font-weight:800;color:white">SYSTEMES<span class="gradient-text">GED</span></h1>
+            </div>
+
+            <!-- Tabs Connexion / Inscription -->
+            <div style="display:flex;gap:6px;padding:6px;background:rgba(0,0,0,0.3);border-radius:14px;margin-bottom:24px;border:1px solid rgba(96,165,250,0.1)">
+                <div class="login-tab active" id="tabLogin" onclick="switchAuthTab('login')">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Connexion
+                </div>
+                <div class="login-tab" id="tabRegister" onclick="switchAuthTab('register')">
+                    <i class="fas fa-user-plus mr-2"></i>Inscription
+                </div>
+            </div>
+
+            <!-- FORMULAIRE CONNEXION -->
+            <div id="loginFormWrapper">
+                <p style="color:rgba(147,197,253,0.6);font-size:0.85rem;margin-bottom:20px">
+                    Bienvenue ! Connectez-vous à votre espace GED.
+                </p>
+                <form id="loginForm" onsubmit="handleLogin(event)">
+                    <div class="input-group relative mb-4">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input type="email" id="loginEmail" class="input-field" placeholder="Adresse email" required autocomplete="email">
+                    </div>
+                    <div class="input-group relative mb-2">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input type="password" id="loginPassword" class="input-field" placeholder="Mot de passe" required autocomplete="current-password">
+                        <i class="fas fa-eye password-toggle absolute right-3 top-1/2 -translate-y-1/2 text-blue-400 cursor-pointer hover:text-blue-300" onclick="togglePasswordVisibility()"></i>
+                    </div>
+                    <div class="flex items-center justify-between mb-6 text-sm mt-3">
+                        <label class="flex items-center gap-2 cursor-pointer text-blue-300/70 hover:text-blue-300 transition-colors">
+                            <input type="checkbox" id="rememberMe" class="rounded border-blue-500/30 text-blue-500">
+                            <span>Se souvenir de moi</span>
+                        </label>
+                        <a href="#" onclick="showForgotPassword(event)" class="text-blue-400 hover:text-blue-300 transition-colors text-xs">Mot de passe oublié ?</a>
+                    </div>
+                    <button type="submit" id="loginBtn" class="btn-login">
+                        <span class="flex items-center justify-center gap-2">
+                            <i class="fas fa-sign-in-alt"></i>
+                            <span>Se connecter</span>
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- FORMULAIRE INSCRIPTION -->
+            <div id="registerFormWrapper" style="display:none">
+                <p style="color:rgba(147,197,253,0.6);font-size:0.85rem;margin-bottom:20px">
+                    Créez votre compte SystemesGED gratuitement.
+                </p>
+                <form id="registerForm" onsubmit="handleRegister(event)">
+                    <div class="input-group relative mb-4">
+                        <i class="fas fa-user input-icon"></i>
+                        <input type="text" id="registerName" class="input-field" placeholder="Nom complet" required>
+                    </div>
+                    <div class="input-group relative mb-4">
+                        <i class="fas fa-envelope input-icon"></i>
+                        <input type="email" id="registerEmail" class="input-field" placeholder="Adresse email" required autocomplete="email">
+                    </div>
+                    <div class="input-group relative mb-4">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input type="password" id="registerPassword" class="input-field" placeholder="Mot de passe (8 caractères min.)" required minlength="8" autocomplete="new-password">
+                    </div>
+                    <div class="input-group relative mb-6">
+                        <i class="fas fa-lock input-icon"></i>
+                        <input type="password" id="registerConfirm" class="input-field" placeholder="Confirmer le mot de passe" required autocomplete="new-password">
+                    </div>
+                    <button type="submit" id="registerBtn" class="btn-login">
+                        <span class="flex items-center justify-center gap-2">
+                            <i class="fas fa-user-plus"></i>
+                            <span>Créer mon compte</span>
+                        </span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Footer carte -->
+            <div style="margin-top:24px;padding-top:18px;border-top:1px solid rgba(96,165,250,0.12);display:flex;justify-content:center;gap:20px">
+                <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:rgba(96,165,250,0.5)">
+                    <i class="fas fa-shield-alt"></i> Sécurisé SSL
+                </span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:rgba(96,165,250,0.5)">
+                    <i class="fas fa-check-circle"></i> RGPD Conforme
+                </span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:rgba(96,165,250,0.5)">
+                    <i class="fas fa-cloud"></i> Cloud v3.0
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
 </div>
 
 <!-- ===== ONBOARDING MODAL (first run) ===== -->
@@ -1080,7 +1219,58 @@ async function handleLogin(e) {
     }
 }
 
-function showRegister(e) { e.preventDefault(); showToast('Inscription : contactez votre administrateur', 'info'); }
+function showRegister(e) { e.preventDefault(); switchAuthTab('register'); }
+
+function switchAuthTab(tab) {
+    const loginWrapper    = document.getElementById('loginFormWrapper');
+    const registerWrapper = document.getElementById('registerFormWrapper');
+    const tabLogin        = document.getElementById('tabLogin');
+    const tabRegister     = document.getElementById('tabRegister');
+
+    if (tab === 'login') {
+        loginWrapper.style.display    = 'block';
+        registerWrapper.style.display = 'none';
+        tabLogin.classList.add('active');
+        tabRegister.classList.remove('active');
+    } else {
+        loginWrapper.style.display    = 'none';
+        registerWrapper.style.display = 'block';
+        tabRegister.classList.add('active');
+        tabLogin.classList.remove('active');
+    }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const name     = document.getElementById('registerName').value.trim();
+    const email    = document.getElementById('registerEmail').value.trim();
+    const password = document.getElementById('registerPassword').value;
+    const confirm  = document.getElementById('registerConfirm').value;
+    const btn      = document.getElementById('registerBtn');
+
+    if (password !== confirm) { showToast('Les mots de passe ne correspondent pas', 'error'); return; }
+    if (password.length < 8)  { showToast('Mot de passe trop court (8 caractères min.)', 'error'); return; }
+
+    btn.innerHTML = '<span class="flex items-center justify-center gap-2"><div class="spinner"></div><span>Création...</span></span>';
+    btn.disabled  = true;
+
+    try {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email, password,
+            options: { data: { full_name: name } }
+        });
+        if (error) throw error;
+
+        showToast('Compte créé ! Vérifiez votre email pour confirmer.', 'success');
+        switchAuthTab('login');
+        document.getElementById('loginEmail').value = email;
+    } catch (err) {
+        showToast('Erreur inscription : ' + err.message, 'error');
+    } finally {
+        btn.innerHTML = '<span class="flex items-center justify-center gap-2"><i class="fas fa-user-plus"></i><span>Créer mon compte</span></span>';
+        btn.disabled  = false;
+    }
+}
 
 async function showForgotPassword(e) {
     e.preventDefault();
