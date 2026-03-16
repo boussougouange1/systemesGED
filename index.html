@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SystemesGED v3.1 — Gestion Électronique de Documents Cloud</title>
+    <title>SystemesGED v3.0 — Gestion Électronique de Documents Cloud</title>
     <meta name="description" content="SystemesGED — Plateforme GED cloud sécurisée, RGPD conforme">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data: blob:; connect-src 'self' https:;">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <base target="_blank" rel="noopener noreferrer">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -117,65 +116,33 @@
         .danger-confirm-input { width: 100%; padding: 0.75rem 1rem; background: rgba(15,23,42,0.8); border: 1px solid rgba(239,68,68,0.5); border-radius: 8px; color: white; outline: none; margin-top: 8px; }
         .danger-confirm-input:focus { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
 
-        /* ── v3.1 : Permission badges ───────────────────────── */
+        /* ── KIMI IMPORTS ─────────────────────────────────────────────── */
+        /* 1. Badges de permission */
         .permission-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.375rem;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            border-width: 1px;
-            transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 0.375rem;
+            padding: 0.25rem 0.75rem; border-radius: 9999px;
+            font-size: 0.75rem; font-weight: 600; border-width: 1px; transition: all 0.2s;
         }
-        .permission-badge.read    { background: rgba(59,130,246,0.15);  border-color: rgba(96,165,250,0.4);  color: #93c5fd; }
-        .permission-badge.write   { background: rgba(234,179,8,0.15);   border-color: rgba(250,204,21,0.4);  color: #fde047; }
-        .permission-badge.admin   { background: rgba(239,68,68,0.15);   border-color: rgba(248,113,113,0.4); color: #fca5a5; }
-        .permission-badge.share   { background: rgba(139,92,246,0.15);  border-color: rgba(167,139,250,0.4); color: #c4b5fd; }
-        .permission-badge:hover   { filter: brightness(1.2); transform: scale(1.04); }
-
-        /* ── v3.1 : Status pulse animation ─────────────────── */
+        /* 2. Hover cartes de partage */
+        .share-card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+        .share-card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5), 0 0 20px rgba(139,92,246,0.15);
+        }
+        /* 3. Animation statut pulse */
         .status-pulse { position: relative; }
         .status-pulse::after {
-            content: '';
-            position: absolute;
-            inset: -2px;
-            border-radius: 50%;
+            content: ''; position: absolute; inset: -2px; border-radius: 50%;
             border: 2px solid currentColor;
             animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
         }
         @keyframes pulse-ring {
             0%   { transform: scale(1);   opacity: 0.8; }
-            100% { transform: scale(1.5); opacity: 0;   }
-        }
-
-        /* ── v3.1 : Share card hover ────────────────────────── */
-        .share-card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease; }
-        .share-card-hover:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5),
-                        0 0 20px rgba(139,92,246,0.15);
-        }
-
-        /* ── v3.1 : Logo fallback SVG ───────────────────────── */
-        .logo-fallback {
-            display: none;
-            width: 100%;
-            height: 100%;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #1d4ed8, #2563eb);
-            border-radius: 20%;
-            font-size: 1.6rem;
-            font-weight: 800;
-            color: white;
-            letter-spacing: -1px;
-            position: relative;
-            z-index: 10;
-            box-shadow: 0 0 24px rgba(37,99,235,0.6);
+            100% { transform: scale(1.5); opacity: 0; }
         }
     </style>
+    <!-- 5. Liens externes dans un nouvel onglet -->
+    <base target="_blank">
 </head>
 <body class="text-gray-100 font-sans antialiased">
 
@@ -195,9 +162,8 @@
             <div class="text-center mb-10">
                 <div class="w-32 h-32 mx-auto mb-5 relative logo-container">
                     <div class="logo-glow" style="inset:-16px"></div>
-                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img"
-                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                    <div class="logo-fallback">SG</div>
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                    <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; background:linear-gradient(135deg,#2563eb,#3b82f6); border-radius:20px; font-size:48px; font-weight:800; color:white; position:relative; z-index:10;">SG</div>
                 </div>
                 <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">
                     SYSTEMES<span class="gradient-text">GED</span>
@@ -246,7 +212,7 @@
                     <p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Par fichier</p>
                 </div>
                 <div class="login-stat">
-                    <p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v3.1</p>
+                    <p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v3.0</p>
                     <p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p>
                 </div>
             </div>
@@ -268,9 +234,8 @@
             <div class="lg:hidden text-center mb-6">
                 <div class="w-20 h-20 mx-auto mb-3 relative logo-container">
                     <div class="logo-glow"></div>
-                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img"
-                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                    <div class="logo-fallback" style="font-size:1.1rem">SG</div>
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                    <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; background:linear-gradient(135deg,#2563eb,#3b82f6); border-radius:14px; font-size:28px; font-weight:800; color:white; position:relative; z-index:10;">SG</div>
                 </div>
                 <h1 style="font-size:1.5rem;font-weight:800;color:white">SYSTEMES<span class="gradient-text">GED</span></h1>
             </div>
@@ -376,7 +341,7 @@
                     <i class="fas fa-check-circle"></i> RGPD Conforme
                 </span>
                 <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:rgba(96,165,250,0.5)">
-                    <i class="fas fa-cloud"></i> Cloud v3.1
+                    <i class="fas fa-cloud"></i> Cloud v3.0
                 </span>
             </div>
         </div>
@@ -460,7 +425,8 @@
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 relative logo-container">
                     <div class="logo-glow" style="inset:-5px;filter:blur(10px);"></div>
-                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                    <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; background:linear-gradient(135deg,#2563eb,#3b82f6); border-radius:8px; font-size:14px; font-weight:800; color:white; position:relative; z-index:10;">SG</div>
                 </div>
                 <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
             </div>
@@ -533,11 +499,12 @@
                 <div class="hidden sm:flex items-center gap-3">
                     <div class="w-10 h-10 relative logo-container">
                         <div class="logo-glow" style="inset:-5px;filter:blur(10px);"></div>
-                        <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
+                        <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                        <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; background:linear-gradient(135deg,#2563eb,#3b82f6); border-radius:8px; font-size:14px; font-weight:800; color:white; position:relative; z-index:10;">SG</div>
                     </div>
                     <div>
                         <h1 class="text-xl font-bold tracking-tight"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1>
-                        <p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v3.1</p>
+                        <p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v3.0</p>
                     </div>
                 </div>
             </div>
@@ -786,8 +753,11 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h2 class="text-2xl font-bold text-white">Documents partagés</h2>
-                        <p class="text-sm text-blue-300/80">Reçus et envoyés</p>
+                        <p class="text-sm text-blue-300/80">Reçus, envoyés et suivi d'accès</p>
                     </div>
+                    <button onclick="revokeAllExpired()" target="_self" class="flex items-center gap-2 px-4 py-2 text-sm bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl hover:bg-red-500/20 transition-colors">
+                        <i class="fas fa-clock"></i> Nettoyer expirés
+                    </button>
                 </div>
 
                 <!-- Tabs -->
@@ -815,7 +785,19 @@
                 </div>
 
                 <!-- Envoyés -->
-                <div id="shared-sent" class="hidden space-y-3" >
+                <div id="shared-sent" class="hidden space-y-3">
+                    <!-- Filtre + recherche -->
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="sentShareSearch" placeholder="Rechercher par email ou document..."
+                            oninput="filterSentShares()" target="_self"
+                            class="flex-1 bg-slate-900/50 border border-blue-500/20 rounded-xl px-4 py-2 text-white text-sm outline-none focus:border-purple-400 transition-all">
+                        <select id="sentShareFilter" onchange="filterSentShares()"
+                            class="bg-slate-900/50 border border-blue-500/20 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-purple-400 transition-all">
+                            <option value="all">Tous les partages</option>
+                            <option value="active">Actifs seulement</option>
+                            <option value="expired">Expirés seulement</option>
+                        </select>
+                    </div>
                     <div class="glass-card rounded-2xl border border-blue-500/20 p-8 text-center" id="sentEmptyState">
                         <div class="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-400 border border-purple-400/20">
                             <i class="fas fa-paper-plane text-3xl"></i>
@@ -823,7 +805,7 @@
                         <p class="text-blue-300 mb-2">Aucun partage envoyé</p>
                         <p class="text-sm text-blue-400/60">Partagez un document depuis la section Documents</p>
                     </div>
-                    <div id="sentSharesList" class="space-y-3 hidden"></div>
+                    <div id="sentSharesList" class="space-y-2 hidden"></div>
                 </div>
             </div>
 
@@ -949,7 +931,7 @@
                     <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i class="fas fa-database text-yellow-400"></i> Configuration Supabase</h3>
                     <p class="text-sm text-blue-300/70">Exécutez ce script SQL dans votre dashboard Supabase (SQL Editor) pour créer toutes les tables requises :</p>
                     <div class="relative">
-                        <pre id="sqlSchemaBlock" class="bg-slate-950/80 border border-yellow-500/20 rounded-xl p-4 text-xs text-green-300 overflow-x-auto max-h-48 overflow-y-auto font-mono leading-relaxed">-- SystemesGED v3.1 — Schema SQL Supabase
+                        <pre id="sqlSchemaBlock" class="bg-slate-950/80 border border-yellow-500/20 rounded-xl p-4 text-xs text-green-300 overflow-x-auto max-h-48 overflow-y-auto font-mono leading-relaxed">-- SystemesGED v3.0 — Schema SQL Supabase
 -- Exécuter dans : Supabase Dashboard → SQL Editor
 
 create table if not exists users_profiles (
@@ -1447,7 +1429,7 @@ create policy "user delete own" on storage.objects for delete using (bucket_id =
                 </div>
                 <!-- Console -->
                 <div id="sysLogConsole" class="glass-card rounded-2xl border border-cyan-500/15 p-4 font-mono text-xs space-y-1 max-h-[58vh] overflow-y-auto" style="background:rgba(2,5,18,0.9)">
-                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:35:00</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-green-300">Application démarrée — SystemesGED v3.1 ✓</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:35:00</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-green-300">Application démarrée — SystemesGED v3.0 ✓</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:55</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Supabase connecté — latence: 38ms</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:10</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Upload: Contrat_2026.pdf (2.4 MB) → storage OK</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:09</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Chiffrement AES-256 appliqué: Contrat_2026.pdf</span></div>
@@ -1628,118 +1610,312 @@ create policy "user delete own" on storage.objects for delete using (bucket_id =
     </div>
 </div>
 
-<!-- ===== SHARE DOCUMENT MODAL ===== -->
+<!-- ===== SHARE DOCUMENT MODAL — v3.1 (Kimi UI + Sécurité avancée) ===== -->
 <div id="shareModal" class="fixed inset-0 bg-slate-900/95 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="glass-card rounded-2xl border border-purple-500/30 w-full max-w-lg shadow-2xl shadow-purple-500/20">
-        <div class="p-6 border-b border-purple-500/20 flex items-center justify-between">
+    <div class="glass-card rounded-2xl border border-purple-500/30 w-full max-w-2xl shadow-2xl shadow-purple-500/20" style="max-height:92vh;overflow-y:auto">
+
+        <!-- Header -->
+        <div class="p-5 border-b border-purple-500/20 flex items-center justify-between sticky top-0 z-10" style="background:rgba(12,20,56,0.97);backdrop-filter:blur(14px)">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 border border-purple-400/30">
-                    <i class="fas fa-share-alt"></i>
+                    <i class="fas fa-shield-alt"></i>
                 </div>
                 <div>
-                    <h2 class="text-lg font-bold text-white">Partager le document</h2>
-                    <p class="text-xs text-purple-300/70" id="shareDocName">—</p>
+                    <h2 class="text-lg font-bold text-white">Partage sécurisé</h2>
+                    <p class="text-xs text-purple-300/70 truncate max-w-xs" id="shareDocName">—</p>
                 </div>
             </div>
-            <button onclick="closeShareModal()" class="text-blue-400 hover:text-white p-2 hover:bg-blue-500/10 rounded-lg transition-colors">
-                <i class="fas fa-times text-xl"></i>
+            <button onclick="closeShareModal()" class="text-blue-400 hover:text-white p-2 hover:bg-blue-500/10 rounded-lg transition-colors"><i class="fas fa-times text-xl"></i></button>
+        </div>
+
+        <!-- Tabs internes -->
+        <div class="flex border-b border-blue-500/20 px-5 pt-3 gap-1">
+            <button onclick="switchShareTab('config')" id="stab-config"
+                class="px-4 py-2 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px transition-all">
+                <i class="fas fa-cog mr-1.5"></i>Configuration
+            </button>
+            <button onclick="switchShareTab('active')" id="stab-active"
+                class="px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px hover:text-blue-400 transition-all">
+                <i class="fas fa-users mr-1.5"></i>Partages actifs
+                <span id="activeSharesBadge" class="ml-1 bg-purple-500/30 text-purple-300 text-xs px-1.5 py-0.5 rounded-full hidden">0</span>
             </button>
         </div>
 
-        <div class="p-6 space-y-5">
-            <!-- Email destinataire -->
+        <!-- TAB CONFIG -->
+        <div id="shareTab-config" class="p-5 space-y-5">
+
+            <!-- Destinataire -->
             <div>
-                <label class="block text-sm font-medium text-blue-300 mb-2">
-                    <i class="fas fa-envelope mr-2"></i>Email du destinataire
+                <label class="block text-sm font-semibold text-blue-300 mb-2">
+                    <i class="fas fa-envelope mr-2 text-purple-400"></i>Destinataire
                 </label>
-                <input type="email" id="shareEmail" placeholder="exemple@email.com"
-                       class="w-full bg-slate-900/50 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 outline-none transition-all"
-                       oninput="validateShareForm()">
+                <div class="relative">
+                    <input type="email" id="shareEmail" placeholder="exemple@domaine.com"
+                        class="w-full bg-slate-900/50 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 outline-none transition-all pr-10"
+                        oninput="validateShareForm()">
+                    <i class="fas fa-check-circle absolute right-3 top-3.5 text-green-400 hidden" id="emailValidIcon"></i>
+                </div>
+                <p class="text-xs text-blue-400/50 mt-1">Un email professionnel pré-rédigé s'ouvrira automatiquement.</p>
             </div>
 
-            <!-- Permission -->
+            <!-- Message personnalisé -->
             <div>
-                <label class="block text-sm font-medium text-blue-300 mb-2">
-                    <i class="fas fa-shield-alt mr-2"></i>Permission
+                <label class="block text-sm font-semibold text-blue-300 mb-2">
+                    <i class="fas fa-comment-alt mr-2 text-blue-400"></i>Message personnalisé <span class="text-xs font-normal text-blue-400/50">(optionnel)</span>
+                </label>
+                <textarea id="shareMessage" rows="2" placeholder="Ajoutez un message pour le destinataire..."
+                    class="w-full bg-slate-900/50 border border-blue-500/30 rounded-xl px-4 py-2.5 text-white text-sm focus:border-purple-400 outline-none transition-all resize-none"></textarea>
+            </div>
+
+            <!-- Niveau d'accès avec permission-badge (Kimi style) -->
+            <div>
+                <label class="block text-sm font-semibold text-blue-300 mb-3">
+                    <i class="fas fa-lock mr-2 text-yellow-400"></i>Niveau d'accès
                 </label>
                 <div class="grid grid-cols-3 gap-3">
                     <label class="cursor-pointer">
                         <input type="radio" name="sharePermission" value="view" checked class="sr-only peer">
-                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
-                            <i class="fas fa-eye text-blue-400 peer-checked:text-purple-400 block mb-1 text-lg"></i>
-                            <span class="text-xs text-gray-300">Lecture</span>
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-blue-400 peer-checked:bg-blue-500/15 transition-all hover:bg-slate-800/50">
+                            <i class="fas fa-eye text-blue-400 block mb-1.5 text-xl"></i>
+                            <span class="permission-badge bg-blue-500/20 border-blue-500/50 text-blue-300">
+                                <i class="fas fa-eye text-xs"></i> Lecture
+                            </span>
+                            <p class="text-[10px] text-blue-300/50 mt-1.5">Voir uniquement</p>
                         </div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="sharePermission" value="download" class="sr-only peer">
-                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
-                            <i class="fas fa-download text-blue-400 block mb-1 text-lg"></i>
-                            <span class="text-xs text-gray-300">Téléchargement</span>
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-green-400 peer-checked:bg-green-500/15 transition-all hover:bg-slate-800/50">
+                            <i class="fas fa-download text-green-400 block mb-1.5 text-xl"></i>
+                            <span class="permission-badge bg-green-500/20 border-green-500/50 text-green-300">
+                                <i class="fas fa-download text-xs"></i> Télécharger
+                            </span>
+                            <p class="text-[10px] text-blue-300/50 mt-1.5">Voir + DL</p>
                         </div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="sharePermission" value="edit" class="sr-only peer">
-                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
-                            <i class="fas fa-edit text-blue-400 block mb-1 text-lg"></i>
-                            <span class="text-xs text-gray-300">Édition</span>
+                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-orange-400 peer-checked:bg-orange-500/15 transition-all hover:bg-slate-800/50">
+                            <i class="fas fa-pen text-orange-400 block mb-1.5 text-xl"></i>
+                            <span class="permission-badge bg-orange-500/20 border-orange-500/50 text-orange-300">
+                                <i class="fas fa-pen text-xs"></i> Édition
+                            </span>
+                            <p class="text-[10px] text-blue-300/50 mt-1.5">Accès total</p>
                         </div>
                     </label>
                 </div>
             </div>
 
-            <!-- Durée de vie -->
+            <!-- Durée de validité étendue -->
             <div>
-                <label class="block text-sm font-medium text-blue-300 mb-2">
-                    <i class="fas fa-clock mr-2"></i>Durée de validité du lien
+                <label class="block text-sm font-semibold text-blue-300 mb-2">
+                    <i class="fas fa-hourglass-half mr-2 text-red-400"></i>Durée de validité du lien
                 </label>
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+                    <label class="cursor-pointer">
+                        <input type="radio" name="shareDuration" value="0.0417" class="sr-only peer">
+                        <div class="p-2 rounded-xl border border-blue-500/20 bg-slate-900/30 text-center peer-checked:border-red-400 peer-checked:bg-red-500/15 transition-all hover:bg-slate-800/50">
+                            <span class="text-white font-bold text-sm block">1h</span>
+                            <span class="text-[10px] text-blue-300/50">Flash</span>
+                        </div>
+                    </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="shareDuration" value="1" class="sr-only peer">
-                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
-                            <span class="text-white font-bold block">1 jour</span>
-                            <span class="text-xs text-blue-300/60">Expire demain</span>
+                        <div class="p-2 rounded-xl border border-blue-500/20 bg-slate-900/30 text-center peer-checked:border-orange-400 peer-checked:bg-orange-500/15 transition-all hover:bg-slate-800/50">
+                            <span class="text-white font-bold text-sm block">1j</span>
+                            <span class="text-[10px] text-blue-300/50">Demain</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="shareDuration" value="3" class="sr-only peer">
+                        <div class="p-2 rounded-xl border border-blue-500/20 bg-slate-900/30 text-center peer-checked:border-yellow-400 peer-checked:bg-yellow-500/15 transition-all hover:bg-slate-800/50">
+                            <span class="text-white font-bold text-sm block">3j</span>
+                            <span class="text-[10px] text-blue-300/50">Court</span>
                         </div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="shareDuration" value="7" checked class="sr-only peer">
-                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
-                            <span class="text-white font-bold block">7 jours</span>
-                            <span class="text-xs text-blue-300/60">Recommandé</span>
+                        <div class="p-2 rounded-xl border border-blue-500/20 bg-slate-900/30 text-center peer-checked:border-blue-400 peer-checked:bg-blue-500/15 transition-all hover:bg-slate-800/50">
+                            <span class="text-white font-bold text-sm block">7j</span>
+                            <span class="text-[10px] text-green-400">✓ Conseillé</span>
                         </div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="shareDuration" value="30" class="sr-only peer">
-                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
-                            <span class="text-white font-bold block">30 jours</span>
-                            <span class="text-xs text-blue-300/60">1 mois</span>
+                        <div class="p-2 rounded-xl border border-blue-500/20 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/15 transition-all hover:bg-slate-800/50">
+                            <span class="text-white font-bold text-sm block">30j</span>
+                            <span class="text-[10px] text-blue-300/50">1 mois</span>
                         </div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="shareDuration" value="0" class="sr-only peer">
-                        <div class="p-3 rounded-xl border border-blue-500/30 bg-slate-900/30 text-center peer-checked:border-purple-400 peer-checked:bg-purple-500/20 transition-all">
-                            <span class="text-white font-bold block">Illimité</span>
-                            <span class="text-xs text-blue-300/60">Pas d'expiration</span>
+                        <div class="p-2 rounded-xl border border-blue-500/20 bg-slate-900/30 text-center peer-checked:border-gray-400 peer-checked:bg-gray-500/15 transition-all hover:bg-slate-800/50">
+                            <span class="text-white font-bold text-sm block">∞</span>
+                            <span class="text-[10px] text-blue-300/50">Illimité</span>
                         </div>
                     </label>
                 </div>
+                <!-- Date personnalisée -->
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-2 cursor-pointer flex-shrink-0">
+                        <input type="checkbox" id="useCustomDate" onchange="toggleCustomDate()" class="w-4 h-4 rounded accent-purple-500">
+                        <span class="text-xs text-blue-300/70">Date personnalisée :</span>
+                    </label>
+                    <input type="datetime-local" id="customExpiry" disabled
+                        class="flex-1 bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-1.5 text-white text-xs outline-none disabled:opacity-40 focus:border-purple-400 transition-all">
+                </div>
             </div>
 
-            <!-- Partages actifs sur ce document -->
+            <!-- Sécurité avancée -->
+            <div class="rounded-xl border border-blue-500/20 overflow-hidden">
+                <button onclick="toggleShareSecurity()" class="w-full flex items-center justify-between p-3.5 bg-slate-900/40 hover:bg-slate-800/50 transition-colors text-left" target="_self">
+                    <span class="text-sm font-semibold text-blue-300 flex items-center gap-2">
+                        <i class="fas fa-shield-virus text-purple-400"></i>Options de sécurité avancées
+                    </span>
+                    <i class="fas fa-chevron-down text-blue-400 text-xs transition-transform" id="secChevron"></i>
+                </button>
+                <div id="shareSecurityPanel" class="hidden p-4 space-y-4 bg-slate-900/20 border-t border-blue-500/10">
+
+                    <!-- Mot de passe -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-blue-300 flex items-center gap-2">
+                                <i class="fas fa-key text-yellow-400"></i>Protection par mot de passe
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="enablePassword" onchange="togglePasswordField()" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-700 peer-checked:bg-purple-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                        </div>
+                        <div id="passwordFieldWrapper" class="hidden">
+                            <div class="relative">
+                                <input type="password" id="sharePassword" placeholder="Mot de passe requis pour accéder..."
+                                    class="w-full bg-slate-900/50 border border-yellow-500/30 rounded-xl px-4 py-2.5 text-white text-sm focus:border-yellow-400 outline-none transition-all pr-10"
+                                    oninput="evalPasswordStrength()">
+                                <button type="button" onclick="togglePasswordVisibility()" target="_self" class="absolute right-3 top-2.5 text-blue-400 hover:text-white transition-colors">
+                                    <i class="fas fa-eye text-sm" id="pwToggleIcon"></i>
+                                </button>
+                            </div>
+                            <div class="mt-2">
+                                <div class="flex gap-1 mb-1">
+                                    <div class="h-1 flex-1 rounded-full bg-slate-700" id="ps1"></div>
+                                    <div class="h-1 flex-1 rounded-full bg-slate-700" id="ps2"></div>
+                                    <div class="h-1 flex-1 rounded-full bg-slate-700" id="ps3"></div>
+                                    <div class="h-1 flex-1 rounded-full bg-slate-700" id="ps4"></div>
+                                </div>
+                                <p class="text-xs text-blue-300/60" id="psLabel"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Limite téléchargements -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-blue-300 flex items-center gap-2">
+                                <i class="fas fa-download text-green-400"></i>Limiter les téléchargements
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="enableDlLimit" onchange="toggleDlLimit()" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-700 peer-checked:bg-green-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                        </div>
+                        <div id="dlLimitWrapper" class="hidden flex items-center gap-3">
+                            <input type="number" id="dlLimitValue" min="1" max="100" value="5"
+                                class="w-24 bg-slate-900/50 border border-green-500/30 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-green-400">
+                            <span class="text-xs text-blue-300/60">téléchargements maximum</span>
+                        </div>
+                    </div>
+
+                    <!-- Restriction domaine -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-blue-300 flex items-center gap-2">
+                                <i class="fas fa-globe text-cyan-400"></i>Restreindre au domaine email
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="enableDomainRestrict" onchange="toggleDomainRestrict()" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-700 peer-checked:bg-cyan-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                        </div>
+                        <div id="domainRestrictWrapper" class="hidden">
+                            <input type="text" id="domainRestrictValue" placeholder="exemple.com"
+                                class="w-full bg-slate-900/50 border border-cyan-500/30 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-cyan-400">
+                            <p class="text-xs text-blue-300/50 mt-1">Seules les adresses de ce domaine pourront accéder au lien.</p>
+                        </div>
+                    </div>
+
+                    <!-- Toggles rapides -->
+                    <div class="grid grid-cols-1 gap-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-medium text-blue-300 flex items-center gap-2 cursor-pointer">
+                                <i class="fas fa-bell text-orange-400"></i>Me notifier à chaque ouverture
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="enableOpenNotif" class="sr-only peer" checked>
+                                <div class="w-9 h-5 bg-slate-700 peer-checked:bg-orange-500 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-medium text-blue-300 flex items-center gap-2 cursor-pointer">
+                                <i class="fas fa-stamp text-pink-400"></i>Filigrane (email destinataire)
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="enableWatermark" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-700 peer-checked:bg-pink-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-medium text-blue-300 flex items-center gap-2 cursor-pointer">
+                                <i class="fas fa-print text-red-400"></i>Désactiver impression / copie
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="disablePrint" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-700 peer-checked:bg-red-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-medium text-blue-300 flex items-center gap-2 cursor-pointer">
+                                <i class="fas fa-clipboard-list text-blue-400"></i>Journal d'audit (traçabilité accès)
+                            </label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="enableAudit" class="sr-only peer" checked>
+                                <div class="w-9 h-5 bg-slate-700 peer-checked:bg-blue-600 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Récapitulatif sécurité actif -->
+            <div id="shareSecuritySummary" class="hidden rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
+                <p class="text-xs font-semibold text-purple-300 mb-2"><i class="fas fa-shield-check mr-1"></i>Protections actives</p>
+                <div id="shareSummaryContent" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <!-- Partages actifs miniature -->
             <div id="activeSharesList" class="hidden">
-                <label class="block text-sm font-medium text-blue-300 mb-2">
-                    <i class="fas fa-users mr-2"></i>Partages actifs
-                </label>
+                <label class="block text-sm font-medium text-blue-300 mb-2"><i class="fas fa-users mr-2"></i>Partages actifs sur ce document</label>
                 <div id="activeSharesContent" class="space-y-2 max-h-32 overflow-y-auto"></div>
             </div>
         </div>
 
-        <div class="p-6 border-t border-blue-500/20 flex gap-3">
-            <button onclick="closeShareModal()" class="flex-1 px-4 py-3 text-blue-300 hover:bg-blue-500/10 rounded-xl transition-colors border border-blue-500/30 font-medium">
+        <!-- TAB: Partages actifs complet -->
+        <div id="shareTab-active" class="p-5 hidden">
+            <p class="text-xs text-blue-300/60 mb-3">Gérez tous les accès actifs pour ce document.</p>
+            <div id="activeSharesFullContent" class="space-y-3"></div>
+            <p class="text-center text-sm text-blue-300/50 mt-6 hidden" id="noActiveSharesMsg">
+                <i class="fas fa-lock text-2xl block mb-2 text-blue-400/30"></i>Aucun partage actif.
+            </p>
+        </div>
+
+        <!-- Footer sticky -->
+        <div class="p-5 border-t border-blue-500/20 flex gap-3 sticky bottom-0" style="background:rgba(12,20,56,0.97);backdrop-filter:blur(14px)">
+            <button onclick="closeShareModal()" target="_self" class="px-5 py-3 text-blue-300 hover:bg-blue-500/10 rounded-xl transition-colors border border-blue-500/30 font-medium">
                 Annuler
             </button>
             <button onclick="submitShare()" id="shareBtn" disabled
-                    class="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                <i class="fas fa-paper-plane"></i> Envoyer le partage
+                    class="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white rounded-xl font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-purple-500/30">
+                <i class="fas fa-paper-plane"></i> Envoyer le partage sécurisé
             </button>
         </div>
     </div>
@@ -2705,7 +2881,7 @@ function renderWorkflows() {
         const nextStatusMap = { pending:'in_progress', in_progress:'completed' };
         const nextLabel = { pending:'Démarrer', in_progress:'Terminer' };
         return `
-            <div class="glass-card share-card-hover rounded-2xl border border-blue-500/20 p-6 hover:border-blue-400/40 transition-all group flex flex-col gap-4">
+            <div class="glass-card rounded-2xl border border-blue-500/20 p-6 hover:border-blue-400/40 transition-all group flex flex-col gap-4">
                 <div class="flex items-center justify-between">
                     <span class="px-3 py-1 bg-${st.color}-500/20 text-${st.color}-400 rounded-full text-xs font-bold border border-${st.color}-500/30">${escapeHtml(st.label)}</span>
                     <span class="px-2 py-1 rounded-lg text-xs font-semibold ${priStyle}">${escapeHtml(wf.priority || 'normal')}</span>
@@ -2880,15 +3056,14 @@ async function loadUsers() {
                     </div>
                 </td>
                 <td class="p-4">
-                    <span class="permission-badge ${user.role === 'admin' ? 'admin' : user.role === 'editor' ? 'write' : 'read'}">
-                        <i class="fas ${user.role === 'admin' ? 'fa-crown' : user.role === 'editor' ? 'fa-pen' : 'fa-eye'}"></i>
+                    <span class="px-2 py-1 ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'} rounded text-xs border border-blue-500/20">
                         ${escapeHtml(user.role || 'user')}
                     </span>
                 </td>
                 <td class="p-4 text-blue-300">${user.id === currentUser.id ? currentDocuments.length : '—'}</td>
                 <td class="p-4">
                     <span class="flex items-center gap-2 text-sm text-blue-300">
-                        <span class="w-2 h-2 bg-green-400 rounded-full status-pulse"></span> Actif
+                        <span class="w-2 h-2 bg-green-400 rounded-full"></span> Actif
                     </span>
                 </td>
                 <td class="p-4">
@@ -2926,17 +3101,35 @@ async function addUser() {
 // ─── PARTAGE DOCUMENTS ───────────────────────────────────────────────────────
 let currentShareDocId = null;
 
+// ─── SHARE MODAL — v3.1 ──────────────────────────────────────────────────────
 function openShareModal(docId) {
     const doc = currentDocuments.find(d => d.id === docId);
     if (!doc) return;
     currentShareDocId = docId;
     document.getElementById('shareDocName').textContent = doc.name;
     document.getElementById('shareEmail').value = '';
+    document.getElementById('shareMessage').value = '';
     document.getElementById('shareBtn').disabled = true;
-    // Reset sélections
+    document.getElementById('emailValidIcon').classList.add('hidden');
     document.querySelector('input[name="sharePermission"][value="view"]').checked = true;
     document.querySelector('input[name="shareDuration"][value="7"]').checked = true;
-    document.getElementById('activeSharesList').classList.add('hidden');
+    // Reset security toggles
+    ['enablePassword','enableDlLimit','enableDomainRestrict','enableWatermark','disablePrint'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.checked = false;
+    });
+    const notif = document.getElementById('enableOpenNotif'); if (notif) notif.checked = true;
+    const audit = document.getElementById('enableAudit');     if (audit) audit.checked = true;
+    const cu = document.getElementById('useCustomDate'); if (cu) cu.checked = false;
+    const ce = document.getElementById('customExpiry');  if (ce) ce.disabled = true;
+    ['passwordFieldWrapper','dlLimitWrapper','domainRestrictWrapper'].forEach(id => {
+        document.getElementById(id)?.classList.add('hidden');
+    });
+    document.getElementById('shareSecurityPanel')?.classList.add('hidden');
+    const chev = document.getElementById('secChevron'); if (chev) chev.style.transform = '';
+    document.getElementById('shareSecuritySummary')?.classList.add('hidden');
+    document.getElementById('activeSharesList')?.classList.add('hidden');
+    document.getElementById('activeSharesBadge')?.classList.add('hidden');
+    switchShareTab('config');
     loadActiveShares(docId);
     document.getElementById('shareModal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -2949,151 +3142,313 @@ function closeShareModal() {
     currentShareDocId = null;
 }
 
+function switchShareTab(tab) {
+    ['config','active'].forEach(t => {
+        document.getElementById('shareTab-' + t)?.classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById('stab-' + t);
+        if (!btn) return;
+        if (t === tab) { btn.classList.add('text-blue-400','border-blue-400'); btn.classList.remove('text-gray-400','border-transparent'); }
+        else           { btn.classList.remove('text-blue-400','border-blue-400'); btn.classList.add('text-gray-400','border-transparent'); }
+    });
+    if (tab === 'active') loadActiveSharesFull(currentShareDocId);
+}
+
+function toggleShareSecurity() {
+    const panel = document.getElementById('shareSecurityPanel');
+    const chev  = document.getElementById('secChevron');
+    const hidden = panel.classList.toggle('hidden');
+    if (chev) chev.style.transform = hidden ? '' : 'rotate(180deg)';
+}
+
+function toggleCustomDate() {
+    const cb = document.getElementById('useCustomDate');
+    const inp = document.getElementById('customExpiry');
+    inp.disabled = !cb.checked;
+    if (cb.checked) { const d = new Date(Date.now() + 7*86400000); inp.value = d.toISOString().slice(0,16); }
+    validateShareForm();
+}
+function togglePasswordField()    { document.getElementById('passwordFieldWrapper')?.classList.toggle('hidden', !document.getElementById('enablePassword').checked); updateShareSummary(); }
+function toggleDlLimit()          { document.getElementById('dlLimitWrapper')?.classList.toggle('hidden', !document.getElementById('enableDlLimit').checked); updateShareSummary(); }
+function toggleDomainRestrict()   { document.getElementById('domainRestrictWrapper')?.classList.toggle('hidden', !document.getElementById('enableDomainRestrict').checked); updateShareSummary(); }
+
+function evalPasswordStrength() {
+    const pw = document.getElementById('sharePassword').value;
+    let score = 0;
+    if (pw.length >= 8) score++; if (/[A-Z]/.test(pw)) score++; if (/[0-9]/.test(pw)) score++; if (/[^A-Za-z0-9]/.test(pw)) score++;
+    const colors = ['bg-red-500','bg-orange-500','bg-yellow-400','bg-green-400'];
+    const labels = ['Très faible','Faible','Moyen','Fort'];
+    [1,2,3,4].forEach(i => { const el = document.getElementById('ps'+i); if (el) el.className = 'h-1 flex-1 rounded-full ' + (i <= score ? colors[score-1] : 'bg-slate-700'); });
+    const lbl = document.getElementById('psLabel'); if (lbl) lbl.textContent = pw.length ? (labels[score-1]||'Très faible') : '';
+}
+
+function togglePasswordVisibility() {
+    const inp = document.getElementById('sharePassword'); const icon = document.getElementById('pwToggleIcon');
+    const show = inp.type === 'password'; inp.type = show ? 'text' : 'password';
+    if (icon) icon.className = 'fas ' + (show ? 'fa-eye-slash' : 'fa-eye') + ' text-sm';
+}
+
+function updateShareSummary() {
+    const checks = [
+        { id:'enablePassword',      icon:'fa-key',            color:'text-yellow-300', label:'Mot de passe' },
+        { id:'enableDlLimit',       icon:'fa-download',       color:'text-green-300',  label:'Limite DL' },
+        { id:'enableDomainRestrict',icon:'fa-globe',          color:'text-cyan-300',   label:'Domaine' },
+        { id:'enableOpenNotif',     icon:'fa-bell',           color:'text-orange-300', label:'Notif' },
+        { id:'enableWatermark',     icon:'fa-stamp',          color:'text-pink-300',   label:'Filigrane' },
+        { id:'disablePrint',        icon:'fa-print',          color:'text-red-300',    label:'No print' },
+        { id:'enableAudit',         icon:'fa-clipboard-list', color:'text-blue-300',   label:'Audit' },
+    ];
+    const active = checks.filter(c => document.getElementById(c.id)?.checked);
+    const sumEl  = document.getElementById('shareSecuritySummary');
+    const cntEl  = document.getElementById('shareSummaryContent');
+    if (!sumEl || !cntEl) return;
+    if (active.length) {
+        cntEl.innerHTML = active.map(c => `<span class="flex items-center gap-1 text-xs bg-slate-800/60 border border-blue-500/20 rounded-full px-2.5 py-1"><i class="fas ${c.icon} ${c.color} text-xs"></i><span class="text-white">${c.label}</span></span>`).join('');
+        sumEl.classList.remove('hidden');
+    } else { sumEl.classList.add('hidden'); }
+}
+
 function validateShareForm() {
     const email = document.getElementById('shareEmail').value.trim();
-    const valid  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     document.getElementById('shareBtn').disabled = !valid;
+    document.getElementById('emailValidIcon')?.classList.toggle('hidden', !valid);
+    updateShareSummary();
+}
+
+function computeExpiryDate() {
+    if (document.getElementById('useCustomDate')?.checked) {
+        const val = document.getElementById('customExpiry').value;
+        return val ? new Date(val).toISOString() : null;
+    }
+    const duration = parseFloat(document.querySelector('input[name="shareDuration"]:checked')?.value || '7');
+    return duration === 0 ? null : new Date(Date.now() + duration * 86400000).toISOString();
+}
+
+function buildSecBadges(s) {
+    const b = [];
+    if (s.password_protected) b.push('<span class="text-[10px] bg-yellow-500/15 text-yellow-300 border border-yellow-500/20 rounded-full px-1.5 py-0.5"><i class="fas fa-key mr-0.5"></i>MDP</span>');
+    if (s.download_limit)     b.push(`<span class="text-[10px] bg-green-500/15 text-green-300 border border-green-500/20 rounded-full px-1.5 py-0.5"><i class="fas fa-download mr-0.5"></i>${s.download_limit} max</span>`);
+    if (s.domain_restriction) b.push(`<span class="text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/20 rounded-full px-1.5 py-0.5"><i class="fas fa-globe mr-0.5"></i>${s.domain_restriction}</span>`);
+    if (s.watermark_enabled)  b.push('<span class="text-[10px] bg-pink-500/15 text-pink-300 border border-pink-500/20 rounded-full px-1.5 py-0.5"><i class="fas fa-stamp mr-0.5"></i>Filigrane</span>');
+    if (s.print_disabled)     b.push('<span class="text-[10px] bg-red-500/15 text-red-300 border border-red-500/20 rounded-full px-1.5 py-0.5"><i class="fas fa-print mr-0.5"></i>No print</span>');
+    if (s.audit_enabled)      b.push('<span class="text-[10px] bg-blue-500/15 text-blue-300 border border-blue-500/20 rounded-full px-1.5 py-0.5"><i class="fas fa-clipboard-list mr-0.5"></i>Audit</span>');
+    return b.join('');
 }
 
 async function loadActiveShares(docId) {
     try {
-        const { data, error } = await supabaseClient
-            .from('shared_documents')
-            .select('*')
-            .eq('document_id', docId)
-            .eq('shared_by', currentUser.id)
-            .order('created_at', { ascending: false });
-
-        if (error || !data || data.length === 0) return;
-
-        const container = document.getElementById('activeSharesContent');
+        const { data, error } = await supabaseClient.from('shared_documents').select('*')
+            .eq('document_id', docId).eq('shared_by', currentUser.id).order('created_at', { ascending: false });
+        if (error || !data || !data.length) return;
+        const badge = document.getElementById('activeSharesBadge');
+        if (badge) { badge.textContent = data.length; badge.classList.remove('hidden'); }
         const now = new Date();
-
+        const permIcons = { view:'fa-eye', download:'fa-download', edit:'fa-edit' };
+        const container = document.getElementById('activeSharesContent');
         container.innerHTML = data.map(s => {
             const expired  = s.expires_at && new Date(s.expires_at) < now;
-            const expLabel = s.expires_at
-                ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at))
-                : 'Illimité';
-            const permConfig = { view:{label:'Lecture',cls:'read',icon:'fa-eye'}, download:{label:'DL',cls:'share',icon:'fa-download'}, edit:{label:'Édition',cls:'write',icon:'fa-edit'} };
-            const perm = permConfig[s.permission] || permConfig.view;
-            return `
-                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10">
+            const expLabel = s.expires_at ? (expired ? '<span class="text-red-400">Expiré</span>' : 'Expire le ' + formatDate(s.expires_at)) : '<span class="text-gray-400">Illimité</span>';
+            const secB = buildSecBadges(s);
+            return `<div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10 ${expired ? 'opacity-60' : ''}">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 flex-shrink-0"><i class="fas fa-user text-xs"></i></div>
+                    <div class="min-w-0">
+                        <p class="text-sm text-white truncate">${escapeHtml(s.shared_with_email)}</p>
+                        <p class="text-xs text-blue-300/50">${expLabel}</p>
+                        ${secB ? `<div class="flex gap-1 mt-1">${secB}</div>` : ''}
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <i class="fas ${permIcons[s.permission]||'fa-eye'} text-purple-400 text-xs"></i>
+                    <button onclick="revokeShare('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-1 rounded transition-colors" title="Révoquer"><i class="fas fa-times text-xs"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+        document.getElementById('activeSharesList')?.classList.remove('hidden');
+    } catch (err) { console.error(err); }
+}
+
+async function loadActiveSharesFull(docId) {
+    const container = document.getElementById('activeSharesFullContent');
+    const noMsg     = document.getElementById('noActiveSharesMsg');
+    if (!container) return;
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner mx-auto"></div></div>';
+    try {
+        const { data, error } = await supabaseClient.from('shared_documents').select('*')
+            .eq('document_id', docId).eq('shared_by', currentUser.id).order('created_at', { ascending: false });
+        if (error || !data || !data.length) { container.innerHTML = ''; noMsg?.classList.remove('hidden'); return; }
+        noMsg?.classList.add('hidden');
+        const now = new Date();
+        const permIcons  = { view:'fa-eye', download:'fa-download', edit:'fa-edit' };
+        const permLabels = { view:'Lecture', download:'Téléchargement', edit:'Édition' };
+        container.innerHTML = data.map(s => {
+            const expired = s.expires_at && new Date(s.expires_at) < now;
+            const expLabel = s.expires_at ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at)) : 'Illimité';
+            const secB = buildSecBadges(s);
+            const dlInfo = s.download_limit ? `${s.download_count||0}/${s.download_limit} DL` : null;
+            return `<div class="share-card-hover glass-card rounded-xl p-4 border ${expired ? 'border-red-500/20 opacity-70' : 'border-purple-500/20'}">
+                <div class="flex items-start justify-between gap-3">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 flex-shrink-0">
-                            <i class="fas fa-user text-xs"></i>
+                        <div class="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 border border-purple-400/20 flex-shrink-0">
+                            <i class="fas fa-user text-sm"></i>
                         </div>
                         <div class="min-w-0">
-                            <p class="text-sm text-white truncate">${escapeHtml(s.shared_with_email)}</p>
-                            <p class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'}">${expLabel}</p>
+                            <p class="text-sm font-semibold text-white truncate">${escapeHtml(s.shared_with_email)}</p>
+                            <div class="flex flex-wrap gap-2 mt-0.5 text-xs">
+                                <span class="${expired ? 'text-red-400' : 'text-blue-300/60'}">${expLabel}</span>
+                                <span class="text-purple-400"><i class="fas ${permIcons[s.permission]||'fa-eye'} mr-1"></i>${permLabels[s.permission]||'Lecture'}</span>
+                                ${dlInfo ? `<span class="text-green-400"><i class="fas fa-download mr-1"></i>${dlInfo}</span>` : ''}
+                            </div>
+                            ${secB ? `<div class="flex flex-wrap gap-1 mt-1.5">${secB}</div>` : ''}
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        <span class="permission-badge ${perm.cls}" style="padding:0.15rem 0.5rem;font-size:0.65rem"><i class="fas ${perm.icon}"></i>${perm.label}</span>
-                        <button onclick="revokeShare('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-1 rounded transition-colors" title="Révoquer">
-                            <i class="fas fa-times text-xs"></i>
-                        </button>
+                    <div class="flex gap-1.5 flex-shrink-0">
+                        ${!expired ? `<button onclick="copyDocShareLinkFromId('${escapeHtml(s.document_id)}')" class="px-2 py-1.5 text-xs bg-blue-500/15 text-blue-300 border border-blue-500/20 rounded-lg hover:bg-blue-500/25 transition-colors" title="Copier lien"><i class="fas fa-link"></i></button>` : ''}
+                        <button onclick="sendShareEmailDirect('${escapeHtml(s.shared_with_email)}')" class="px-2 py-1.5 text-xs bg-purple-500/15 text-purple-300 border border-purple-500/20 rounded-lg hover:bg-purple-500/25 transition-colors" title="Email"><i class="fas fa-envelope"></i></button>
+                        <button onclick="revokeShare('${escapeHtml(s.id)}')" class="px-2 py-1.5 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors" title="Révoquer"><i class="fas fa-times"></i></button>
                     </div>
-                </div>`;
+                </div>
+            </div>`;
         }).join('');
+    } catch (err) { container.innerHTML = ''; console.error(err); }
+}
 
-        document.getElementById('activeSharesList').classList.remove('hidden');
-    } catch (err) { console.error(err); }
+async function copyDocShareLinkFromId(docId) {
+    const doc = currentDocuments.find(d => d.id === docId);
+    if (!doc?.storage_path) { showToast('Impossible de générer le lien', 'error'); return; }
+    const { data: urlData } = await supabaseClient.storage.from('documents').createSignedUrl(doc.storage_path, 604800);
+    if (urlData?.signedUrl) { await navigator.clipboard.writeText(urlData.signedUrl).catch(()=>{}); showToast('Lien copié !', 'success'); }
+}
+
+function sendShareEmailDirect(email) {
+    const doc = currentDocuments.find(d => d.id === currentShareDocId) || { name: 'Document' };
+    const sender = currentUser?.user_metadata?.full_name || currentUser?.email || 'Un utilisateur SystemesGED';
+    const subject = encodeURIComponent(`[SystemesGED] Document partagé : ${doc.name}`);
+    const body = encodeURIComponent(`Bonjour,\n\n${sender} vous a partagé le document "${doc.name}" via SystemesGED.\n\nConnectez-vous à votre espace pour y accéder.\n\n---\nSystemesGED — GED Cloud sécurisée`);
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
 }
 
 async function submitShare() {
     const email      = document.getElementById('shareEmail').value.trim();
     const permission = document.querySelector('input[name="sharePermission"]:checked')?.value || 'view';
-    const duration   = parseInt(document.querySelector('input[name="shareDuration"]:checked')?.value || '7');
-
+    const message    = document.getElementById('shareMessage')?.value.trim() || '';
     if (!email || !currentShareDocId) return;
 
     const btn = document.getElementById('shareBtn');
     btn.disabled = true;
-    btn.innerHTML = '<div class="spinner"></div> Envoi...';
+    btn.innerHTML = '<div class="spinner"></div> Création du partage...';
 
     try {
-        // Calculer la date d'expiration
-        let expiresAt = null;
-        if (duration > 0) {
-            expiresAt = new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString();
+        const expiresAt          = computeExpiryDate();
+        const passwordEnabled    = document.getElementById('enablePassword')?.checked || false;
+        const sharePassword      = passwordEnabled ? document.getElementById('sharePassword')?.value : null;
+        const dlLimitEnabled     = document.getElementById('enableDlLimit')?.checked || false;
+        const dlLimit            = dlLimitEnabled ? parseInt(document.getElementById('dlLimitValue')?.value||'5') : null;
+        const domainEnabled      = document.getElementById('enableDomainRestrict')?.checked || false;
+        const domainRestrict     = domainEnabled ? (document.getElementById('domainRestrictValue')?.value.trim()||null) : null;
+        const openNotif          = document.getElementById('enableOpenNotif')?.checked ?? true;
+        const watermark          = document.getElementById('enableWatermark')?.checked || false;
+        const printDisabled      = document.getElementById('disablePrint')?.checked || false;
+        const auditEnabled       = document.getElementById('enableAudit')?.checked ?? true;
+
+        if (domainRestrict && !email.endsWith('@' + domainRestrict)) {
+            showToast(`L'email doit appartenir au domaine @${domainRestrict}`, 'error');
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Envoyer le partage sécurisé';
+            return;
         }
 
-        // Chercher si l'email correspond à un utilisateur existant
-        const { data: profileData } = await supabaseClient
-            .from('users_profiles')
-            .select('id')
-            .eq('email', email)
-            .single();
+        const { data: profileData } = await supabaseClient.from('users_profiles').select('id').eq('email', email).single();
 
         const { error } = await supabaseClient.from('shared_documents').insert({
-            document_id:        currentShareDocId,
-            shared_by:          currentUser.id,
-            shared_with_email:  email,
-            shared_with:        profileData?.id || null,
-            permission,
-            expires_at:         expiresAt
+            document_id: currentShareDocId, shared_by: currentUser.id,
+            shared_with_email: email, shared_with: profileData?.id || null,
+            permission, expires_at: expiresAt,
+            password_protected: passwordEnabled, share_password: sharePassword,
+            download_limit: dlLimit, download_count: 0,
+            domain_restriction: domainRestrict, notify_on_open: openNotif,
+            watermark_enabled: watermark, print_disabled: printDisabled,
+            audit_enabled: auditEnabled, share_message: message || null,
         });
-
         if (error) throw error;
 
-        // Générer le lien signé à envoyer
+        // Lien signé
         const doc = currentDocuments.find(d => d.id === currentShareDocId);
+        let signedUrl = null;
         if (doc?.storage_path) {
-            const seconds = duration > 0 ? duration * 86400 : 604800;
-            const { data: urlData } = await supabaseClient.storage
-                .from('documents')
-                .createSignedUrl(doc.storage_path, seconds);
-
-            if (urlData?.signedUrl) {
-                await navigator.clipboard.writeText(urlData.signedUrl).catch(() => {});
-            }
+            const duration = parseFloat(document.querySelector('input[name="shareDuration"]:checked')?.value||'7');
+            const secs = duration > 0 ? Math.round(duration * 86400) : 604800;
+            const { data: urlData } = await supabaseClient.storage.from('documents').createSignedUrl(doc.storage_path, secs);
+            if (urlData?.signedUrl) { signedUrl = urlData.signedUrl; await navigator.clipboard.writeText(signedUrl).catch(()=>{}); }
         }
 
-        await logActivity('share', currentShareDocId, `Document partagé avec ${email}`);
-        showToast(`Document partagé avec ${email} !`, 'success');
+        await logActivity('share', currentShareDocId, `Partage sécurisé → ${email} [${permission}]`);
 
-        // Rafraîchir la liste des partages actifs
+        const secOpts = [];
+        if (passwordEnabled) secOpts.push('MDP'); if (dlLimit) secOpts.push(`Max ${dlLimit} DL`);
+        if (domainRestrict) secOpts.push(`@${domainRestrict}`); if (expiresAt) secOpts.push(`Expire: ${formatDate(expiresAt)}`);
+        if (watermark) secOpts.push('Filigrane'); if (printDisabled) secOpts.push('No print');
+        showToast(`✅ Partage créé pour ${email}${secOpts.length ? ' — ' + secOpts.join(', ') : ''}`, 'success');
+
+        // Email professionnel
+        const sender = currentUser?.user_metadata?.full_name || currentUser?.email || 'Un utilisateur SystemesGED';
+        const permLabels = { view:'consultation (lecture seule)', download:'téléchargement', edit:'édition complète' };
+        const expiryTxt  = expiresAt ? `Le lien expire le ${formatDate(expiresAt)}.` : 'Ce lien est valable sans limite de durée.';
+        const msgBlock   = message ? `\nMessage de l'expéditeur : "${message}"\n` : '';
+        const pwNote     = passwordEnabled ? '\n⚠️ Ce document est protégé par un mot de passe. Contactez l\'expéditeur pour l\'obtenir.' : '';
+        const linkBlock  = signedUrl ? `\nLien d'accès sécurisé :\n${signedUrl}` : '\nConnectez-vous sur votre espace SystemesGED pour accéder au document.';
+        const subject = encodeURIComponent(`[SystemesGED] Document partagé : ${doc?.name||'Document'}`);
+        const body    = encodeURIComponent(
+`Bonjour,
+
+${sender} vous a partagé le document suivant via SystemesGED :
+${msgBlock}
+  📄 Document : ${doc?.name||'Document'}
+  🔐 Niveau d'accès : ${permLabels[permission]||permission}
+  ⏱ Validité : ${expiryTxt}
+${pwNote}
+${linkBlock}
+
+---
+SystemesGED — Gestion Électronique de Documents Cloud | SSL | RGPD`);
+        setTimeout(() => { window.location.href = `mailto:${email}?subject=${subject}&body=${body}`; }, 800);
+
         loadActiveShares(currentShareDocId);
         document.getElementById('shareEmail').value = '';
+        document.getElementById('shareMessage').value = '';
         btn.disabled = true;
-
     } catch (err) {
-        showToast('Erreur partage: ' + err.message, 'error');
+        showToast('Erreur partage : ' + err.message, 'error');
     } finally {
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Envoyer le partage';
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Envoyer le partage sécurisé';
         btn.disabled  = false;
     }
 }
 
 async function revokeShare(shareId) {
-    if (!confirm('Révoquer ce partage ?')) return;
+    if (!confirm('Révoquer ce partage ? Le destinataire perdra l\'accès immédiatement.')) return;
     try {
         const { error } = await supabaseClient.from('shared_documents').delete().eq('id', shareId);
         if (error) throw error;
         showToast('Partage révoqué', 'success');
         loadActiveShares(currentShareDocId);
+        if (!document.getElementById('shareTab-active')?.classList.contains('hidden')) loadActiveSharesFull(currentShareDocId);
     } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
 }
 
-// ─── SHARED ──────────────────────────────────────────────────────────────────
+// ─── VUE PARTAGES ─────────────────────────────────────────────────────────────
 function switchSharedTab(tab) {
     const received = document.getElementById('shared-received');
     const sent     = document.getElementById('shared-sent');
     const tabR     = document.getElementById('tab-received');
     const tabS     = document.getElementById('tab-sent');
-
     if (tab === 'received') {
-        received.classList.remove('hidden'); sent.classList.add('hidden');
-        tabR.classList.add('text-blue-400','border-blue-400');
-        tabR.classList.remove('text-gray-400','border-transparent');
-        tabS.classList.add('text-gray-400','border-transparent');
-        tabS.classList.remove('text-blue-400','border-blue-400');
+        received?.classList.remove('hidden'); sent?.classList.add('hidden');
+        tabR?.classList.add('text-blue-400','border-blue-400');    tabR?.classList.remove('text-gray-400','border-transparent');
+        tabS?.classList.add('text-gray-400','border-transparent'); tabS?.classList.remove('text-blue-400','border-blue-400');
     } else {
-        sent.classList.remove('hidden'); received.classList.add('hidden');
-        tabS.classList.add('text-blue-400','border-blue-400');
-        tabS.classList.remove('text-gray-400','border-transparent');
-        tabR.classList.add('text-gray-400','border-transparent');
-        tabR.classList.remove('text-blue-400','border-blue-400');
+        sent?.classList.remove('hidden'); received?.classList.add('hidden');
+        tabS?.classList.add('text-blue-400','border-blue-400');    tabS?.classList.remove('text-gray-400','border-transparent');
+        tabR?.classList.add('text-gray-400','border-transparent'); tabR?.classList.remove('text-blue-400','border-blue-400');
         loadSentShares();
     }
 }
@@ -3101,118 +3456,142 @@ function switchSharedTab(tab) {
 async function loadSharedDocuments() {
     const emptyState = document.getElementById('sharedEmptyState');
     const list       = document.getElementById('sharedList');
-
     try {
-        const { data: myProfile } = await supabaseClient
-            .from('users_profiles').select('email').eq('id', currentUser.id).single();
-
+        const { data: myProfile } = await supabaseClient.from('users_profiles').select('email').eq('id', currentUser.id).single();
         const email = myProfile?.email || currentUser.email;
-
-        const { data, error } = await supabaseClient
-            .from('shared_documents')
-            .select('*, documents(*)')
-            .eq('shared_with_email', email)
-            .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
-
+        const { data, error } = await supabaseClient.from('shared_documents').select('*, documents(*)')
+            .eq('shared_with_email', email).or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
         if (error) throw error;
-
-        const shared = (data || []).filter(s => s.documents);
+        const shared = (data||[]).filter(s => s.documents);
         document.getElementById('sharedCount').textContent = shared.length;
-
-        if (shared.length === 0) {
-            emptyState.classList.remove('hidden'); list.classList.add('hidden');
-        } else {
-            emptyState.classList.add('hidden'); list.classList.remove('hidden');
-            list.innerHTML = shared.map(s => {
-                const doc = s.documents;
-                const fileIcon = getFileIcon(doc.name);
-                const permConfig = {
-                    view:     { label:'Lecture',         cls:'read',  icon:'fa-eye' },
-                    download: { label:'Téléchargement',  cls:'share', icon:'fa-download' },
-                    edit:     { label:'Édition',         cls:'write', icon:'fa-edit' }
-                };
-                const perm = permConfig[s.permission] || permConfig.view;
-                const expLabel = s.expires_at ? 'Expire le ' + formatDate(s.expires_at) : 'Illimité';
-                return `
-                    <div class="document-card share-card-hover glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="window.open('${escapeHtml(doc.file_url)}','_blank')">
-                        <div class="flex items-start gap-3 mb-3">
-                            <div class="w-12 h-12 ${fileIcon.bg} rounded-xl flex items-center justify-center ${fileIcon.color} border ${fileIcon.border} flex-shrink-0">
-                                <i class="fas ${fileIcon.icon} text-xl"></i>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <h4 class="font-bold text-white truncate">${escapeHtml(doc.name)}</h4>
-                                <div class="flex items-center gap-2 mt-1 flex-wrap">
-                                    <span class="permission-badge ${perm.cls}"><i class="fas ${perm.icon}"></i>${perm.label}</span>
-                                    <span class="text-xs text-purple-300/50">${expLabel}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-xs text-blue-400/60 border-t border-blue-500/10 pt-2">
-                            Partagé le ${formatDate(s.created_at)}
-                        </div>
-                    </div>`;
-            }).join('');
-        }
-    } catch {
-        emptyState.classList.remove('hidden'); list.classList.add('hidden');
-    }
+        if (!shared.length) { emptyState?.classList.remove('hidden'); list?.classList.add('hidden'); return; }
+        emptyState?.classList.add('hidden'); list?.classList.remove('hidden');
+        list.innerHTML = shared.map(s => {
+            const doc = s.documents;
+            const fi = getFileIcon(doc.name);
+            const permLabel = { view:'Lecture', download:'Téléchargement', edit:'Édition' }[s.permission]||'Lecture';
+            const expLabel  = s.expires_at ? 'Expire le ' + formatDate(s.expires_at) : 'Illimité';
+            const secB      = buildSecBadges(s);
+            return `<div class="share-card-hover document-card glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="window.open('${escapeHtml(doc.file_url)}','_blank')">
+                <div class="flex items-start gap-3 mb-3">
+                    <div class="w-12 h-12 ${fi.bg} rounded-xl flex items-center justify-center ${fi.color} border ${fi.border} flex-shrink-0"><i class="fas ${fi.icon} text-xl"></i></div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-white truncate">${escapeHtml(doc.name)}</h4>
+                        <p class="text-xs text-purple-300/70 mb-1">
+                            <span class="permission-badge bg-purple-500/20 border-purple-500/50 text-purple-300"><i class="fas ${s.permission==='view'?'fa-eye':s.permission==='download'?'fa-download':'fa-pen'} text-xs"></i> ${permLabel}</span>
+                        </p>
+                        <p class="text-xs text-blue-300/50">${expLabel}</p>
+                        ${secB ? `<div class="flex flex-wrap gap-1 mt-1">${secB}</div>` : ''}
+                    </div>
+                </div>
+                <div class="text-xs text-blue-400/60 border-t border-blue-500/10 pt-2">Partagé le ${formatDate(s.created_at)}</div>
+            </div>`;
+        }).join('');
+    } catch { emptyState?.classList.remove('hidden'); list?.classList.add('hidden'); }
 }
+
+let _allSentShares = [];
 
 async function loadSentShares() {
     const emptyState = document.getElementById('sentEmptyState');
     const list       = document.getElementById('sentSharesList');
-
     try {
-        const { data, error } = await supabaseClient
-            .from('shared_documents')
-            .select('*, documents(name, file_type)')
-            .eq('shared_by', currentUser.id)
-            .order('created_at', { ascending: false });
-
+        const { data, error } = await supabaseClient.from('shared_documents')
+            .select('*, documents(name, file_type, storage_path)')
+            .eq('shared_by', currentUser.id).order('created_at', { ascending: false });
         if (error) throw error;
-        const shares = data || [];
-
-        if (shares.length === 0) {
-            emptyState.classList.remove('hidden'); list.classList.add('hidden');
-        } else {
-            emptyState.classList.add('hidden'); list.classList.remove('hidden');
-            const now = new Date();
-            list.innerHTML = shares.map(s => {
-                const expired   = s.expires_at && new Date(s.expires_at) < now;
-                const expLabel  = s.expires_at ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at)) : 'Illimité';
-                const permConfig = {
-                    view:     { label:'Lecture',        cls:'read',  icon:'fa-eye' },
-                    download: { label:'Téléchargement', cls:'share', icon:'fa-download' },
-                    edit:     { label:'Édition',        cls:'write', icon:'fa-edit' }
-                };
-                const perm = permConfig[s.permission] || permConfig.view;
-                return `
-                    <div class="share-card-hover glass-card rounded-xl p-4 border ${expired ? 'border-red-500/20' : 'border-purple-500/20'} flex items-center gap-4">
-                        <div class="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 border border-purple-400/20 flex-shrink-0">
-                            <i class="fas fa-user text-sm"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-semibold text-white truncate">${escapeHtml(s.shared_with_email)}</p>
-                            <p class="text-xs text-blue-300/60 truncate">${escapeHtml(s.documents?.name || 'Document supprimé')}</p>
-                            <p class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'} mt-0.5">${expLabel}</p>
-                        </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                            <span class="permission-badge ${perm.cls}"><i class="fas ${perm.icon}"></i>${perm.label}</span>
-                            <button onclick="revokeShareFromList('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-500/10 transition-colors" title="Révoquer">
-                                <i class="fas fa-ban text-sm"></i>
-                            </button>
-                        </div>
-                    </div>`;
-            }).join('');
-        }
+        _allSentShares = data || [];
+        renderSentShares(_allSentShares);
     } catch (err) { console.error(err); }
 }
 
+function filterSentShares() {
+    const q      = (document.getElementById('sentShareSearch')?.value||'').toLowerCase();
+    const filter = document.getElementById('sentShareFilter')?.value||'all';
+    const now    = new Date();
+    const filtered = _allSentShares.filter(s => {
+        const matchQ = !q || s.shared_with_email?.toLowerCase().includes(q) || s.documents?.name?.toLowerCase().includes(q);
+        const exp    = s.expires_at && new Date(s.expires_at) <= now;
+        const matchF = filter==='all' || (filter==='active'&&!exp) || (filter==='expired'&&exp);
+        return matchQ && matchF;
+    });
+    renderSentShares(filtered);
+}
+
+function renderSentShares(shares) {
+    const emptyState = document.getElementById('sentEmptyState');
+    const list       = document.getElementById('sentSharesList');
+    if (!shares.length) { emptyState?.classList.remove('hidden'); list?.classList.add('hidden'); return; }
+    emptyState?.classList.add('hidden'); list?.classList.remove('hidden');
+    const now = new Date();
+    const permIcons  = { view:'fa-eye', download:'fa-download', edit:'fa-edit' };
+    const permLabels = { view:'Lecture', download:'Téléchargement', edit:'Édition' };
+    list.innerHTML = shares.map(s => {
+        const expired   = s.expires_at && new Date(s.expires_at) < now;
+        const expLabel  = s.expires_at ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at)) : 'Illimité';
+        const secB      = buildSecBadges(s);
+        const dlProg    = s.download_limit ? `<div class="mt-2"><div class="flex justify-between text-[10px] text-blue-300/50 mb-0.5"><span>Téléchargements</span><span>${s.download_count||0}/${s.download_limit}</span></div><div class="h-1 bg-slate-700 rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" style="width:${Math.min(100,((s.download_count||0)/s.download_limit)*100)}%"></div></div></div>` : '';
+        return `<div class="share-card-hover glass-card rounded-xl border ${expired ? 'border-red-500/20' : 'border-purple-500/20'} overflow-hidden">
+            <div class="flex items-start gap-3 p-4">
+                <div class="w-10 h-10 ${expired?'bg-red-500/20':'bg-purple-500/20'} rounded-full flex items-center justify-center ${expired?'text-red-400':'text-purple-400'} border ${expired?'border-red-400/20':'border-purple-400/20'} flex-shrink-0 mt-0.5 status-pulse">
+                    <i class="fas ${expired?'fa-clock':'fa-user'} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2 mb-0.5">
+                        <p class="text-sm font-semibold text-white truncate">${escapeHtml(s.shared_with_email)}</p>
+                        ${expired ? '<span class="text-[10px] bg-red-500/20 text-red-400 border border-red-500/20 rounded-full px-2 py-0.5">Expiré</span>' : '<span class="text-[10px] bg-green-500/15 text-green-400 border border-green-500/20 rounded-full px-2 py-0.5">Actif</span>'}
+                    </div>
+                    <p class="text-xs text-blue-300/60 truncate mb-1"><i class="fas fa-file mr-1"></i>${escapeHtml(s.documents?.name||'Document supprimé')}</p>
+                    <div class="flex flex-wrap gap-2 text-xs mb-1">
+                        <span class="${expired?'text-red-400':'text-blue-300/50'}"><i class="fas fa-clock mr-1"></i>${expLabel}</span>
+                        <span class="permission-badge bg-purple-500/20 border-purple-500/50 text-purple-300">
+                            <i class="fas ${permIcons[s.permission]||'fa-eye'} text-xs"></i> ${permLabels[s.permission]||'Lecture'}
+                        </span>
+                    </div>
+                    ${secB ? `<div class="flex flex-wrap gap-1 mt-1">${secB}</div>` : ''}
+                    ${dlProg}
+                    ${s.share_message ? `<p class="text-xs text-blue-300/50 italic mt-1.5 border-l-2 border-purple-500/30 pl-2">"${escapeHtml(s.share_message)}"</p>` : ''}
+                </div>
+                <div class="flex flex-col gap-1.5 flex-shrink-0">
+                    ${!expired ? `<button onclick="copyDocShareLinkFromId('${escapeHtml(s.document_id)}')" class="px-2 py-1.5 text-xs bg-blue-500/15 text-blue-300 border border-blue-500/20 rounded-lg hover:bg-blue-500/25 transition-colors" title="Copier lien"><i class="fas fa-link text-xs"></i></button>` : ''}
+                    <button onclick="sendShareEmailList('${escapeHtml(s.shared_with_email)}','${escapeHtml(s.documents?.name||'')}','${escapeHtml(s.permission||'view')}')"
+                        class="px-2 py-1.5 text-xs bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg hover:bg-purple-500/20 transition-colors" title="Renvoyer email">
+                        <i class="fas fa-envelope text-xs"></i>
+                    </button>
+                    <button onclick="revokeShareFromList('${escapeHtml(s.id)}')"
+                        class="px-2 py-1.5 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors" title="Révoquer">
+                        <i class="fas fa-ban text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function sendShareEmailList(email, docName, permission) {
+    const sender = currentUser?.user_metadata?.full_name || currentUser?.email || 'Un utilisateur SystemesGED';
+    const permLabels = { view:'consultation', download:'téléchargement', edit:'édition' };
+    const subject = encodeURIComponent(`[SystemesGED] Document partagé : ${docName}`);
+    const body = encodeURIComponent(`Bonjour,\n\n${sender} vous a partagé "${docName}" (${permLabels[permission]||permission}) via SystemesGED.\n\nConnectez-vous à votre espace pour y accéder.\n\n---\nSystemesGED — GED Cloud | SSL | RGPD`);
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+}
+
 async function revokeShareFromList(shareId) {
-    if (!confirm('Révoquer ce partage ?')) return;
+    if (!confirm('Révoquer ce partage ? Le destinataire perdra l\'accès immédiatement.')) return;
     try {
         await supabaseClient.from('shared_documents').delete().eq('id', shareId);
         showToast('Partage révoqué', 'success');
+        loadSentShares();
+    } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
+}
+
+async function revokeAllExpired() {
+    if (!confirm('Supprimer tous les partages expirés ?')) return;
+    try {
+        const { error } = await supabaseClient.from('shared_documents')
+            .delete().eq('shared_by', currentUser.id).lt('expires_at', new Date().toISOString());
+        if (error) throw error;
+        showToast('Partages expirés supprimés', 'success');
         loadSentShares();
     } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
 }
@@ -4089,7 +4468,7 @@ Fichiers inclus :
 - profil.json      : données de profil
 
 Note : Les fichiers réels sont accessibles via les URLs dans documents.csv
-Conforme RGPD — Exporté depuis SystemesGED v3.1
+Conforme RGPD — Exporté depuis SystemesGED v3.0
 `;
 
         // Créer le ZIP manuellement (multi-blob)
