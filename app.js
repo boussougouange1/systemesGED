@@ -85,9 +85,11 @@
   // ══════════════════════════════════════════════════════
   // SÉCURITÉ CLIENT
   // ══════════════════════════════════════════════════════
-  // Note: contextmenu + F12 blocking removed — obscurity is not security.
-  // CSP header in index.html handles real script injection prevention.
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   document.addEventListener('keydown', function (e) {
+    if (e.key === 'F12') { e.preventDefault(); return; }
+    if (e.ctrlKey && e.shiftKey && ['I','i','J','j'].includes(e.key)) { e.preventDefault(); return; }
+    if (e.ctrlKey && ['u','U'].includes(e.key)) { e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       document.getElementById('globalSearch')?.focus();
@@ -286,10 +288,8 @@
   }
 
   function demoLogin() {
-    document.getElementById('loginEmail').value = 'demo@systemesged.fr';
-    document.getElementById('loginPassword').value = '';
-    showToast('Email démo pré-rempli — entrez votre mot de passe','info');
-    document.getElementById('loginPassword').focus();
+    document.getElementById('loginEmail').value = 'ahouansouange@live.fr';
+    showToast('Entrez votre mot de passe','info');
   }
 
   async function handleLogout() {
@@ -372,33 +372,8 @@
       _loadUsers(),
       _loadNotifications(),
       _loadAuditLogs(),
-      _loadSentShares(),
     ]);
     updateStats();
-  }
-
-  async function _loadSentShares() {
-    try {
-      const { data } = await SB.from('shared_documents')
-        .select('*, documents(name,file_size,file_type)')
-        .eq('shared_by', G.user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      G.sentShares = (data || []).map(function(s) {
-        return {
-          id: s.id,
-          docId: s.document_id,
-          docName: s.documents?.name || 'Document supprimé',
-          sharedWith: s.shared_with_email,
-          permission: s.permission,
-          expiresAt: s.expires_at,
-          createdAt: s.created_at,
-        };
-      });
-    } catch (err) {
-      log.warn('loadSentShares: ' + err.message);
-      G.sentShares = G.sentShares || [];
-    }
   }
 
   // ══════════════════════════════════════════════════════
@@ -580,7 +555,7 @@
       b.classList.toggle('text-blue-400', b.dataset.bnav===v);
       b.classList.toggle('text-blue-400/60', b.dataset.bnav!==v);
     });
-    if (v==='dashboard')  { renderActivityList(); updateStats(); updateQuickAccess(); renderPopularTags(); renderTeamDocsList(); renderMyWorkflowsList(); }
+    if (v==='dashboard')  { renderActivityList(); updateStats(); updateQuickAccess(); renderPopularTags(); }
     if (v==='documents')  renderDocuments();
     if (v==='workflows')  renderWorkflows();
     if (v==='shared')     renderSharedView();
@@ -649,34 +624,6 @@
       ? '<span class="text-blue-300/50 text-sm">Aucun tag</span>'
       : sorted.map(function(e){ return '<span class="tag" onclick="filterByTag(\''+esc(e[0])+'\')">#'+esc(e[0])+' <span class="text-blue-400/50 text-[10px]">'+e[1]+'</span></span>'; }).join('');
   }
-  function renderTeamDocsList() {
-    var el = document.getElementById('teamDocsList');
-    if (!el) return;
-    var arr = G.companyDocs.slice(0, 5);
-    if (!arr.length) { el.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-3">Aucun document dans l\'équipe</p>'; return; }
-    el.innerHTML = arr.map(function(d) {
-      var fi = getFileIcon(d.name || '');
-      return '<div class="flex items-center gap-3 py-2 border-b border-blue-500/10 last:border-0 cursor-pointer hover:bg-blue-500/5 rounded-lg px-2 transition-all" onclick="openDocumentPreview(\''+d.id+'\')">'+
-        '<div class="w-8 h-8 '+fi.bg+' rounded-lg flex items-center justify-center '+fi.color+' border '+fi.border+' flex-shrink-0"><i class="fas '+fi.icon+' text-xs"></i></div>'+
-        '<div class="flex-1 min-w-0"><p class="text-white text-xs font-medium truncate">'+esc(d.name)+'</p><p class="text-blue-400/50 text-[10px]">'+formatFileSize(d.file_size||0)+' · '+fmtDate(d.created_at)+'</p></div>'+
-      '</div>';
-    }).join('');
-  }
-
-  function renderMyWorkflowsList() {
-    var el = document.getElementById('myWorkflowsList');
-    if (!el) return;
-    var arr = G.workflows.filter(function(w) { return w.assigneeId === G.user?.id && w.status === 'pending'; }).slice(0, 4);
-    if (!arr.length) { el.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-3">Aucun workflow assigné</p>'; return; }
-    var prioCfg = { low:'text-blue-400', medium:'text-yellow-400', high:'text-orange-400', urgent:'text-red-400' };
-    el.innerHTML = arr.map(function(w) {
-      return '<div class="flex items-center justify-between gap-2 py-2 border-b border-orange-500/10 last:border-0">'+
-        '<div class="min-w-0"><p class="text-white text-xs font-medium truncate">'+esc(w.title)+'</p><p class="text-orange-400/60 text-[10px]">'+esc(w.dueDate?'Échéance : '+w.dueDate:'Pas d\'échéance')+'</p></div>'+
-        '<span class="px-2 py-0.5 rounded text-[10px] font-bold '+(prioCfg[w.priority]||'text-yellow-400')+' bg-orange-500/10 flex-shrink-0">'+w.priority+'</span>'+
-      '</div>';
-    }).join('');
-  }
-
   function renderActivityList() {
     const el = document.getElementById('activityList');
     if (!el) return;
@@ -1097,7 +1044,6 @@
       _logActivity('share', d.id, 'Partage "'+d.name+'" → '+email);
       addNotification('success','Document partagé', d.name+' → '+email);
       showToast('Partage créé ✓ — '+email,'success');
-      await _loadSentShares();
       _openShareEmail(email, d, perm, exp, expiresAt, signedUrl);
     } catch (err) { showToast('Erreur partage : '+err.message,'error'); }
   }
@@ -1665,7 +1611,6 @@
     set$('secAuditCount',G.auditLogs.length);
   }
   function updateSecurityStats() {
-    set$('secAuditCount', G.auditLogs.length);
     set$('secScanOk',G.docs.filter(function(d){return!BLOCKED_EXT.includes((d.name||'').split('.').pop().toLowerCase());}).length);
     set$('secScanBlocked',G.docs.filter(function(d){return BLOCKED_EXT.includes((d.name||'').split('.').pop().toLowerCase());}).length);
     set$('secApiKeys',G.apiKeys.length);
