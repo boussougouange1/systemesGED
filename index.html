@@ -2,12 +2,12 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <base target="_blank">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SystemesGED v3.1 — Gestion Électronique de Documents Cloud</title>
     <meta name="description" content="SystemesGED — Plateforme GED cloud sécurisée, RGPD conforme">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data: blob:; connect-src 'self' https:;">
     <meta name="referrer" content="strict-origin-when-cross-origin">
+    <base target="_blank" rel="noopener noreferrer">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -117,9 +117,7 @@
         .danger-confirm-input { width: 100%; padding: 0.75rem 1rem; background: rgba(15,23,42,0.8); border: 1px solid rgba(239,68,68,0.5); border-radius: 8px; color: white; outline: none; margin-top: 8px; }
         .danger-confirm-input:focus { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
 
-        /* ── KIMI PATCH v3.1 ──────────────────────────────── */
-
-        /* 2️⃣ Permission badges */
+        /* ── v3.1 : Permission badges ───────────────────────── */
         .permission-badge {
             display: inline-flex;
             align-items: center;
@@ -129,34 +127,53 @@
             font-size: 0.75rem;
             font-weight: 600;
             border-width: 1px;
-            border-style: solid;
+            transition: all 0.2s;
         }
-        .permission-badge-view     { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.5); color: #93c5fd; }
-        .permission-badge-download { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.5); color: #6ee7b7; }
-        .permission-badge-edit     { background: rgba(249,115,22,0.15); border-color: rgba(249,115,22,0.5); color: #fdba74; }
+        .permission-badge.read    { background: rgba(59,130,246,0.15);  border-color: rgba(96,165,250,0.4);  color: #93c5fd; }
+        .permission-badge.write   { background: rgba(234,179,8,0.15);   border-color: rgba(250,204,21,0.4);  color: #fde047; }
+        .permission-badge.admin   { background: rgba(239,68,68,0.15);   border-color: rgba(248,113,113,0.4); color: #fca5a5; }
+        .permission-badge.share   { background: rgba(139,92,246,0.15);  border-color: rgba(167,139,250,0.4); color: #c4b5fd; }
+        .permission-badge:hover   { filter: brightness(1.2); transform: scale(1.04); }
 
-        /* 3️⃣ Status pulse ring */
-        .status-pulse { position: relative; display: inline-block; }
+        /* ── v3.1 : Status pulse animation ─────────────────── */
+        .status-pulse { position: relative; }
         .status-pulse::after {
             content: '';
             position: absolute;
             inset: -2px;
             border-radius: 50%;
             border: 2px solid currentColor;
-            animation: pulse-ring 2s ease-out infinite;
-            opacity: 0;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
         }
         @keyframes pulse-ring {
-            0%   { transform: scale(0.85); opacity: 0.8; }
-            70%  { transform: scale(1.4);  opacity: 0; }
-            100% { transform: scale(1.4);  opacity: 0; }
+            0%   { transform: scale(1);   opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0;   }
         }
 
-        /* 4️⃣ Share card hover lift */
+        /* ── v3.1 : Share card hover ────────────────────────── */
         .share-card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease; }
         .share-card-hover:hover {
             transform: translateY(-2px);
-            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5), 0 0 20px rgba(139,92,246,0.15);
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5),
+                        0 0 20px rgba(139,92,246,0.15);
+        }
+
+        /* ── v3.1 : Logo fallback SVG ───────────────────────── */
+        .logo-fallback {
+            display: none;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1d4ed8, #2563eb);
+            border-radius: 20%;
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: white;
+            letter-spacing: -1px;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 0 24px rgba(37,99,235,0.6);
         }
     </style>
 </head>
@@ -179,8 +196,8 @@
                 <div class="w-32 h-32 mx-auto mb-5 relative logo-container">
                     <div class="logo-glow" style="inset:-16px"></div>
                     <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <div style="display:none; width:100%; height:100%; background:linear-gradient(135deg,#1d4ed8,#7c3aed); border-radius:20px; align-items:center; justify-content:center; font-size:2rem; font-weight:800; color:white; letter-spacing:-1px; position:relative; z-index:10;">SG</div>
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <div class="logo-fallback">SG</div>
                 </div>
                 <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">
                     SYSTEMES<span class="gradient-text">GED</span>
@@ -229,7 +246,7 @@
                     <p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Par fichier</p>
                 </div>
                 <div class="login-stat">
-                    <p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v3.0</p>
+                    <p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v3.1</p>
                     <p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p>
                 </div>
             </div>
@@ -252,8 +269,8 @@
                 <div class="w-20 h-20 mx-auto mb-3 relative logo-container">
                     <div class="logo-glow"></div>
                     <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <div style="display:none; width:100%; height:100%; background:linear-gradient(135deg,#1d4ed8,#7c3aed); border-radius:16px; align-items:center; justify-content:center; font-size:1.4rem; font-weight:800; color:white; letter-spacing:-1px; position:relative; z-index:10;">SG</div>
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <div class="logo-fallback" style="font-size:1.1rem">SG</div>
                 </div>
                 <h1 style="font-size:1.5rem;font-weight:800;color:white">SYSTEMES<span class="gradient-text">GED</span></h1>
             </div>
@@ -359,7 +376,7 @@
                     <i class="fas fa-check-circle"></i> RGPD Conforme
                 </span>
                 <span style="display:flex;align-items:center;gap:5px;font-size:0.72rem;color:rgba(96,165,250,0.5)">
-                    <i class="fas fa-cloud"></i> Cloud v3.0
+                    <i class="fas fa-cloud"></i> Cloud v3.1
                 </span>
             </div>
         </div>
@@ -443,9 +460,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 relative logo-container">
                     <div class="logo-glow" style="inset:-5px;filter:blur(10px);"></div>
-                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                    <div style="display:none; width:100%; height:100%; background:linear-gradient(135deg,#1d4ed8,#7c3aed); border-radius:10px; align-items:center; justify-content:center; font-size:0.75rem; font-weight:800; color:white; position:relative; z-index:10;">SG</div>
+                    <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
                 </div>
                 <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
             </div>
@@ -518,13 +533,11 @@
                 <div class="hidden sm:flex items-center gap-3">
                     <div class="w-10 h-10 relative logo-container">
                         <div class="logo-glow" style="inset:-5px;filter:blur(10px);"></div>
-                        <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                        <div style="display:none; width:100%; height:100%; background:linear-gradient(135deg,#1d4ed8,#7c3aed); border-radius:10px; align-items:center; justify-content:center; font-size:0.75rem; font-weight:800; color:white; position:relative; z-index:10;">SG</div>
+                        <img src="logo-systemesGED.png" alt="SystemesGED" class="logo-img" onerror="this.style.display='none'">
                     </div>
                     <div>
                         <h1 class="text-xl font-bold tracking-tight"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1>
-                        <p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v3.0</p>
+                        <p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v3.1</p>
                     </div>
                 </div>
             </div>
@@ -936,7 +949,7 @@
                     <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i class="fas fa-database text-yellow-400"></i> Configuration Supabase</h3>
                     <p class="text-sm text-blue-300/70">Exécutez ce script SQL dans votre dashboard Supabase (SQL Editor) pour créer toutes les tables requises :</p>
                     <div class="relative">
-                        <pre id="sqlSchemaBlock" class="bg-slate-950/80 border border-yellow-500/20 rounded-xl p-4 text-xs text-green-300 overflow-x-auto max-h-48 overflow-y-auto font-mono leading-relaxed">-- SystemesGED v3.0 — Schema SQL Supabase
+                        <pre id="sqlSchemaBlock" class="bg-slate-950/80 border border-yellow-500/20 rounded-xl p-4 text-xs text-green-300 overflow-x-auto max-h-48 overflow-y-auto font-mono leading-relaxed">-- SystemesGED v3.1 — Schema SQL Supabase
 -- Exécuter dans : Supabase Dashboard → SQL Editor
 
 create table if not exists users_profiles (
@@ -1434,7 +1447,7 @@ create policy "user delete own" on storage.objects for delete using (bucket_id =
                 </div>
                 <!-- Console -->
                 <div id="sysLogConsole" class="glass-card rounded-2xl border border-cyan-500/15 p-4 font-mono text-xs space-y-1 max-h-[58vh] overflow-y-auto" style="background:rgba(2,5,18,0.9)">
-                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:35:00</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-green-300">Application démarrée — SystemesGED v3.0 ✓</span></div>
+                    <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:35:00</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-green-300">Application démarrée — SystemesGED v3.1 ✓</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:55</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Supabase connecté — latence: 38ms</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:10</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Upload: Contrat_2026.pdf (2.4 MB) → storage OK</span></div>
                     <div class="syslog-row flex gap-3 py-0.5" data-lv="info"><span class="text-gray-600 flex-shrink-0 w-36">2026-03-15 14:34:09</span><span class="text-blue-400 w-14 flex-shrink-0 font-bold">[INFO]</span><span class="text-gray-300">Chiffrement AES-256 appliqué: Contrat_2026.pdf</span></div>
@@ -2692,7 +2705,7 @@ function renderWorkflows() {
         const nextStatusMap = { pending:'in_progress', in_progress:'completed' };
         const nextLabel = { pending:'Démarrer', in_progress:'Terminer' };
         return `
-            <div class="glass-card rounded-2xl border border-blue-500/20 p-6 hover:border-blue-400/40 transition-all group flex flex-col gap-4">
+            <div class="glass-card share-card-hover rounded-2xl border border-blue-500/20 p-6 hover:border-blue-400/40 transition-all group flex flex-col gap-4">
                 <div class="flex items-center justify-between">
                     <span class="px-3 py-1 bg-${st.color}-500/20 text-${st.color}-400 rounded-full text-xs font-bold border border-${st.color}-500/30">${escapeHtml(st.label)}</span>
                     <span class="px-2 py-1 rounded-lg text-xs font-semibold ${priStyle}">${escapeHtml(wf.priority || 'normal')}</span>
@@ -2867,14 +2880,15 @@ async function loadUsers() {
                     </div>
                 </td>
                 <td class="p-4">
-                    <span class="px-2 py-1 ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'} rounded text-xs border border-blue-500/20">
+                    <span class="permission-badge ${user.role === 'admin' ? 'admin' : user.role === 'editor' ? 'write' : 'read'}">
+                        <i class="fas ${user.role === 'admin' ? 'fa-crown' : user.role === 'editor' ? 'fa-pen' : 'fa-eye'}"></i>
                         ${escapeHtml(user.role || 'user')}
                     </span>
                 </td>
                 <td class="p-4 text-blue-300">${user.id === currentUser.id ? currentDocuments.length : '—'}</td>
                 <td class="p-4">
                     <span class="flex items-center gap-2 text-sm text-blue-300">
-                        <span class="w-2 h-2 bg-green-400 rounded-full"></span> Actif
+                        <span class="w-2 h-2 bg-green-400 rounded-full status-pulse"></span> Actif
                     </span>
                 </td>
                 <td class="p-4">
@@ -2960,7 +2974,8 @@ async function loadActiveShares(docId) {
             const expLabel = s.expires_at
                 ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at))
                 : 'Illimité';
-            const permIcons = { view: 'fa-eye', download: 'fa-download', edit: 'fa-edit' };
+            const permConfig = { view:{label:'Lecture',cls:'read',icon:'fa-eye'}, download:{label:'DL',cls:'share',icon:'fa-download'}, edit:{label:'Édition',cls:'write',icon:'fa-edit'} };
+            const perm = permConfig[s.permission] || permConfig.view;
             return `
                 <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10">
                     <div class="flex items-center gap-3 min-w-0">
@@ -2973,7 +2988,7 @@ async function loadActiveShares(docId) {
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                        <i class="fas ${permIcons[s.permission] || 'fa-eye'} text-purple-400 text-xs"></i>
+                        <span class="permission-badge ${perm.cls}" style="padding:0.15rem 0.5rem;font-size:0.65rem"><i class="fas ${perm.icon}"></i>${perm.label}</span>
                         <button onclick="revokeShare('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-1 rounded transition-colors" title="Révoquer">
                             <i class="fas fa-times text-xs"></i>
                         </button>
@@ -3110,26 +3125,25 @@ async function loadSharedDocuments() {
             emptyState.classList.add('hidden'); list.classList.remove('hidden');
             list.innerHTML = shared.map(s => {
                 const doc = s.documents;
-                const fileIcon       = getFileIcon(doc.name);
-                const permBadgeClass = { view:'permission-badge-view', download:'permission-badge-download', edit:'permission-badge-edit' }[s.permission] || 'permission-badge-view';
-                const permIcon       = { view:'fa-eye', download:'fa-download', edit:'fa-pen' }[s.permission] || 'fa-eye';
-                const permText       = { view:'Lecture', download:'Téléchargement', edit:'Édition' }[s.permission] || 'Lecture';
-                const expLabel       = s.expires_at ? 'Expire le ' + formatDate(s.expires_at) : 'Illimité';
+                const fileIcon = getFileIcon(doc.name);
+                const permConfig = {
+                    view:     { label:'Lecture',         cls:'read',  icon:'fa-eye' },
+                    download: { label:'Téléchargement',  cls:'share', icon:'fa-download' },
+                    edit:     { label:'Édition',         cls:'write', icon:'fa-edit' }
+                };
+                const perm = permConfig[s.permission] || permConfig.view;
+                const expLabel = s.expires_at ? 'Expire le ' + formatDate(s.expires_at) : 'Illimité';
                 return `
-                    <div class="share-card-hover document-card glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="window.open('${escapeHtml(doc.file_url)}','_blank')">
+                    <div class="document-card share-card-hover glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="window.open('${escapeHtml(doc.file_url)}','_blank')">
                         <div class="flex items-start gap-3 mb-3">
                             <div class="w-12 h-12 ${fileIcon.bg} rounded-xl flex items-center justify-center ${fileIcon.color} border ${fileIcon.border} flex-shrink-0">
                                 <i class="fas ${fileIcon.icon} text-xl"></i>
                             </div>
                             <div class="flex-1 min-w-0">
                                 <h4 class="font-bold text-white truncate">${escapeHtml(doc.name)}</h4>
-                                <div class="flex flex-wrap gap-1.5 mt-1.5">
-                                    <span class="permission-badge ${permBadgeClass}">
-                                        <i class="fas ${permIcon}"></i>${permText}
-                                    </span>
-                                    <span class="text-xs text-blue-300/50 flex items-center gap-1">
-                                        <i class="fas fa-clock text-[10px]"></i>${expLabel}
-                                    </span>
+                                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                    <span class="permission-badge ${perm.cls}"><i class="fas ${perm.icon}"></i>${perm.label}</span>
+                                    <span class="text-xs text-purple-300/50">${expLabel}</span>
                                 </div>
                             </div>
                         </div>
@@ -3164,31 +3178,27 @@ async function loadSentShares() {
             emptyState.classList.add('hidden'); list.classList.remove('hidden');
             const now = new Date();
             list.innerHTML = shares.map(s => {
-                const expired  = s.expires_at && new Date(s.expires_at) < now;
-                const expLabel = s.expires_at ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at)) : 'Illimité';
-                const permBadgeClass = { view:'permission-badge-view', download:'permission-badge-download', edit:'permission-badge-edit' }[s.permission] || 'permission-badge-view';
-                const permIcon      = { view:'fa-eye', download:'fa-download', edit:'fa-pen' }[s.permission] || 'fa-eye';
-                const permText      = { view:'Lecture', download:'Téléchargement', edit:'Édition' }[s.permission] || 'Lecture';
-                const pulseColor    = expired ? 'text-red-400' : 'text-purple-400';
+                const expired   = s.expires_at && new Date(s.expires_at) < now;
+                const expLabel  = s.expires_at ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at)) : 'Illimité';
+                const permConfig = {
+                    view:     { label:'Lecture',        cls:'read',  icon:'fa-eye' },
+                    download: { label:'Téléchargement', cls:'share', icon:'fa-download' },
+                    edit:     { label:'Édition',        cls:'write', icon:'fa-edit' }
+                };
+                const perm = permConfig[s.permission] || permConfig.view;
                 return `
                     <div class="share-card-hover glass-card rounded-xl p-4 border ${expired ? 'border-red-500/20' : 'border-purple-500/20'} flex items-center gap-4">
-                        <div class="w-10 h-10 ${expired ? 'bg-red-500/20' : 'bg-purple-500/20'} rounded-full flex items-center justify-center ${pulseColor} border ${expired ? 'border-red-400/20' : 'border-purple-400/20'} flex-shrink-0 ${expired ? '' : 'status-pulse'}">
+                        <div class="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 border border-purple-400/20 flex-shrink-0">
                             <i class="fas fa-user text-sm"></i>
                         </div>
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-semibold text-white truncate">${escapeHtml(s.shared_with_email)}</p>
-                            <p class="text-xs text-blue-300/60 truncate mb-1.5"><i class="fas fa-file mr-1 opacity-60"></i>${escapeHtml(s.documents?.name || 'Document supprimé')}</p>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="permission-badge ${permBadgeClass}">
-                                    <i class="fas ${permIcon}"></i>${permText}
-                                </span>
-                                <span class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'}">
-                                    <i class="fas fa-clock mr-1"></i>${expLabel}
-                                </span>
-                            </div>
+                            <p class="text-xs text-blue-300/60 truncate">${escapeHtml(s.documents?.name || 'Document supprimé')}</p>
+                            <p class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'} mt-0.5">${expLabel}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <button onclick="revokeShareFromList('${escapeHtml(s.id)}')" class="p-2 text-red-400 hover:text-red-300 rounded-lg hover:bg-red-500/10 transition-colors" title="Révoquer">
+                            <span class="permission-badge ${perm.cls}"><i class="fas ${perm.icon}"></i>${perm.label}</span>
+                            <button onclick="revokeShareFromList('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-500/10 transition-colors" title="Révoquer">
                                 <i class="fas fa-ban text-sm"></i>
                             </button>
                         </div>
@@ -4079,7 +4089,7 @@ Fichiers inclus :
 - profil.json      : données de profil
 
 Note : Les fichiers réels sont accessibles via les URLs dans documents.csv
-Conforme RGPD — Exporté depuis SystemesGED v3.0
+Conforme RGPD — Exporté depuis SystemesGED v3.1
 `;
 
         // Créer le ZIP manuellement (multi-blob)
