@@ -131,7 +131,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">SYSTEMES<span class="gradient-text">GED</span></h1>
         <p style="color:rgba(147,197,253,0.7);font-size:0.9rem">Gestion Électronique de Documents Cloud</p>
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px">
-          <span class="version-badge">v5.0 SaaS</span>
+          <span class="version-badge">v4.0 SaaS</span>
           <span style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#34d399;font-weight:600;">RGPD ✓</span>
         </div>
       </div>
@@ -142,7 +142,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px">
         <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#60a5fa">100%</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">RGPD</p></div>
         <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#34d399">100MB</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Par fichier</p></div>
-        <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v5.0</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p></div>
+        <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v4.0</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p></div>
       </div>
     </div>
   </div>
@@ -169,7 +169,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         </form>
         <div style="display:flex;align-items:center;gap:12px;margin:18px 0;"><div style="flex:1;height:1px;background:rgba(96,165,250,0.15)"></div><span style="color:rgba(96,165,250,0.4);font-size:0.8rem">ou continuer avec</span><div style="flex:1;height:1px;background:rgba(96,165,250,0.15)"></div></div>
         <button onclick="demoLogin()" style="width:100%;padding:0.75rem;border-radius:12px;border:1px solid rgba(96,165,250,0.3);background:rgba(59,130,246,0.1);color:#93c5fd;font-size:0.9rem;cursor:pointer;transition:all 0.2s;font-weight:500;">
-          <i class="fas fa-rocket mr-2"></i>Accès démo — demo@systemesged.fr / Admin123!
+          <i class="fas fa-rocket mr-2"></i>Accès démo — <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7d1c191014133d19181012531e1210">[email&#160;protected]</a> / Admin123!
         </button>
         <div style="display:flex;gap:8px;margin-top:10px;">
           <button onclick="oauthLogin('google')" style="flex:1;padding:0.6rem;border-radius:10px;border:1px solid rgba(96,165,250,0.2);background:rgba(255,255,255,0.04);color:#e2e8f0;font-size:0.8rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fab fa-google text-red-400"></i>Google</button>
@@ -291,7 +291,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
             <div class="p-2">
               <div class="px-4 py-2 border-b border-blue-500/20 mb-2">
                 <p class="text-sm font-semibold text-white" id="dropdownUserName">Admin</p>
-                <p class="text-xs text-blue-400" id="dropdownUserEmail">demo@systemesged.fr</p>
+                <p class="text-xs text-blue-400" id="dropdownUserEmail"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c2a3a6afabac82a6a7afadeca1adaf">[email&#160;protected]</a></p>
               </div>
               <button onclick="switchView('settings')" class="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-500/10 text-sm text-gray-300 transition-colors"><i class="fas fa-cog mr-2"></i>Paramètres</button>
               <button onclick="switchView('billing')" class="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-500/10 text-sm text-gray-300 transition-colors"><i class="fas fa-credit-card mr-2"></i>Abonnement</button>
@@ -699,56 +699,32 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
         <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-database text-blue-400"></i>Schéma SQL Supabase</h3>
         <div class="relative">
-          <pre class="text-xs text-green-400 bg-slate-900/80 rounded-xl p-4 overflow-x-auto max-h-64 overflow-y-auto border border-green-500/20" id="sqlSchemaBlock">-- SystemesGED v5.0 — Migration complète
--- Coller dans : Supabase Dashboard → SQL Editor → Run
--- Voir migration_v5_fix5.sql pour le schéma complet avec RLS
-
--- Tables essentielles (version simplifiée)
-create table if not exists public.companies (
-  id uuid default gen_random_uuid() primary key,
-  name text not null, slug text unique not null,
-  plan text not null default 'FREE',
-  max_storage bigint not null default 104857600,
-  created_at timestamptz default now()
-);
-create table if not exists public.users_profiles (
+          <pre class="text-xs text-green-400 bg-slate-900/80 rounded-xl p-4 overflow-x-auto max-h-64 overflow-y-auto border border-green-500/20" id="sqlSchemaBlock">-- Exécuter dans : Supabase Dashboard → SQL Editor
+create table if not exists users_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  email text, full_name text, role text default 'viewer',
-  company_id uuid references public.companies(id) on delete set null,
-  active boolean default true, last_login timestamptz,
+  email text, name text, role text default 'user',
   created_at timestamptz default now()
 );
-create table if not exists public.documents (
-  id uuid default gen_random_uuid() primary key,
-  owner_id uuid references auth.users(id), company_id uuid,
+create table if not exists documents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
   name text not null, description text, file_url text,
   file_size bigint default 0, file_type text, storage_path text,
-  version_number int default 1, sha256 text,
-  is_deleted boolean default false, created_at timestamptz default now()
+  version_number int default 1, created_at timestamptz default now()
 );
-create table if not exists public.document_permissions (
-  id uuid default gen_random_uuid() primary key,
-  document_id uuid references public.documents(id) on delete cascade,
-  user_id uuid references auth.users(id) on delete cascade,
-  shared_by uuid references auth.users(id),
-  permission text default 'viewer' check (permission in ('viewer','editor','owner')),
-  expires_at timestamptz, created_at timestamptz default now(),
-  unique (document_id, user_id)
+create table if not exists tags (
+  id uuid primary key default gen_random_uuid(),
+  name text unique not null, color text default '#3b82f6',
+  created_at timestamptz default now()
 );
-create table if not exists public.notifications (
-  id uuid default gen_random_uuid() primary key,
-  user_id uuid references auth.users(id) on delete cascade,
-  type text default 'info', title text not null, message text not null,
-  document_id uuid, workflow_id uuid, actor_id uuid,
-  read boolean default false, created_at timestamptz default now()
+create table if not exists workflows (
+  id uuid primary key default gen_random_uuid(),
+  title text not null, description text, status text default 'pending',
+  priority text default 'medium', created_by uuid references auth.users(id),
+  document_id uuid references documents(id), due_date date,
+  approvers text[], created_at timestamptz default now()
 );
--- Activer RLS sur toutes les tables
-alter table public.companies enable row level security;
-alter table public.users_profiles enable row level security;
-alter table public.documents enable row level security;
-alter table public.document_permissions enable row level security;
-alter table public.notifications enable row level security;
--- Voir migration_v5_fix5.sql pour les politiques RLS complètes</pre>
+-- RLS policies omitted for brevity — see docs</pre>
           <button onclick="copySqlSchema()" class="absolute top-2 right-2 px-3 py-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs hover:bg-yellow-500/30 font-medium"><i class="fas fa-copy mr-1"></i>Copier</button>
         </div>
       </div>
@@ -822,7 +798,7 @@ alter table public.notifications enable row level security;
 <div id="uploadModal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg"><i class="fas fa-upload text-blue-400 mr-2"></i>Importer des fichiers</h3><button onclick="closeUploadModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
-    <div id="dropZone" class="border-2 border-dashed rounded-xl p-8 text-center mb-4 cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" onclick="document.getElementById('fileInput').click()" ondragover="handleDragOver(event,'dropZone')" ondragleave="handleDragLeave(event,'dropZone')" ondrop="handleDrop(event,'dropZone')">
+    <div id="dropZone" class="border-2 border-dashed rounded-xl p-8 text-center mb-4 cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" onclick="document.getElementById('fileInput').click()" ondragover="handleDragOver(event,'dropZone')" ondragleave="handleDragLeave(event,'dropZone')" ondrop="handleDrop(event)">
       <i class="fas fa-cloud-upload-alt text-blue-400 text-3xl mb-2"></i>
       <p class="text-white font-medium mb-1">Glissez-déposez vos fichiers</p>
       <p class="text-blue-400/60 text-sm">ou cliquez pour parcourir</p>
