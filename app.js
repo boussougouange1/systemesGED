@@ -17,6 +17,11 @@
 (function () {
   'use strict';
 
+  // ════════════════════════════ SUPABASE CLIENT
+  const SUPABASE_URL = 'https://spgtflhprppeoidjguhs.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ';
+  const SB = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
   // ════════════════════════════ ÉTAT GLOBAL (module-scoped, jamais window.*)
   const G = {
     user: null,
@@ -164,76 +169,97 @@
     document.getElementById('registerFormWrapper').style.display = tab === 'register' ? '' : 'none';
   }
 
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const pwd = document.getElementById('loginPassword').value;
-    const btn = document.getElementById('loginBtn');
+    const email = document.getElementById('loginEmail').value.trim();
+    const pwd   = document.getElementById('loginPassword').value;
+    const btn   = document.getElementById('loginBtn');
+
+    // Rate limiting
+    const lockout = parseInt(localStorage.getItem('ged_lockout') || '0');
+    if (lockout && Date.now() < lockout) {
+      showToast('Trop de tentatives — attendez ' + Math.ceil((lockout - Date.now()) / 1000) + 's', 'error');
+      return;
+    }
+    const attempts = parseInt(localStorage.getItem('ged_attempts') || '0') + 1;
+    localStorage.setItem('ged_attempts', attempts);
+    if (attempts >= 5) {
+      localStorage.setItem('ged_lockout', Date.now() + 30000);
+      localStorage.setItem('ged_attempts', '0');
+      showToast('5 tentatives échouées — attendez 30 secondes', 'error');
+      return;
+    }
+
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
-    setTimeout(function () {
-      const DEMO_USERS = [
-        { email: 'admin@demo.com', password: 'Admin123!', name: 'Admin Démo', role: 'admin', companyId: 'demo' },
-        { email: 'user@demo.com', password: 'User123!', name: 'Jean Dupont', role: 'editor', companyId: 'demo' },
-      ];
-      const found = DEMO_USERS.find(function (u) { return u.email === email && u.password === pwd; });
-      if (found) {
-        G.user = { id: 'u-' + Date.now(), email: found.email, name: found.name, role: found.role, companyId: found.companyId };
-        G.company = { id: 'demo', name: 'Entreprise Démo', slug: 'demo', plan: 'FREE', maxUsers: 5, maxStorage: 100 * 1024 * 1024 };
-        G.MAX_STORAGE_MB = 100;
-        initApp();
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('mainApp').style.display = 'block';
-        showToast('Bienvenue, ' + found.name + ' !', 'success');
-        logActivity('login', null, 'Connexion réussie depuis ' + email);
-        switchView('dashboard');
-      } else {
-        showToast('Identifiants invalides', 'error');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
-      }
-    }, 800);
+    try {
+      const { data, error } = await SB.auth.signInWithPassword({ email, password: pwd });
+      if (error) throw error;
+      localStorage.setItem('ged_attempts', '0');
+      await _onSignedIn(data.session);
+    } catch (err) {
+      const msg = err.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect' : err.message;
+      showToast(msg, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
+    }
   }
 
-  function handleRegister(e) {
+  async function handleRegister(e) {
     e.preventDefault();
-    const first = document.getElementById('regFirst').value.trim();
-    const last = document.getElementById('regLast').value.trim();
+    const first   = document.getElementById('regFirst').value.trim();
+    const last    = document.getElementById('regLast').value.trim();
     const company = document.getElementById('regCompany').value.trim();
-    const email = document.getElementById('regEmail').value.trim();
-    const pwd = document.getElementById('regPassword').value;
-    if (pwd.length < 8) { showToast('Mot de passe trop court', 'error'); return; }
-    G.user = { id: 'u-' + Date.now(), email: email, name: first + ' ' + last, role: 'admin', companyId: 'new' };
-    G.company = { id: 'new', name: company, slug: company.toLowerCase().replace(/\s+/g, '-'), plan: 'FREE', maxUsers: 5, maxStorage: 100 * 1024 * 1024 };
-    initApp();
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
-    showToast('Bienvenue, ' + first + ' ! Compte créé.', 'success');
-    switchView('dashboard');
+    const email   = document.getElementById('regEmail').value.trim();
+    const pwd     = document.getElementById('regPassword').value;
+    if (pwd.length < 8) { showToast('Mot de passe trop court (8 caractères min.)', 'error'); return; }
+    const btn = document.querySelector('#registerForm button[type="submit"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+    try {
+      const { data, error } = await SB.auth.signUp({
+        email, password: pwd,
+        options: { data: { full_name: first + ' ' + last, company: company } }
+      });
+      if (error) throw error;
+      showToast('Compte créé ! Vérifiez votre email pour confirmer.', 'success');
+      switchAuthTab('login');
+      document.getElementById('loginEmail').value = email;
+    } catch (err) {
+      showToast('Erreur inscription : ' + err.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus mr-2"></i>Créer mon compte'; }
+    }
   }
 
   function demoLogin() {
-    document.getElementById('loginEmail').value = 'admin@demo.com';
-    document.getElementById('loginPassword').value = 'Admin123!';
-    seedDemoData();
-    handleLogin({ preventDefault: function () {} });
+    document.getElementById('loginEmail').value = 'ahouansouange@live.fr';
+    document.getElementById('loginPassword').value = '';
+    showToast('Entrez votre mot de passe et cliquez Se connecter', 'info');
   }
 
-  function oauthLogin(provider) {
-    showToast('OAuth ' + provider + ' — simulation (non connecté à Supabase)', 'info');
-    logActivity('oauth', null, 'Tentative OAuth : ' + provider);
+  async function oauthLogin(provider) {
+    try {
+      const { error } = await SB.auth.signInWithOAuth({
+        provider: provider,
+        options: { redirectTo: window.location.origin }
+      });
+      if (error) throw error;
+    } catch (err) {
+      showToast('Erreur OAuth ' + provider + ' : ' + err.message, 'error');
+    }
   }
 
-  function handleLogout() {
-    logActivity('logout', null, 'Déconnexion');
-    G.user = null;
+  async function handleLogout() {
+    try {
+      await SB.auth.signOut();
+    } catch (_) {}
+    G.user = null; G.docs = []; G.workflows = []; G.tags = []; G.users = [];
     document.getElementById('mainApp').style.display = 'none';
     document.getElementById('loginScreen').style.display = '';
     document.getElementById('loginEmail').value = '';
     document.getElementById('loginPassword').value = '';
     const btn = document.getElementById('loginBtn');
-    btn.disabled = false;
-    btn.innerHTML = '<span id="loginBtnText"><i class="fas fa-sign-in-alt mr-2"></i>Se connecter</span>';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span id="loginBtnText"><i class="fas fa-sign-in-alt mr-2"></i>Se connecter</span>'; }
     showToast('Déconnexion réussie', 'info');
   }
 
@@ -284,25 +310,122 @@
     ];
   }
 
-  // ════════════════════════════ INIT
-  function initApp() {
+  // ════════════════════════════ INIT SUPABASE
+  // Appelé après une connexion réussie
+  async function _onSignedIn(session) {
+    if (!session || !session.user) return;
+    const sbUser = session.user;
+
+    // Charger le profil Supabase
+    const { data: profile } = await SB.from('users_profiles').select('*').eq('id', sbUser.id).single();
+
+    G.user = {
+      id:        sbUser.id,
+      email:     sbUser.email,
+      name:      profile?.full_name || sbUser.user_metadata?.full_name || sbUser.email.split('@')[0],
+      role:      profile?.role || 'user',
+      companyId: profile?.company_id || 'default'
+    };
+    G.MAX_STORAGE_MB = 100;
+    G.company = { id: G.user.companyId, name: profile?.company || 'Mon organisation', plan: 'FREE', maxStorage: 100 * 1024 * 1024 };
+
+    _updateUI();
+    await _loadAllData();
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    switchView('dashboard');
+    showToast('Bienvenue, ' + G.user.name + ' !', 'success');
+    startLiveLogs();
+    addNotification('info', 'Connexion sécurisée', 'JWT actif · Session valide');
+  }
+
+  function _updateUI() {
     if (!G.user) return;
-    const initials = G.user.name.split(' ').map(function (n) { return n[0]; }).join('').toUpperCase().slice(0, 2);
-    document.getElementById('userAvatarInitial').textContent = initials;
-    document.getElementById('userNameDisplay').textContent = G.user.name.split(' ')[0];
-    document.getElementById('userRoleDisplay').textContent = ROLE_LABELS[G.user.role] || G.user.role;
-    document.getElementById('dropdownUserName').textContent = G.user.name;
-    document.getElementById('dropdownUserEmail').textContent = G.user.email;
-    document.getElementById('profileName').value = G.user.name;
-    document.getElementById('profileEmail').value = G.user.email;
+    const initials = G.user.name.split(' ').map(function (n) { return n[0] || ''; }).join('').toUpperCase().slice(0, 2) || 'U';
+    const set = function (id, val) { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const setVal = function (id, val) { const el = document.getElementById(id); if (el) el.value = val; };
+    set('userAvatarInitial', initials);
+    set('userNameDisplay', G.user.name.split(' ')[0]);
+    set('userRoleDisplay', ROLE_LABELS[G.user.role] || G.user.role);
+    set('dropdownUserName', G.user.name);
+    set('dropdownUserEmail', G.user.email);
+    setVal('profileName', G.user.name);
+    setVal('profileEmail', G.user.email);
     if (G.company) {
-      document.getElementById('companyAvatar').textContent = G.company.name[0].toUpperCase();
-      document.getElementById('companyNameLabel').textContent = G.company.name;
+      set('companyAvatar', G.company.name[0].toUpperCase());
+      set('companyNameLabel', G.company.name);
       updatePlanUI(G.company.plan);
     }
-    addNotification('info', 'Connexion sécurisée', 'JWT actif · Session valide');
-    startLiveLogs();
   }
+
+  async function _loadAllData() {
+    await Promise.all([_loadDocuments(), _loadWorkflows(), _loadTags(), _loadUsers(), _loadAuditLogs()]);
+    updateStats();
+  }
+
+  // ─── Chargement documents ─────────────────────────────────────
+  async function _loadDocuments() {
+    try {
+      const { data, error } = await SB.from('documents')
+        .select('*, document_tags(tags(name))')
+        .eq('user_id', G.user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      G.docs = (data || []).map(function (d) {
+        return Object.assign({}, d, {
+          tags: (d.document_tags || []).map(function (dt) { return dt.tags?.name || ''; }).filter(Boolean)
+        });
+      });
+    } catch (err) { console.warn('loadDocuments:', err.message); G.docs = []; }
+  }
+
+  // ─── Chargement workflows ─────────────────────────────────────
+  async function _loadWorkflows() {
+    try {
+      const { data, error } = await SB.from('workflows')
+        .select('*').eq('user_id', G.user.id).order('created_at', { ascending: false });
+      if (error) throw error;
+      G.workflows = (data || []).map(function (w) {
+        return { id: w.id, title: w.title, description: w.description, status: w.status, priority: w.priority, approvers: w.assignee_email ? [w.assignee_email] : [], docId: w.document_id, dueDate: w.due_date, createdAt: w.created_at };
+      });
+    } catch (err) { console.warn('loadWorkflows:', err.message); G.workflows = []; }
+  }
+
+  // ─── Chargement tags ──────────────────────────────────────────
+  async function _loadTags() {
+    try {
+      const { data, error } = await SB.from('tags').select('*').order('name');
+      if (error) throw error;
+      G.tags = (data || []).map(function (t) { return { id: t.id, name: t.name, color: t.color || '#3b82f6', count: 0 }; });
+    } catch (err) { console.warn('loadTags:', err.message); G.tags = []; }
+  }
+
+  // ─── Chargement utilisateurs ──────────────────────────────────
+  async function _loadUsers() {
+    try {
+      const { data, error } = await SB.from('users_profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      G.users = (data || []).map(function (u) {
+        return { id: u.id, name: u.full_name || u.email || 'Utilisateur', email: u.email || '', role: u.role || 'user', active: true, lastLogin: u.updated_at, docs: 0 };
+      });
+    } catch (err) { console.warn('loadUsers:', err.message); G.users = []; }
+  }
+
+  // ─── Chargement audit logs ────────────────────────────────────
+  async function _loadAuditLogs() {
+    try {
+      const { data, error } = await SB.from('activity_logs')
+        .select('*').eq('user_id', G.user.id)
+        .order('created_at', { ascending: false }).limit(100);
+      if (error) throw error;
+      G.auditLogs = (data || []).map(function (l) {
+        return { id: l.id, action: l.action, description: l.description, user: G.user.name, docId: l.document_id, createdAt: l.created_at };
+      });
+    } catch (err) { console.warn('loadAuditLogs:', err.message); G.auditLogs = []; }
+  }
+
+  // ════════════════════════════ INIT (compatibilité)
+  function initApp() { _updateUI(); startLiveLogs(); }
 
   // ════════════════════════════ NAVIGATION
   function switchView(v) {
@@ -445,21 +568,31 @@
   function filterByType(t) { document.getElementById('filterType').value = t; switchView('documents'); applyFilters(); }
   function toggleViewMode() { G.gridView = !G.gridView; const i = document.getElementById('viewModeIcon'); i.classList.toggle('fa-th-large', G.gridView); i.classList.toggle('fa-list', !G.gridView); renderDocuments(); }
 
-  function downloadDocument(id) {
+  async function downloadDocument(id) {
     const d = G.docs.find(function (x) { return x.id === id; }); if (!d) return;
     showToast('Téléchargement de "' + d.name + '"…', 'info');
     logActivity('download', id, 'Téléchargement : ' + d.name);
+    var url = d.file_url;
+    if (d.storage_path) {
+      var { data: urlData } = await SB.storage.from('documents').createSignedUrl(d.storage_path, 300);
+      if (urlData?.signedUrl) url = urlData.signedUrl;
+    }
+    if (url) { var a = document.createElement('a'); a.href = url; a.download = d.name; a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
   }
 
-  function confirmDeleteDocument(id) {
+    async function confirmDeleteDocument(id) {
     const d = G.docs.find(function (x) { return x.id === id; }); if (!d) return;
-    if (!confirm('Supprimer "' + d.name + '" ?')) return;
-    G.docs = G.docs.filter(function (x) { return x.id !== id; });
-    logActivity('delete', id, 'Suppression : ' + d.name);
-    showToast('"' + d.name + '" supprimé', 'success');
-    renderDocuments();
+    if (!confirm('Supprimer "' + d.name + '" ? Cette action est irréversible.')) return;
+    try {
+      if (d.storage_path) await SB.storage.from('documents').remove([d.storage_path]);
+      const { error } = await SB.from('documents').delete().eq('id', id);
+      if (error) throw error;
+      G.docs = G.docs.filter(function (x) { return x.id !== id; });
+      logActivity('delete', id, 'Suppression : ' + d.name);
+      showToast('"' + d.name + '" supprimé ✓', 'success');
+      renderDocuments(); updateStats();
+    } catch (err) { showToast('Erreur suppression : ' + err.message, 'error'); }
   }
-
   function openDocumentPreview(id) {
     const d = G.docs.find(function (x) { return x.id === id; }); if (!d) return;
     G.previewDocId = id;
@@ -510,34 +643,79 @@
     c.innerHTML = G.uploadTags.map(function (t, i) { return '<span class="tag">' + esc(t) + ' <span class="tag-close" onclick="G.uploadTags.splice(' + i + ',1);addUploadTag()">×</span></span>'; }).join('');
   }
 
-  function uploadDocument() {
+  async function uploadDocument() {
     if (!G.selectedFiles.length) { showToast('Aucun fichier sélectionné', 'error'); return; }
+    const ALLOWED = ['application/pdf','application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg','image/png','image/gif'];
+    for (var fi = 0; fi < G.selectedFiles.length; fi++) {
+      var f = G.selectedFiles[fi];
+      if (!ALLOWED.includes(f.type)) { showToast('Type non autorisé : ' + f.name, 'error'); return; }
+      if (f.size > 100 * 1024 * 1024) { showToast(f.name + ' dépasse 100 MB', 'error'); return; }
+      // Scan antivirus basique (signatures binaires)
+      var buf = await f.slice(0, 4).arrayBuffer();
+      var bytes = new Uint8Array(buf);
+      if ((bytes[0] === 0x4D && bytes[1] === 0x5A) || (bytes[0] === 0x7F && bytes[1] === 0x45)) {
+        showToast('Fichier bloqué (exécutable détecté) : ' + f.name, 'error');
+        return;
+      }
+    }
     const btn = document.getElementById('uploadBtn');
     btn.disabled = true;
     document.getElementById('uploadProgress').classList.remove('hidden');
-    const name = document.getElementById('docNameInput').value.trim();
-    const desc = document.getElementById('docDescInput').value.trim();
-    let prog = 0;
-    const iv = setInterval(function () {
-      prog += Math.random() * 20;
-      if (prog >= 100) { prog = 100; clearInterval(iv); finishUpload(name, desc); }
-      document.getElementById('uploadProgressBar').style.width = prog + '%';
-      document.getElementById('uploadPercent').textContent = Math.round(prog) + '%';
-    }, 100);
-  }
-
-  function finishUpload(name, desc) {
-    G.selectedFiles.forEach(function (f, i) {
-      const doc = { id: 'doc-' + Date.now() + '-' + i, name: (name && G.selectedFiles.length === 1 ? name : f.name), description: desc, file_type: f.type || 'application/octet-stream', file_size: f.size, version_number: 1, tags: [...G.uploadTags], created_at: new Date().toISOString() };
-      G.docs.unshift(doc);
-      logActivity('upload', doc.id, 'Upload : ' + doc.name);
-      addNotification('success', 'Document uploadé', doc.name);
-    });
-    showToast(G.selectedFiles.length + ' fichier(s) importé(s) ✓', 'success');
+    const docName = document.getElementById('docNameInput').value.trim();
+    const desc    = document.getElementById('docDescInput').value.trim();
+    var uploaded = 0;
+    for (var i = 0; i < G.selectedFiles.length; i++) {
+      var file = G.selectedFiles[i];
+      var finalName = (docName && G.selectedFiles.length === 1) ? docName : file.name;
+      var safeName  = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      var storagePath = G.user.id + '/' + Date.now() + '_' + safeName;
+      document.getElementById('uploadProgressBar').style.width = Math.round(((i + 0.5) / G.selectedFiles.length) * 100) + '%';
+      document.getElementById('uploadPercent').textContent = Math.round(((i + 0.5) / G.selectedFiles.length) * 100) + '%';
+      try {
+        // Upload vers Supabase Storage
+        var { error: storageErr } = await SB.storage.from('documents').upload(storagePath, file);
+        if (storageErr) throw storageErr;
+        var { data: urlData } = SB.storage.from('documents').getPublicUrl(storagePath);
+        // Insérer en base
+        var { data: docData, error: dbErr } = await SB.from('documents').insert([{
+          name: finalName, description: desc || 'Document importé',
+          file_url: urlData.publicUrl, file_size: file.size,
+          file_type: file.type, storage_path: storagePath,
+          user_id: G.user.id, version_number: 1
+        }]).select().single();
+        if (dbErr) throw dbErr;
+        // Tags
+        for (var ti = 0; ti < G.uploadTags.length; ti++) {
+          var tagName = G.uploadTags[ti];
+          var { data: tagRow } = await SB.from('tags').select('id').eq('name', tagName).single();
+          if (!tagRow) {
+            var { data: newTag } = await SB.from('tags').insert({ name: tagName, color: '#3b82f6' }).select().single();
+            tagRow = newTag;
+          }
+          if (tagRow) await SB.from('document_tags').insert({ document_id: docData.id, tag_id: tagRow.id });
+        }
+        var localDoc = Object.assign({}, docData, { tags: [...G.uploadTags] });
+        G.docs.unshift(localDoc);
+        await _logActivitySB('upload', docData.id, 'Upload : ' + finalName);
+        addNotification('success', 'Document uploadé', finalName);
+        uploaded++;
+      } catch (err) {
+        showToast('Erreur upload ' + file.name + ' : ' + err.message, 'error');
+      }
+      document.getElementById('uploadProgressBar').style.width = Math.round(((i + 1) / G.selectedFiles.length) * 100) + '%';
+      document.getElementById('uploadPercent').textContent = Math.round(((i + 1) / G.selectedFiles.length) * 100) + '%';
+    }
+    if (uploaded > 0) showToast(uploaded + ' fichier(s) importé(s) ✓', 'success');
     closeUploadModal();
     if (G.currentView === 'documents') renderDocuments();
     updateStats();
   }
+
+  function finishUpload(name, desc) { /* compatibilité — non utilisé */ }
 
   // ════════════════════════════ SHARE
   function openShareModal(id) {
@@ -551,21 +729,67 @@
   }
   function closeShareModal() { document.getElementById('shareModal').classList.add('hidden'); G.shareDocId = null; }
 
-  function shareDocument() {
+  async function shareDocument() {
     const email = document.getElementById('shareEmail').value.trim();
     if (!email) { showToast('Email requis', 'error'); return; }
     const perm = document.getElementById('sharePermission').value;
-    const exp = parseInt(document.getElementById('shareExpiration').value);
-    const d = G.docs.find(function (x) { return x.id === G.shareDocId; }); if (!d) return;
-    const token = Math.random().toString(36).substr(2, 16);
-    const shareLink = 'https://app.systemesged.com/share/' + token;
-    const share = { id: 's-' + Date.now(), docId: d.id, docName: d.name, sharedWith: email, permission: perm, expiresAt: exp ? new Date(Date.now() + exp * 86400000).toISOString() : null, createdAt: new Date().toISOString() };
-    G.sentShares.unshift(share);
-    document.getElementById('shareLinkInput').value = shareLink;
-    document.getElementById('generatedLink').classList.remove('hidden');
-    logActivity('share', d.id, 'Partage "' + d.name + '" → ' + email);
-    addNotification('success', 'Document partagé', d.name + ' → ' + email);
-    showToast('Document partagé avec ' + email + ' ✓', 'success');
+    const exp  = parseInt(document.getElementById('shareExpiration').value);
+    const d    = G.docs.find(function (x) { return x.id === G.shareDocId; });
+    if (!d) return;
+    const btn = document.querySelector('#shareModal button[onclick="shareDocument()"]');
+    if (btn) btn.disabled = true;
+    try {
+      const expiresAt = exp ? new Date(Date.now() + exp * 86400000).toISOString() : null;
+      // Insérer partage en DB
+      const { error: shareErr } = await SB.from('shared_documents').insert({
+        document_id: d.id, shared_by: G.user.id,
+        shared_with_email: email, permission: perm, expires_at: expiresAt
+      });
+      if (shareErr) throw shareErr;
+      // Générer lien signé
+      var signedUrl = window.location.origin;
+      if (d.storage_path) {
+        const secs = exp ? exp * 86400 : 604800;
+        const { data: urlData } = await SB.storage.from('documents').createSignedUrl(d.storage_path, secs);
+        if (urlData?.signedUrl) signedUrl = urlData.signedUrl;
+      }
+      document.getElementById('shareLinkInput').value = signedUrl;
+      document.getElementById('generatedLink').classList.remove('hidden');
+      // Mettre à jour liste locale
+      G.sentShares.unshift({ id: 's-' + Date.now(), docId: d.id, docName: d.name, sharedWith: email, permission: perm, expiresAt: expiresAt, createdAt: new Date().toISOString() });
+      await _logActivitySB('share', d.id, 'Partage "' + d.name + '" → ' + email);
+      addNotification('success', 'Document partagé', d.name + ' → ' + email);
+      showToast('Partage créé avec ' + email + ' ✓', 'success');
+      // Ouvrir client email
+      _openShareEmail(email, d, perm, exp, expiresAt, signedUrl);
+    } catch (err) {
+      showToast('Erreur partage : ' + err.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function _openShareEmail(toEmail, doc, permission, duration, expiresAt, signedUrl) {
+    const senderName  = G.user.name;
+    const permLabels  = { view: 'Lecture seule', download: 'Téléchargement', edit: 'Édition' };
+    const permLabel   = permLabels[permission] || permission;
+    const expStr      = expiresAt ? new Date(expiresAt).toLocaleDateString('fr-FR') : 'Illimité';
+    const durLabel    = duration ? duration + ' jour(s)' : 'Illimité';
+    const subject = encodeURIComponent('[SystemesGED] ' + senderName + ' partage avec vous : ' + doc.name);
+    const body = encodeURIComponent(
+      'Bonjour,\n\n' + senderName + ' vous partage un document via SystemesGED.\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '📄 ' + doc.name + '\n' +
+      (doc.file_size ? 'Taille     : ' + formatFileSize(doc.file_size) + '\n' : '') +
+      'Permission : ' + permLabel + '\n' +
+      'Validité   : ' + durLabel + '\n' +
+      'Expiration : ' + expStr + '\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+      '🔗 Accéder au document :\n' + signedUrl + '\n\n' +
+      '⚠️ Ce lien est sécurisé et personnel.\n' +
+      '🔒 Chiffrement TLS 1.3 — SystemesGED v4.1\n--\n' + window.location.origin
+    );
+    window.location.href = 'mailto:' + toEmail + '?subject=' + subject + '&body=' + body;
   }
   function copyShareLink() { navigator.clipboard?.writeText(document.getElementById('shareLinkInput').value).then(function () { showToast('Lien copié !', 'success'); }); }
 
@@ -996,9 +1220,21 @@
 
   // ════════════════════════════ AUDIT HELPER
   function logActivity(action, docId, description) {
+    // Log local immédiat
     G.auditLogs.unshift({ id: 'a-' + Date.now(), action: action, docId: docId, description: description, user: G.user?.name || 'Système', createdAt: new Date().toISOString() });
     if (G.auditLogs.length > 200) G.auditLogs = G.auditLogs.slice(0, 200);
     addSysLog('info', description || action);
+    // Persister en DB (async, sans bloquer)
+    if (G.user) _logActivitySB(action, docId, description).catch(function () {});
+  }
+
+  async function _logActivitySB(action, docId, description) {
+    if (!G.user) return;
+    await SB.from('activity_logs').insert({
+      user_id: G.user.id, action: action,
+      document_id: docId || null,
+      description: description || action
+    });
   }
 
   // ════════════════════════════ TOAST
@@ -1025,10 +1261,42 @@
     btn.innerHTML = '<i class="fas fa-eye' + (t ? '' : '-slash') + '"></i>';
   }
 
+  // ════════════════════════════ SUPABASE AUTH INIT
+  // Vérifier session au chargement + écouter les changements OAuth
+  document.addEventListener('DOMContentLoaded', async function () {
+    try {
+      const { data: { session }, error } = await SB.auth.getSession();
+      if (error) throw error;
+      if (session && session.user) {
+        await _onSignedIn(session);
+      } else {
+        document.getElementById('loginScreen').style.display = '';
+      }
+    } catch (err) {
+      console.warn('Session init:', err.message);
+      document.getElementById('loginScreen').style.display = '';
+    }
+
+    // Gérer les redirections OAuth et changements de session
+    SB.auth.onAuthStateChange(async function (event, session) {
+      if (event === 'SIGNED_IN' && session && !G.user) {
+        await _onSignedIn(session);
+      }
+      if (event === 'SIGNED_OUT') {
+        G.user = null; G.docs = []; G.workflows = [];
+        document.getElementById('mainApp').style.display = 'none';
+        document.getElementById('loginScreen').style.display = '';
+      }
+      if (event === 'TOKEN_REFRESHED' && session) {
+        console.log('Token rafraîchi');
+      }
+    });
+  });
+
   // ════════════════════════════ EXPOSE FONCTIONS AU DOM (onclick= handlers)
   // Toutes les fonctions appelées via onclick="" dans le HTML doivent être exposées sur window.
   const _pub = {
-    switchAuthTab, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout,
+    switchAuthTab, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout, _onSignedIn,
     switchView, applyFilters, clearFilters, filterByTag, filterByType, toggleViewMode,
     downloadDocument, confirmDeleteDocument, openDocumentPreview, closePreviewModal,
     openUploadModal, closeUploadModal, handleFileSelect, handleFilePickerSelect,
