@@ -17,6 +17,14 @@
 (function () {
   'use strict';
 
+  // ════════════════════════════ LOGGER SÉCURISÉ
+  var IS_DEV = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  var log = {
+    warn:  function (msg) { if (IS_DEV) console.warn('[GED]', msg); },
+    error: function (msg) { if (IS_DEV) console.error('[GED]', msg); },
+    info:  function (msg) { if (IS_DEV) console.log('[GED]', msg); }
+  };
+
   // ════════════════════════════ SUPABASE CLIENT
   const SUPABASE_URL = 'https://spgtflhprppeoidjguhs.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_0TPq4MIBVDRBzS2CI5WxuA_SV7HkwMJ';
@@ -120,7 +128,26 @@
 
   // ════════════════════════════ UTILS
   function esc(s) {
-    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\//g, '&#x2F;');
+  }
+
+  // Alias pour rétrocompatibilité
+  var escapeHtml = esc;
+
+  // Validation URL sécurisée (éviter javascript: protocol)
+  function safeUrl(url) {
+    if (!url) return '#';
+    try {
+      var u = new URL(url);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:' && u.protocol !== 'blob:') return '#';
+      return url;
+    } catch (_) { return '#'; }
   }
 
   function timeAgo(iso) {
@@ -171,22 +198,43 @@
 
   async function handleLogin(e) {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim();
-    const pwd   = document.getElementById('loginPassword').value;
+    const email = document.getElementById('loginEmail').value.trim().toLowerCase().slice(0, 254);
+    const pwd   = document.getElementById('loginPassword').value.slice(0, 128);
     const btn   = document.getElementById('loginBtn');
+    // Validation basique email
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showToast('Adresse email invalide', 'error'); return;
+    }
 
-    // Rate limiting
-    const lockout = parseInt(localStorage.getItem('ged_lockout') || '0');
-    if (lockout && Date.now() < lockout) {
-      showToast('Trop de tentatives — attendez ' + Math.ceil((lockout - Date.now()) / 1000) + 's', 'error');
+    // Rate limiting avec backoff exponentiel
+    const now      = Date.now();
+    const lockout  = parseInt(localStorage.getItem('ged_lockout') || '0');
+    const attempts = parseInt(localStorage.getItem('ged_attempts') || '0');
+    if (lockout && now < lockout) {
+      const secs = Math.ceil((lockout - now) / 1000);
+      showToast('🔒 Accès bloqué — réessayez dans ' + secs + 's', 'error');
+      // Feedback visuel sur le bouton
+      const btn2 = document.getElementById('loginBtn');
+      btn2.innerHTML = '<i class="fas fa-lock mr-2"></i>' + secs + 's';
+      const countdown = setInterval(function () {
+        const rem = Math.ceil((parseInt(localStorage.getItem('ged_lockout') || '0') - Date.now()) / 1000);
+        if (rem <= 0) { clearInterval(countdown); btn2.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter'; btn2.disabled = false; }
+        else btn2.innerHTML = '<i class="fas fa-lock mr-2"></i>' + rem + 's';
+      }, 1000);
       return;
     }
-    const attempts = parseInt(localStorage.getItem('ged_attempts') || '0') + 1;
-    localStorage.setItem('ged_attempts', attempts);
-    if (attempts >= 5) {
-      localStorage.setItem('ged_lockout', Date.now() + 30000);
+    // Incrémenter compteur
+    localStorage.setItem('ged_attempts', attempts + 1);
+    // Backoff : 3 tentatives → 10s, 5 → 30s, 8 → 120s, 10+ → 300s
+    var waitTime = 0;
+    if (attempts + 1 >= 10) waitTime = 300000;
+    else if (attempts + 1 >= 8) waitTime = 120000;
+    else if (attempts + 1 >= 5) waitTime = 30000;
+    else if (attempts + 1 >= 3) waitTime = 10000;
+    if (waitTime > 0) {
+      localStorage.setItem('ged_lockout', now + waitTime);
       localStorage.setItem('ged_attempts', '0');
-      showToast('5 tentatives échouées — attendez 30 secondes', 'error');
+      showToast('Trop de tentatives — attendez ' + (waitTime / 1000) + 's', 'error');
       return;
     }
 
@@ -196,6 +244,7 @@
       const { data, error } = await SB.auth.signInWithPassword({ email, password: pwd });
       if (error) throw error;
       localStorage.setItem('ged_attempts', '0');
+      logActivity('login', null, 'Connexion réussie: ' + email + ' — IP: ' + (navigator.onLine ? 'online' : 'offline'));
       await _onSignedIn(data.session);
     } catch (err) {
       const msg = err.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect' : err.message;
@@ -212,7 +261,17 @@
     const company = document.getElementById('regCompany').value.trim();
     const email   = document.getElementById('regEmail').value.trim();
     const pwd     = document.getElementById('regPassword').value;
+    // Validation renforcée inscription
+    if (!first || !last || !email || !company || !pwd) { showToast('Tous les champs sont obligatoires', 'error'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Email invalide', 'error'); return; }
     if (pwd.length < 8) { showToast('Mot de passe trop court (8 caractères min.)', 'error'); return; }
+    // Force du mot de passe
+    var hasUpper  = /[A-Z]/.test(pwd);
+    var hasLower  = /[a-z]/.test(pwd);
+    var hasDigit  = /\d/.test(pwd);
+    var hasSpec   = /[^A-Za-z0-9]/.test(pwd);
+    var strength  = [hasUpper, hasLower, hasDigit, hasSpec].filter(Boolean).length;
+    if (strength < 3) { showToast('Mot de passe trop faible (majuscule, minuscule, chiffre requis)', 'error'); return; }
     const btn = document.querySelector('#registerForm button[type="submit"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
     try {
@@ -260,6 +319,8 @@
     document.getElementById('loginPassword').value = '';
     const btn = document.getElementById('loginBtn');
     if (btn) { btn.disabled = false; btn.innerHTML = '<span id="loginBtnText"><i class="fas fa-sign-in-alt mr-2"></i>Se connecter</span>'; }
+    _stopInactivityWatch();
+    localStorage.setItem('ged_signout', Date.now()); // sync multi-onglets
     showToast('Déconnexion réussie', 'info');
   }
 
@@ -337,6 +398,7 @@
     showToast('Bienvenue, ' + G.user.name + ' !', 'success');
     startLiveLogs();
     addNotification('info', 'Connexion sécurisée', 'JWT actif · Session valide');
+    _startInactivityWatch();
   }
 
   function _updateUI() {
@@ -376,7 +438,7 @@
           tags: (d.document_tags || []).map(function (dt) { return dt.tags?.name || ''; }).filter(Boolean)
         });
       });
-    } catch (err) { console.warn('loadDocuments:', err.message); G.docs = []; }
+    } catch (err) { log.warn('loadDocuments:', err.message); G.docs = []; }
   }
 
   // ─── Chargement workflows ─────────────────────────────────────
@@ -388,7 +450,7 @@
       G.workflows = (data || []).map(function (w) {
         return { id: w.id, title: w.title, description: w.description, status: w.status, priority: w.priority, approvers: w.assignee_email ? [w.assignee_email] : [], docId: w.document_id, dueDate: w.due_date, createdAt: w.created_at };
       });
-    } catch (err) { console.warn('loadWorkflows:', err.message); G.workflows = []; }
+    } catch (err) { log.warn('loadWorkflows:', err.message); G.workflows = []; }
   }
 
   // ─── Chargement tags ──────────────────────────────────────────
@@ -397,7 +459,7 @@
       const { data, error } = await SB.from('tags').select('*').order('name');
       if (error) throw error;
       G.tags = (data || []).map(function (t) { return { id: t.id, name: t.name, color: t.color || '#3b82f6', count: 0 }; });
-    } catch (err) { console.warn('loadTags:', err.message); G.tags = []; }
+    } catch (err) { log.warn('loadTags:', err.message); G.tags = []; }
   }
 
   // ─── Chargement utilisateurs ──────────────────────────────────
@@ -408,7 +470,7 @@
       G.users = (data || []).map(function (u) {
         return { id: u.id, name: u.full_name || u.email || 'Utilisateur', email: u.email || '', role: u.role || 'user', active: true, lastLogin: u.updated_at, docs: 0 };
       });
-    } catch (err) { console.warn('loadUsers:', err.message); G.users = []; }
+    } catch (err) { log.warn('loadUsers:', err.message); G.users = []; }
   }
 
   // ─── Chargement audit logs ────────────────────────────────────
@@ -421,7 +483,7 @@
       G.auditLogs = (data || []).map(function (l) {
         return { id: l.id, action: l.action, description: l.description, user: G.user.name, docId: l.document_id, createdAt: l.created_at };
       });
-    } catch (err) { console.warn('loadAuditLogs:', err.message); G.auditLogs = []; }
+    } catch (err) { log.warn('loadAuditLogs:', err.message); G.auditLogs = []; }
   }
 
   // ════════════════════════════ INIT (compatibilité)
@@ -643,22 +705,65 @@
     c.innerHTML = G.uploadTags.map(function (t, i) { return '<span class="tag">' + esc(t) + ' <span class="tag-close" onclick="G.uploadTags.splice(' + i + ',1);addUploadTag()">×</span></span>'; }).join('');
   }
 
-  async function uploadDocument() {
-    if (!G.selectedFiles.length) { showToast('Aucun fichier sélectionné', 'error'); return; }
-    const ALLOWED = ['application/pdf','application/msword',
+  // ─── Calcul hash SHA-256 ─────────────────────────────────────
+  async function _sha256(file) {
+    try {
+      const buf  = await file.arrayBuffer();
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    } catch (_) { return null; }
+  }
+
+  // ─── Validation MIME renforcée ────────────────────────────────
+  async function _scanFile(file) {
+    // 1. Extension
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (BLOCKED_EXT.includes(ext)) return { safe: false, reason: 'Extension dangereuse: .' + ext };
+    // 2. Signature binaire
+    const buf   = await file.slice(0, 8).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const sigs  = [
+      { b: [0x4D,0x5A],             name: 'EXE/DLL Windows' },
+      { b: [0x7F,0x45,0x4C,0x46],   name: 'ELF Linux executable' },
+      { b: [0xCA,0xFE,0xBA,0xBE],   name: 'Java class' },
+      { b: [0x50,0x4B,0x03,0x04],   name: 'ZIP (vérifier contenu)' }, // ZIP ok, pas bloqué
+      { b: [0x4D,0x5A,0x90,0x00],   name: 'PE executable' },
+    ];
+    for (var si = 0; si < sigs.length; si++) {
+      var sig = sigs[si];
+      if (sig.name.includes('ZIP')) continue; // ZIP autorisé (Word/Excel utilisent ce format)
+      var match = true;
+      for (var bi = 0; bi < sig.b.length; bi++) {
+        if (bytes[bi] !== sig.b[bi]) { match = false; break; }
+      }
+      if (match) return { safe: false, reason: sig.name + ' détecté' };
+    }
+    // 3. MIME type
+    const ALLOWED_MIME = [
+      'application/pdf',
+      'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'image/jpeg','image/png','image/gif'];
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp'
+    ];
+    if (file.type && !ALLOWED_MIME.includes(file.type)) {
+      return { safe: false, reason: 'Type MIME non autorisé: ' + file.type };
+    }
+    return { safe: true };
+  }
+
+  async function uploadDocument() {
+    if (!G.selectedFiles.length) { showToast('Aucun fichier sélectionné', 'error'); return; }
+    // Validation + scan antivirus renforcé pour chaque fichier
+    showToast('Analyse des fichiers en cours…', 'info');
     for (var fi = 0; fi < G.selectedFiles.length; fi++) {
       var f = G.selectedFiles[fi];
-      if (!ALLOWED.includes(f.type)) { showToast('Type non autorisé : ' + f.name, 'error'); return; }
       if (f.size > 100 * 1024 * 1024) { showToast(f.name + ' dépasse 100 MB', 'error'); return; }
-      // Scan antivirus basique (signatures binaires)
-      var buf = await f.slice(0, 4).arrayBuffer();
-      var bytes = new Uint8Array(buf);
-      if ((bytes[0] === 0x4D && bytes[1] === 0x5A) || (bytes[0] === 0x7F && bytes[1] === 0x45)) {
-        showToast('Fichier bloqué (exécutable détecté) : ' + f.name, 'error');
+      var scan = await _scanFile(f);
+      if (!scan.safe) {
+        showToast('🛡️ Fichier bloqué — ' + scan.reason + ' : ' + f.name, 'error');
+        logActivity('security', null, 'Fichier bloqué antivirus : ' + f.name + ' — ' + scan.reason);
         return;
       }
     }
@@ -680,13 +785,17 @@
         var { error: storageErr } = await SB.storage.from('documents').upload(storagePath, file);
         if (storageErr) throw storageErr;
         var { data: urlData } = SB.storage.from('documents').getPublicUrl(storagePath);
+        // Calculer hash SHA-256
+        var fileHash = await _sha256(file);
         // Insérer en base
-        var { data: docData, error: dbErr } = await SB.from('documents').insert([{
+        var docPayload = {
           name: finalName, description: desc || 'Document importé',
           file_url: urlData.publicUrl, file_size: file.size,
           file_type: file.type, storage_path: storagePath,
           user_id: G.user.id, version_number: 1
-        }]).select().single();
+        };
+        if (fileHash) docPayload.sha256 = fileHash;
+        var { data: docData, error: dbErr } = await SB.from('documents').insert([docPayload]).select().single();
         if (dbErr) throw dbErr;
         // Tags
         for (var ti = 0; ti < G.uploadTags.length; ti++) {
@@ -1261,9 +1370,59 @@
     btn.innerHTML = '<i class="fas fa-eye' + (t ? '' : '-slash') + '"></i>';
   }
 
+  // ════════════════════════════ SESSION TIMEOUT (inactivité 30 min)
+  var _inactivityTimer = null;
+  var _INACTIVITY_MS   = 30 * 60 * 1000; // 30 minutes
+
+  function _resetInactivityTimer() {
+    clearTimeout(_inactivityTimer);
+    _inactivityTimer = setTimeout(async function () {
+      if (!G.user) return;
+      showToast('⏱️ Session expirée par inactivité — reconnectez-vous', 'warning');
+      logActivity('logout', null, 'Session expirée — inactivité 30 min');
+      await handleLogout();
+    }, _INACTIVITY_MS);
+  }
+
+  function _startInactivityWatch() {
+    ['mousedown','keydown','touchstart','scroll','click'].forEach(function (evt) {
+      document.addEventListener(evt, _resetInactivityTimer, { passive: true });
+    });
+    _resetInactivityTimer();
+  }
+
+  function _stopInactivityWatch() {
+    clearTimeout(_inactivityTimer);
+    ['mousedown','keydown','touchstart','scroll','click'].forEach(function (evt) {
+      document.removeEventListener(evt, _resetInactivityTimer);
+    });
+  }
+
+  // ════════════════════════════ DÉTECTION ONGLETS MULTIPLES
+  // Synchroniser la déconnexion entre onglets
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'ged_signout' && G.user) {
+      G.user = null;
+      document.getElementById('mainApp').style.display = 'none';
+      document.getElementById('loginScreen').style.display = '';
+      showToast('Déconnexion détectée dans un autre onglet', 'info');
+    }
+  });
+
   // ════════════════════════════ SUPABASE AUTH INIT
   // Vérifier session au chargement + écouter les changements OAuth
   document.addEventListener('DOMContentLoaded', async function () {
+    // Avertissement HTTPS (production uniquement)
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      log.warn('[SECURITY] Application non servie en HTTPS — connexions non chiffrées');
+    }
+
+    // Vérifier si l'app est dans une iframe (clickjacking)
+    if (window.self !== window.top) {
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#ef4444;font-family:sans-serif;text-align:center"><div><i class="fas fa-exclamation-triangle" style="font-size:3rem;margin-bottom:1rem;display:block"></i><h1>Accès non autorisé</h1><p>Cette application ne peut pas être chargée dans une iframe.</p></div></div>';
+      return;
+    }
+
     try {
       const { data: { session }, error } = await SB.auth.getSession();
       if (error) throw error;
@@ -1273,7 +1432,7 @@
         document.getElementById('loginScreen').style.display = '';
       }
     } catch (err) {
-      console.warn('Session init:', err.message);
+      log.warn('Session init:', err.message);
       document.getElementById('loginScreen').style.display = '';
     }
 
@@ -1288,7 +1447,7 @@
         document.getElementById('loginScreen').style.display = '';
       }
       if (event === 'TOKEN_REFRESHED' && session) {
-        console.log('Token rafraîchi');
+        log.info('Token rafraîchi');
       }
     });
   });
