@@ -767,9 +767,6 @@
 
                 <!-- Envoyés -->
                 <div id="shared-sent" class="hidden space-y-3" >
-                    <div class="flex items-center justify-between mb-1">
-                        <p class="text-sm text-blue-300/70"><span id="sentSharesCount">0</span> partage(s) envoyé(s)</p>
-                    </div>
                     <div class="glass-card rounded-2xl border border-blue-500/20 p-8 text-center" id="sentEmptyState">
                         <div class="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-400 border border-purple-400/20">
                             <i class="fas fa-paper-plane text-3xl"></i>
@@ -2830,10 +2827,8 @@ async function submitShare() {
 
         if (error) throw error;
 
-        // Générer le lien signé et ouvrir le client email
+        // Générer le lien signé à envoyer
         const doc = currentDocuments.find(d => d.id === currentShareDocId);
-        let signedUrl = null;
-
         if (doc?.storage_path) {
             const seconds = duration > 0 ? duration * 86400 : 604800;
             const { data: urlData } = await supabaseClient.storage
@@ -2841,52 +2836,12 @@ async function submitShare() {
                 .createSignedUrl(doc.storage_path, seconds);
 
             if (urlData?.signedUrl) {
-                signedUrl = urlData.signedUrl;
-                await navigator.clipboard.writeText(signedUrl).catch(() => {});
+                await navigator.clipboard.writeText(urlData.signedUrl).catch(() => {});
             }
         }
 
         await logActivity('share', currentShareDocId, `Document partagé avec ${email}`);
-        showToast(`Document partagé avec ${email} ! Ouverture de votre messagerie...`, 'success');
-
-        // Ouvrir le client email de l'utilisateur connecté avec un email professionnel pré-rédigé
-        const senderName = currentUser?.user_metadata?.full_name || currentUser?.email || 'Un utilisateur SystemesGED';
-        const docName    = doc?.name || 'Document';
-        const permLabels = { view: 'consultation (lecture seule)', download: 'consultation et téléchargement', edit: 'consultation et édition' };
-        const permLabel  = permLabels[permission] || 'consultation';
-        const expiryText = duration === 0
-            ? 'Ce lien est valable sans limite de durée.'
-            : `Ce lien est valable pendant ${duration} jour${duration > 1 ? 's' : ''} à compter de la réception de cet email.`;
-        const linkBlock  = signedUrl
-            ? `Lien d'accès sécurisé :\n${signedUrl}`
-            : `Connectez-vous sur SystemesGED pour accéder au document partagé.`;
-
-        const subject = encodeURIComponent(`[SystemesGED] Partage de document : ${docName}`);
-        const body    = encodeURIComponent(
-`Bonjour,
-
-${senderName} vous a partagé le document suivant via la plateforme SystemesGED :
-
-  📄 Document : ${docName}
-  🔐 Niveau d'accès : ${permLabel}
-  ⏳ Validité : ${expiryText.replace('Ce lien est valable ', '')}
-
-${linkBlock}
-
-Pour accéder au document, cliquez sur le lien ci-dessus ou connectez-vous directement à votre espace SystemesGED.
-
-Si vous n'avez pas de compte, vous pouvez en créer un gratuitement sur la plateforme.
-
----
-Cet email a été généré automatiquement par SystemesGED.
-Plateforme de Gestion Électronique de Documents Cloud — Sécurisé SSL | Conforme RGPD
-
-Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.`
-        );
-
-        setTimeout(() => {
-            window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
-        }, 600);
+        showToast(`Document partagé avec ${email} !`, 'success');
 
         // Rafraîchir la liste des partages actifs
         loadActiveShares(currentShareDocId);
@@ -3000,10 +2955,6 @@ async function loadSentShares() {
         if (error) throw error;
         const shares = data || [];
 
-        // Mettre à jour le compteur de partages envoyés
-        const countEl = document.getElementById('sentSharesCount');
-        if (countEl) countEl.textContent = shares.length;
-
         if (shares.length === 0) {
             emptyState.classList.remove('hidden'); list.classList.add('hidden');
         } else {
@@ -3013,37 +2964,21 @@ async function loadSentShares() {
                 const expired   = s.expires_at && new Date(s.expires_at) < now;
                 const expLabel  = s.expires_at ? (expired ? 'Expiré' : 'Expire le ' + formatDate(s.expires_at)) : 'Illimité';
                 const permIcons = { view:'fa-eye', download:'fa-download', edit:'fa-edit' };
-                const permLabels = { view:'Lecture', download:'Téléchargement', edit:'Édition' };
-                const docName   = escapeHtml(s.documents?.name || 'Document supprimé');
-                const docId     = escapeHtml(s.document_id || '');
-                const shareEmail = escapeHtml(s.shared_with_email);
-                const permValue = escapeHtml(s.permission || 'view');
                 return `
-                    <div class="glass-card rounded-xl border ${expired ? 'border-red-500/20' : 'border-purple-500/20'}">
-                        <div class="flex items-center gap-4 p-4">
-                            <div class="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 border border-purple-400/20 flex-shrink-0">
-                                <i class="fas fa-user text-sm"></i>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-semibold text-white truncate">${shareEmail}</p>
-                                <p class="text-xs text-blue-300/60 truncate">${docName}</p>
-                                <div class="flex items-center gap-2 mt-0.5">
-                                    <span class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'}">${expLabel}</span>
-                                    <span class="text-xs text-purple-400/70">• <i class="fas ${permIcons[s.permission] || 'fa-eye'}"></i> ${permLabels[s.permission] || 'Lecture'}</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-1 flex-shrink-0">
-                                ${!expired ? `
-                                <button onclick="resendShareEmail('${shareEmail}', '${docName}', '${docId}', '${permValue}')"
-                                    class="flex items-center gap-1 px-2 py-1.5 text-xs bg-blue-500/15 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/25 transition-colors" title="Renvoyer par email">
-                                    <i class="fas fa-envelope text-xs"></i>
-                                    <span class="hidden sm:inline">Email</span>
-                                </button>` : ''}
-                                <button onclick="revokeShareFromList('${escapeHtml(s.id)}')" class="flex items-center gap-1 px-2 py-1.5 text-xs bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors" title="Révoquer ce partage">
-                                    <i class="fas fa-ban text-xs"></i>
-                                    <span class="hidden sm:inline">Révoquer</span>
-                                </button>
-                            </div>
+                    <div class="glass-card rounded-xl p-4 border ${expired ? 'border-red-500/20' : 'border-purple-500/20'} flex items-center gap-4">
+                        <div class="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 border border-purple-400/20 flex-shrink-0">
+                            <i class="fas fa-user text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold text-white truncate">${escapeHtml(s.shared_with_email)}</p>
+                            <p class="text-xs text-blue-300/60 truncate">${escapeHtml(s.documents?.name || 'Document supprimé')}</p>
+                            <p class="text-xs ${expired ? 'text-red-400' : 'text-blue-300/50'}">${expLabel}</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <i class="fas ${permIcons[s.permission] || 'fa-eye'} text-purple-400 text-sm"></i>
+                            <button onclick="revokeShareFromList('${escapeHtml(s.id)}')" class="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-500/10 transition-colors" title="Révoquer">
+                                <i class="fas fa-ban text-sm"></i>
+                            </button>
                         </div>
                     </div>`;
             }).join('');
@@ -3058,67 +2993,6 @@ async function revokeShareFromList(shareId) {
         showToast('Partage révoqué', 'success');
         loadSentShares();
     } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
-}
-
-// ─── RENVOYER EMAIL DE PARTAGE ────────────────────────────────────────────────
-async function resendShareEmail(email, docName, docId, permission) {
-    showToast('Génération du lien sécurisé...', 'info');
-
-    let signedUrl = null;
-    try {
-        // Récupérer le storage_path depuis les documents en mémoire ou Supabase
-        let storagePath = null;
-        const localDoc = currentDocuments.find(d => d.id === docId);
-        if (localDoc?.storage_path) {
-            storagePath = localDoc.storage_path;
-        } else if (docId) {
-            const { data: docData } = await supabaseClient
-                .from('documents').select('storage_path').eq('id', docId).single();
-            storagePath = docData?.storage_path || null;
-        }
-
-        if (storagePath) {
-            const { data: urlData } = await supabaseClient.storage
-                .from('documents').createSignedUrl(storagePath, 7 * 86400);
-            if (urlData?.signedUrl) signedUrl = urlData.signedUrl;
-        }
-    } catch (e) { console.warn('Impossible de régénérer le lien signé:', e); }
-
-    openShareEmail(email, docName, permission, signedUrl);
-}
-
-function openShareEmail(email, docName, permission, signedUrl) {
-    const senderName = currentUser?.user_metadata?.full_name || currentUser?.email || 'Un utilisateur SystemesGED';
-    const permLabels = { view: 'consultation (lecture seule)', download: 'consultation et téléchargement', edit: 'consultation et édition' };
-    const permLabel  = permLabels[permission] || 'consultation';
-    const linkBlock  = signedUrl
-        ? `Lien d'accès sécurisé :\n${signedUrl}`
-        : `Connectez-vous sur SystemesGED pour accéder au document partagé.`;
-
-    const subject = encodeURIComponent(`[SystemesGED] Partage de document : ${docName}`);
-    const body    = encodeURIComponent(
-`Bonjour,
-
-${senderName} vous a partagé le document suivant via la plateforme SystemesGED :
-
-  📄 Document : ${docName}
-  🔐 Niveau d'accès : ${permLabel}
-
-${linkBlock}
-
-Pour accéder au document, cliquez sur le lien ci-dessus ou connectez-vous directement à votre espace SystemesGED.
-
-Si vous n'avez pas de compte, vous pouvez en créer un gratuitement sur la plateforme.
-
----
-Cet email a été généré automatiquement par SystemesGED.
-Plateforme de Gestion Électronique de Documents Cloud — Sécurisé SSL | Conforme RGPD
-
-Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.`
-    );
-
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
-    showToast('Ouverture de votre messagerie...', 'success');
 }
 
 // ─── RECHERCHE & FILTRES ─────────────────────────────────────────────────────
