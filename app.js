@@ -13,10 +13,10 @@
   // ══════════════════════════════════════════════════════
   // LOGGER SÉCURISÉ (pas de logs en production)
   // ══════════════════════════════════════════════════════
-  const IS_DEV = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const IS_DEV = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || new URLSearchParams(window.location.search).get('debug') === '1';
   const log = {
     warn:  function (m) { if (IS_DEV) console.warn('[GED]', m); },
-    error: function (m) { if (IS_DEV) console.error('[GED]', m); },
+    error: function (m) { console.error('[GED]', m); },   // toujours visible pour diagnostiquer
     info:  function (m) { if (IS_DEV) console.log('[GED]', m); }
   };
 
@@ -322,6 +322,8 @@
     document.getElementById('mainApp').style.display = 'block';
     await _loadAllData();
     switchView('dashboard');
+    renderTeamDocs();
+    renderMyWorkflows();
     showToast('Bienvenue, '+(G.profile?.name||G.user.email.split('@')[0])+' !','success');
     _logActivity('login', null, 'Connexion : '+G.user.email);
     _startInactivityWatch();
@@ -381,52 +383,71 @@
   // ══════════════════════════════════════════════════════
   async function _loadDocuments() {
     try {
-      const SELECT_FIELDS = '*, document_tags(tags(id,name,color)), document_permissions(user_id,permission,users_profiles(name,email))';
+      // ── Champ de sélection simplifié : on évite la jointure imbriquée
+      //    users_profiles dans document_permissions (FK potentiellement absente)
+      const SEL = '*, document_tags(tags(id,name,color)), document_permissions(user_id,permission)';
 
       // 1. Docs de l'entreprise (filtrés par company_id)
-      let companyDocs = [];
+      var companyRows = [];
       if (G.profile?.company_id) {
-        const { data } = await SB.from('documents')
-          .select(SELECT_FIELDS)
+        var { data: cd, error: ce } = await SB.from('documents')
+          .select(SEL)
           .eq('is_deleted', false)
           .eq('company_id', G.profile.company_id)
           .order('created_at', { ascending: false });
-        companyDocs = data || [];
+        if (ce) {
+          log.error('loadDocuments company: ' + ce.message);
+          showToast('Erreur chargement documents entreprise : ' + ce.message, 'error');
+        } else {
+          companyRows = cd || [];
+        }
       }
 
-      // 2. Docs dont je suis propriétaire (sans company_id ou avec)
-      //    Récupère TOUS mes docs uploadés, même si company_id est NULL
-      const { data: myOwnDocs } = await SB.from('documents')
-        .select(SELECT_FIELDS)
+      // 2. Tous mes propres docs (owner_id = moi), qu'ils aient un company_id ou non
+      var { data: myRows, error: me } = await SB.from('documents')
+        .select(SEL)
         .eq('is_deleted', false)
         .eq('owner_id', G.user.id)
         .order('created_at', { ascending: false });
+      if (me) {
+        log.error('loadDocuments mine: ' + me.message);
+        showToast('Erreur chargement de vos documents : ' + me.message, 'error');
+        myRows = [];
+      }
 
       // 3. Docs partagés avec moi via document_permissions
-      const { data: permDocs } = await SB.from('document_permissions')
+      var { data: permDocs, error: pe } = await SB.from('document_permissions')
         .select('*, documents!inner(*, document_tags(tags(id,name,color)))')
         .eq('user_id', G.user.id)
         .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+      if (pe) {
+        log.error('loadDocuments shared: ' + pe.message);
+        permDocs = [];
+      }
 
-      // Fusionner companyDocs + myOwnDocs sans doublons → G.companyDocs
-      const allIds = new Set();
-      const merged = [];
-      companyDocs.forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
-      (myOwnDocs||[]).forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
+      // ── Fusionner companyRows + myRows sans doublons → G.companyDocs
+      var mergedIds = new Set();
+      var merged = [];
+      (companyRows).forEach(function(d){ if(!mergedIds.has(d.id)){ mergedIds.add(d.id); merged.push(d); } });
+      (myRows||[]).forEach(function(d){ if(!mergedIds.has(d.id)){ mergedIds.add(d.id); merged.push(d); } });
 
-      // Normaliser
-      G.companyDocs = merged.map(_normalizeDoc);
-      G.myDocs      = (myOwnDocs||[]).map(_normalizeDoc);
+      G.companyDocs  = merged.map(_normalizeDoc);
+      G.myDocs       = (myRows||[]).map(_normalizeDoc);
       G.sharedWithMe = (permDocs||[])
         .filter(function(p){ return p.documents; })
         .map(function(p){ return Object.assign(_normalizeDoc(p.documents), { myPermission: p.permission }); });
 
       // G.docs = union complète des docs visibles
-      const visibleIds = new Set();
+      var visibleIds = new Set();
       G.docs = [];
       G.companyDocs.forEach(function(d){ if(!visibleIds.has(d.id)){ visibleIds.add(d.id); G.docs.push(d); } });
       G.sharedWithMe.forEach(function(d){ if(!visibleIds.has(d.id)){ visibleIds.add(d.id); G.docs.push(d); } });
-    } catch (err) { log.error('loadDocuments: '+err.message); G.docs=[]; G.companyDocs=[]; }
+
+    } catch (err) {
+      log.error('loadDocuments: ' + err.message);
+      showToast('Erreur critique chargement documents : ' + err.message, 'error');
+      G.docs = []; G.companyDocs = []; G.myDocs = []; G.sharedWithMe = [];
+    }
   }
 
   function _normalizeDoc(d) {
@@ -446,7 +467,8 @@
         .order('created_at', { ascending: false });
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
       else q = q.or('created_by.eq.'+G.user.id+',assignee_id.eq.'+G.user.id);
-      const { data } = await q;
+      const { data, error: wfe } = await q;
+      if (wfe) { log.error('loadWorkflows: '+wfe.message); G.workflows=[]; return; }
       G.workflows = (data||[]).map(function(w){
         return {
           id:w.id, title:w.title, description:w.description, status:w.status,
@@ -465,7 +487,8 @@
     try {
       let q = SB.from('tags').select('*').order('name');
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
-      const { data } = await q;
+      const { data, error: te } = await q;
+      if (te) { log.error('loadTags: '+te.message); G.tags=[]; return; }
       G.tags = (data||[]).map(function(t){ return { id:t.id, name:t.name, color:t.color||'#3b82f6', count:0 }; });
     } catch (err) { log.error('loadTags: '+err.message); G.tags=[]; }
   }
@@ -475,7 +498,8 @@
       let q = SB.from('users_profiles').select('*').order('name');
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
       else q = q.eq('id', G.user.id);
-      const { data } = await q;
+      const { data, error: ue } = await q;
+      if (ue) { log.error('loadUsers: '+ue.message); G.users=[]; return; }
       G.users = (data||[]).map(function(u){
         return { id:u.id, name:u.name||u.email||'Utilisateur', email:u.email||'', role:u.role||'viewer', active:u.active!==false, lastLogin:u.last_login, docs:0 };
       });
@@ -484,9 +508,10 @@
 
   async function _loadNotifications() {
     try {
-      const { data } = await SB.from('notifications')
+      const { data, error: ne } = await SB.from('notifications')
         .select('*').eq('user_id', G.user.id)
         .order('created_at', { ascending: false }).limit(30);
+      if (ne) { log.error('loadNotifications: '+ne.message); return; }
       G.notifications = (data||[]).map(function(n){
         return { id:n.id, type:n.type, title:n.title, msg:n.message, read:n.read, at:n.created_at, category:n.category };
       });
@@ -496,14 +521,19 @@
 
   async function _loadAuditLogs() {
     try {
-      let q = SB.from('activity_logs').select('id, user_id, document_id, description, action, created_at, company_id, users_profiles(name)')
+      // On évite la jointure users_profiles (FK potentiellement absente)
+      let q = SB.from('activity_logs')
+        .select('id, user_id, document_id, description, action, created_at, company_id')
         .order('created_at', { ascending: false }).limit(100);
       if (['admin','manager'].includes(G.profile?.role) && G.profile?.company_id)
         q = q.eq('company_id', G.profile.company_id);
       else q = q.eq('user_id', G.user.id);
-      const { data } = await q;
+      const { data, error: ale } = await q;
+      if (ale) { log.error('loadAuditLogs: '+ale.message); G.auditLogs=[]; return; }
+      // Résoudre le nom de l'utilisateur depuis G.users si disponible
       G.auditLogs = (data||[]).map(function(l){
-        return { id:l.id, action:l.action, description:l.description, user:l.users_profiles?.name||'Système', docId:l.document_id, createdAt:l.created_at };
+        var u = G.users.find(function(x){ return x.id === l.user_id; });
+        return { id:l.id, action:l.action, description:l.description, user:u?.name||'Système', docId:l.document_id, createdAt:l.created_at };
       });
     } catch (err) { log.error('loadAuditLogs: '+err.message); G.auditLogs=[]; }
   }
@@ -535,7 +565,7 @@
         }, async function(payload) {
           await _loadDocuments();
           if (G.currentView === 'documents') renderDocuments();
-          if (G.currentView === 'dashboard') { updateStats(); renderActivityList(); }
+          if (G.currentView === 'dashboard') { updateStats(); renderActivityList(); renderTeamDocs(); }
         })
         .subscribe();
       G.realtimeChannels.push(docChannel);
@@ -548,6 +578,7 @@
         }, async function() {
           await _loadWorkflows();
           if (G.currentView === 'workflows') renderWorkflows();
+          if (G.currentView === 'dashboard') renderMyWorkflows();
           updateStats();
         })
         .subscribe();
@@ -574,7 +605,7 @@
       b.classList.toggle('text-blue-400/60', b.dataset.bnav!==v);
     });
     // ── Vues core v5 ──────────────────────────────────────────
-    if (v==='dashboard')  { renderActivityList(); updateStats(); updateQuickAccess(); renderPopularTags(); }
+    if (v==='dashboard')  { renderActivityList(); updateStats(); updateQuickAccess(); renderPopularTags(); renderTeamDocs(); renderMyWorkflows(); }
     if (v==='documents')  renderDocuments();
     if (v==='workflows')  renderWorkflows();
     if (v==='shared')     renderSharedView();
@@ -597,6 +628,7 @@
     if (v==='auditv6'     && typeof window.renderAuditV6    ==='function') window.renderAuditV6();
     // ── Vues v7 (app_v7.js) ───────────────────────────────────
     if (v==='signatures'  && typeof window.renderSignaturesView  ==='function') window.renderSignaturesView();
+    if (v==='search-adv') { /* Recherche avancée v5 — panel view-search-adv */ }
     if (v==='search'      && typeof window.initSearchView        ==='function') window.initSearchView();
     if (v==='ai'          && typeof window.renderAIView          ==='function') window.renderAIView();
     if (v==='automation'  && typeof window.renderAutomationView  ==='function') window.renderAutomationView();
@@ -648,6 +680,42 @@
     set$('quickPdfCount', pdfC+' fichier(s)');
     set$('quickDocCount', docC+' fichier(s)');
   }
+  function renderTeamDocs() {
+    var el = document.getElementById('teamDocsList'); if (!el) return;
+    var recent = G.companyDocs.slice(0, 5);
+    if (!recent.length) {
+      el.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucun document dans l\'entreprise</p>';
+      return;
+    }
+    el.innerHTML = recent.map(function(d) {
+      var fi = getFileIcon(d.name || '');
+      return '<div class="flex items-center gap-3 p-2 rounded-xl hover:bg-cyan-500/5 cursor-pointer transition-all" onclick="openDocumentPreview(\'' + d.id + '\')">' +
+        '<div class="w-9 h-9 ' + fi.bg + ' rounded-lg flex items-center justify-center ' + fi.color + ' border ' + fi.border + ' flex-shrink-0"><i class="fas ' + fi.icon + ' text-sm"></i></div>' +
+        '<div class="flex-1 min-w-0"><p class="text-white text-xs font-semibold truncate">' + esc(d.name) + '</p>' +
+        '<p class="text-blue-400/50 text-xs">' + formatFileSize(d.file_size || 0) + ' · ' + fmtDate(d.created_at) + '</p></div>' +
+        '<button onclick="event.stopPropagation();downloadDocument(\'' + d.id + '\')" class="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded-lg flex-shrink-0"><i class="fas fa-download text-xs"></i></button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderMyWorkflows() {
+    var el = document.getElementById('myWorkflowsList'); if (!el) return;
+    var mine = G.workflows.filter(function(w) { return w.status === 'pending' && (w.assigneeId === G.user?.id || w.createdBy === G.profile?.name); }).slice(0, 4);
+    if (!mine.length) {
+      el.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucun workflow assigné</p>';
+      return;
+    }
+    var prioCfg = { low: 'text-blue-400', medium: 'text-yellow-400', high: 'text-orange-400', urgent: 'text-red-400' };
+    el.innerHTML = mine.map(function(w) {
+      return '<div class="flex items-center gap-3 p-2 rounded-xl hover:bg-orange-500/5 transition-all cursor-pointer" onclick="switchView(\'workflows\')">' +
+        '<div class="w-9 h-9 bg-orange-500/20 rounded-lg flex items-center justify-center text-orange-400 flex-shrink-0"><i class="fas fa-project-diagram text-sm"></i></div>' +
+        '<div class="flex-1 min-w-0"><p class="text-white text-xs font-semibold truncate">' + esc(w.title) + '</p>' +
+        '<p class="' + (prioCfg[w.priority] || 'text-blue-400') + ' text-xs"><i class="fas fa-flag mr-1"></i>' + esc(w.priority) + '</p></div>' +
+        '<span class="px-2 py-0.5 bg-orange-500/15 text-orange-400 text-[10px] rounded-full border border-orange-500/20 flex-shrink-0">En attente</span>' +
+        '</div>';
+    }).join('');
+  }
+
   function renderPopularTags() {
     const counts = {};
     G.docs.forEach(function(d){ (d.tags||[]).forEach(function(t){ counts[t]=(counts[t]||0)+1; }); });
@@ -1872,6 +1940,8 @@
   // EXPOSE — toutes les fonctions appelées depuis le HTML
   // ══════════════════════════════════════════════════════
   const _pub = {
+    // Dashboard
+    renderTeamDocs, renderMyWorkflows,
     // Auth
     switchAuthTab, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout,
     // Navigation
