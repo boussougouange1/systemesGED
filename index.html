@@ -520,8 +520,11 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         <div id="docsTab-company" class="docs-tab active" onclick="switchDocsTab('company')">
           <i class="fas fa-building mr-1.5"></i>Entreprise
         </div>
+        <div id="docsTab-personal" class="docs-tab" onclick="switchDocsTab('personal')">
+          <i class="fas fa-user mr-1.5"></i>Personnel
+        </div>
         <div id="docsTab-mine" class="docs-tab" onclick="switchDocsTab('mine')">
-          <i class="fas fa-user mr-1.5"></i>Mes documents
+          <i class="fas fa-folder mr-1.5"></i>Mes documents
         </div>
         <div id="docsTab-shared" class="docs-tab" onclick="switchDocsTab('shared')">
           <i class="fas fa-share-alt mr-1.5"></i>Partagés avec moi
@@ -832,10 +835,32 @@ create table if not exists workflows (
         <!-- Audit Log -->
         <div class="glass-card rounded-2xl border border-purple-500/20 p-6">
           <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i class="fas fa-clipboard-list text-purple-400"></i>Journal d'audit</h3>
-          <div class="flex gap-2 mb-4">
-            <select id="auditFilter" onchange="renderAuditLog()" class="flex-1 bg-slate-900/50 border border-blue-500/30 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none"><option value="">Toutes les actions</option><option value="login">Connexions</option><option value="upload">Uploads</option><option value="share">Partages</option><option value="delete">Suppressions</option></select>
+          <div class="flex gap-2 mb-3">
+            <select id="auditFilter" onchange="renderAuditLog()" class="flex-1 bg-slate-900/50 border border-blue-500/30 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none">
+              <option value="">Toutes les actions</option>
+              <option value="login">Connexions</option>
+              <option value="upload">Uploads</option>
+              <option value="share">Partages</option>
+              <option value="delete">Suppressions</option>
+              <option value="restore">Restaurations</option>
+            </select>
+            <button onclick="switchSecurityTab('audit')" id="secTab-audit" class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/20 font-medium">Journal</button>
+            <button onclick="switchSecurityTab('trash')" id="secTab-trash" class="px-3 py-1.5 text-xs rounded-lg text-gray-400 border border-blue-500/10 font-medium hover:border-blue-500/30 flex items-center gap-1"><i class="fas fa-trash text-red-400"></i>Corbeille<span id="trashCount" class="ml-1 px-1.5 bg-red-500/20 text-red-300 rounded-full hidden">0</span></button>
           </div>
-          <div id="auditLogList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+          <!-- Journal tab -->
+          <div id="secPanel-audit">
+            <div id="auditLogList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+          </div>
+          <!-- Trash tab -->
+          <div id="secPanel-trash" class="hidden">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-blue-300/60 text-xs">Documents supprimés — restauration possible par Admin/Manager</p>
+              <button onclick="loadDeletedDocs()" class="text-xs text-blue-400 hover:text-blue-300"><i class="fas fa-sync-alt mr-1"></i>Actualiser</button>
+            </div>
+            <div id="trashList" class="space-y-2 max-h-64 overflow-y-auto">
+              <div class="text-center py-6 text-blue-300/40 text-sm"><i class="fas fa-trash text-2xl mb-2 block opacity-20"></i>Chargement…</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
