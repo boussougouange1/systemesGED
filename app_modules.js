@@ -6,8 +6,16 @@
   'use strict';
 
   // ── Attendre que app.js soit prêt (G, SB, showToast disponibles) ──
+  // Attend que app.js ait exposé G, SB, showToast ET chargé les premiers documents
   function _ready(fn) {
-    if (typeof window.G !== 'undefined' && typeof window.SB !== 'undefined' && typeof window.showToast === 'function') {
+    var G   = window.G;
+    var SB  = window.SB;
+    var ok  = typeof G !== 'undefined'
+           && typeof SB !== 'undefined'
+           && typeof window.showToast === 'function'
+           && typeof window.getFileIcon === 'function'
+           && typeof window.formatFileSize === 'function';
+    if (ok) {
       fn();
     } else {
       setTimeout(function () { _ready(fn); }, 80);
@@ -36,28 +44,30 @@
 
     async function loadAnalytics() {
       set$('analyticsLoading', 'Chargement des données…');
-      try {
-        var docs  = G.docs  || [];
-        var logs  = G.auditLogs || [];
-        var wfs   = G.workflows || [];
-        var users = G.users || [];
+      // Toujours utiliser G.docs (source de vérité) — fallback garanti
+      var docs  = G.docs        || [];
+      var logs  = G.auditLogs   || [];
+      var wfs   = G.workflows   || [];
+      var users = G.users       || [];
 
-        // Try to load fresh logs from DB
-        if (G.profile?.company_id) {
+      try {
+        // Enrichir avec les logs DB si possible (non bloquant)
+        if (G.profile?.company_id && typeof SB !== 'undefined') {
           var since = new Date(Date.now() - 14*86400000).toISOString();
-          var { data } = await SB.from('activity_logs')
+          var { data: freshLogs } = await SB
+            .from('activity_logs')
             .select('action,created_at,user_id,document_id')
             .eq('company_id', G.profile.company_id)
             .gte('created_at', since)
             .order('created_at');
-          if (data && data.length) logs = data;
+          if (freshLogs && freshLogs.length > 0) logs = freshLogs;
         }
-
-        _renderAnalytics({ docs, logs, wfs, users });
       } catch (err) {
-        // Fallback: render with local data anyway
-        _renderAnalytics({ docs: G.docs||[], logs: G.auditLogs||[], wfs: G.workflows||[], users: G.users||[] });
+        console.warn('[GED:analytics] DB fetch failed, using local data:', err.message);
       }
+
+      // Rendu avec les données disponibles (jamais bloqué)
+      _renderAnalytics({ docs, logs, wfs, users });
       set$('analyticsLoading', '');
     }
 
@@ -131,46 +141,45 @@
         )
       );
 
-      // Top documents
+      // ── Top documents (indépendant — pas de return prématuré) ──────────────
       var docAct = {};
-      logs.forEach(function(l){if(l.document_id)docAct[l.document_id]=(docAct[l.document_id]||0)+1;});
-      var topDocs = docs.map(function(d){return{doc:d,count:docAct[d.id]||0};})
-                        .sort(function(a,b){return b.count-a.count;}).slice(0,6);
-      var maxDA = Math.max(1, topDocs[0]?topDocs[0].count:1);
+      logs.forEach(function(l){ if(l.document_id) docAct[l.document_id] = (docAct[l.document_id]||0)+1; });
+      // Même si docs est vide, afficher un message — NE PAS faire de return ici
+      var topDocs = docs.map(function(d){ return { doc:d, count:docAct[d.id]||0 }; })
+                        .sort(function(a,b){ return b.count - a.count; }).slice(0,6);
+      var maxDA = Math.max(1, topDocs.length > 0 ? topDocs[0].count : 1);
       html$('analyticsTopDocs',
-        (!topDocs.length
-          ? '<p class="text-blue-300/40 text-xs text-center py-6">Aucun document</p>'
+        (topDocs.length === 0)
+          ? '<p class="text-blue-300/40 text-xs text-center py-6">Aucun document à afficher</p>'
           : topDocs.map(function(item){
-            var fi=getFileIcon(item.doc.name||'');
-            var pct=Math.round(item.count/maxDA*100);
-            return '<div class="flex items-center gap-3 py-2 border-b border-blue-500/8 last:border-0">'
-              +'<div class="w-8 h-8 '+fi.bg+' rounded-lg flex items-center justify-center '+fi.color+' flex-shrink-0"><i class="fas '+fi.icon+' text-xs"></i></div>'
-              +'<div class="flex-1 min-w-0"><p class="text-white text-xs truncate">'+esc(item.doc.name)+'</p>'
-              +'<div class="h-1 bg-slate-800/50 rounded mt-1"><div class="h-1 rounded bg-gradient-to-r from-blue-500 to-cyan-400" style="width:'+pct+'%"></div></div></div>'
-              +'<span class="text-blue-300/40 text-[10px]">'+item.count+'</span></div>';
-          }).join('')
-        )
+              var fi = getFileIcon(item.doc.name||'');
+              var pct = Math.round(item.count / maxDA * 100);
+              return '<div class="flex items-center gap-3 py-2 border-b border-blue-500/8 last:border-0">'
+                +'<div class="w-8 h-8 '+fi.bg+' rounded-lg flex items-center justify-center '+fi.color+' flex-shrink-0"><i class="fas '+fi.icon+' text-xs"></i></div>'
+                +'<div class="flex-1 min-w-0"><p class="text-white text-xs truncate">'+esc(item.doc.name)+'</p>'
+                +'<div class="h-1 bg-slate-800/50 rounded mt-1"><div class="h-1 rounded bg-gradient-to-r from-blue-500 to-cyan-400" style="width:'+pct+'%"></div></div></div>'
+                +'<span class="text-blue-300/40 text-[10px]">'+item.count+'</span></div>';
+            }).join('')
       );
 
-      // Top users
-      var userAct={};
-      logs.forEach(function(l){if(l.user_id)userAct[l.user_id]=(userAct[l.user_id]||0)+1;});
-      var topUsers=users.map(function(u){return{user:u,count:userAct[u.id]||0};})
-                        .sort(function(a,b){return b.count-a.count;}).slice(0,6);
-      var maxUA=Math.max(1,topUsers[0]?topUsers[0].count:1);
+      // ── Top utilisateurs (section indépendante — pas de return) ───────────
+      var userAct = {};
+      logs.forEach(function(l){ if(l.user_id) userAct[l.user_id] = (userAct[l.user_id]||0)+1; });
+      var topUsers = users.map(function(u){ return { user:u, count:userAct[u.id]||0 }; })
+                          .sort(function(a,b){ return b.count - a.count; }).slice(0,6);
+      var maxUA = Math.max(1, topUsers.length > 0 ? topUsers[0].count : 1);
       html$('analyticsTopUsers',
-        (!topUsers.length
+        (topUsers.length === 0)
           ? '<p class="text-blue-300/40 text-xs text-center py-6">Aucun utilisateur</p>'
-          : topUsers.map(function(item,i){
-            var pct=Math.round(item.count/maxUA*100);
-            var medal=['🥇','🥈','🥉'][i]||'';
-            return '<div class="flex items-center gap-3 py-2 border-b border-blue-500/8 last:border-0">'
-              +'<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">'+esc(avatarInitials(item.user.name))+'</div>'
-              +'<div class="flex-1 min-w-0"><p class="text-white text-xs truncate">'+medal+' '+esc(item.user.name)+'</p>'
-              +'<div class="h-1 bg-slate-800/50 rounded mt-1"><div class="h-1 rounded bg-gradient-to-r from-purple-500 to-pink-400" style="width:'+pct+'%"></div></div></div>'
-              +'<span class="text-blue-300/40 text-[10px]">'+item.count+'</span></div>';
-          }).join('')
-        )
+          : topUsers.map(function(item, i){
+              var pct   = Math.round(item.count / maxUA * 100);
+              var medal = ['🥇','🥈','🥉'][i] || '';
+              return '<div class="flex items-center gap-3 py-2 border-b border-blue-500/8 last:border-0">'
+                +'<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">'+esc(avatarInitials(item.user.name))+'</div>'
+                +'<div class="flex-1 min-w-0"><p class="text-white text-xs truncate">'+medal+' '+esc(item.user.name)+'</p>'
+                +'<div class="h-1 bg-slate-800/50 rounded mt-1"><div class="h-1 rounded bg-gradient-to-r from-purple-500 to-pink-400" style="width:'+pct+'%"></div></div></div>'
+                +'<span class="text-blue-300/40 text-[10px]">'+item.count+'</span></div>';
+            }).join('')
       );
 
       set$('dashTotalViews', downloads14);
@@ -203,7 +212,8 @@
       set$('ftsCount','');
 
       try {
-        var results = G.docs.slice();
+        // Partir de G.docs (source de vérité — toujours à jour)
+        var results = (G.docs || []).slice();
 
         // Filter by query
         if (q.length >= 2) {
@@ -272,19 +282,21 @@
     if (!G.aiAnalyses) G.aiAnalyses = {};
 
     function renderAIView() {
-      if (!G.docs.length) {
+      // Toujours utiliser G.docs (source de vérité synchronisée par app.js)
+      var docs = G.docs || [];
+      if (!docs.length) {
         html$('aiDocsList','<div class="text-center py-12 text-blue-300/50"><i class="fas fa-brain text-4xl mb-3 block opacity-20"></i><p>Importez des documents pour les analyser</p></div>');
         return;
       }
-      var analyzed = G.docs.filter(function(d){return G.aiAnalyses[d.id];}).length;
+      var analyzed = docs.filter(function(d){return G.aiAnalyses[d.id];}).length;
       html$('aiDocsList',
         '<div class="flex items-center justify-between mb-3 p-3 glass-card rounded-xl border border-pink-500/15">'
-          +'<div><p class="text-white font-semibold text-sm">'+analyzed+' / '+G.docs.length+' documents analysés</p>'
-          +'<div class="h-1.5 bg-slate-800/50 rounded-full mt-1 w-48"><div class="h-1.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-400" style="width:'+Math.round(analyzed/Math.max(1,G.docs.length)*100)+'%"></div></div></div>'
+          +'<div><p class="text-white font-semibold text-sm">'+analyzed+' / '+docs.length+' documents analysés</p>'
+          +'<div class="h-1.5 bg-slate-800/50 rounded-full mt-1 w-48"><div class="h-1.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-400" style="width:'+Math.round(analyzed/Math.max(1,docs.length)*100)+'%"></div></div></div>'
           +'<button onclick="analyzeAllDocuments()" class="btn-primary px-4 py-2 rounded-xl text-white text-xs font-semibold"><i class="fas fa-robot mr-1"></i>Analyser tous</button>'
         +'</div>'
         +'<div class="space-y-3">'
-        +G.docs.slice(0,30).map(function(d){
+        +docs.slice(0,30).map(function(d){
           var a=G.aiAnalyses[d.id];
           var fi=getFileIcon(d.name||'');
           return '<div class="glass-card rounded-xl p-4 flex items-start gap-3 border '+(a?'border-blue-500/20':'border-blue-500/8')+'">'
