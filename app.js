@@ -42,6 +42,10 @@
     sharedWithMe:  [],     // document_permissions où user_id = moi
     users:         [],     // membres de l'entreprise
     workflows:     [],
+    wfView:        'kanban',   // 'kanban' | 'list'
+    wfSearchTerm:  '',
+    activeWfId:    null,       // workflow ouvert dans le détail
+    wfSteps:       [],         // étapes en cours de création
     tags:          [],
     notifications: [],
     auditLogs:     [],
@@ -879,8 +883,10 @@
     var isAdmin  = ['admin','manager'].includes(role);
     var isOwner  = doc.owner_id === G.user?.id;
     var isCompanyDoc = !!doc.company_id;
-    // Doc entreprise → admin/manager uniquement
-    if (isCompanyDoc) return isAdmin;
+    // Admin/Manager → peuvent supprimer TOUT document (entreprise ou personnel)
+    if (isAdmin) return true;
+    // Doc entreprise → admin/manager seulement (déjà couvert ci-dessus)
+    if (isCompanyDoc) return false;
     // Doc personnel → propriétaire uniquement
     return isOwner;
   }
@@ -1708,113 +1714,510 @@
   // ══════════════════════════════════════════════════════
   // WORKFLOWS COLLABORATIFS
   // ══════════════════════════════════════════════════════
-  function renderWorkflows() {
-    const arr = G.wfFilter ? G.workflows.filter(function(w){return w.status===G.wfFilter;}) : G.workflows;
+  // ══════════════════════════════════════════════════════
+  // WORKFLOWS — Système complet multi-étapes
+  // ══════════════════════════════════════════════════════
+
+  var WF_STATUS = {
+    pending:        { label:'En attente',  color:'text-orange-400',  bg:'bg-orange-400/15',  border:'border-orange-400/25',  dot:'bg-orange-400'  },
+    in_review:      { label:'En révision', color:'text-blue-400',    bg:'bg-blue-400/15',    border:'border-blue-400/25',    dot:'bg-blue-400'    },
+    approved:       { label:'Approuvé',    color:'text-green-400',   bg:'bg-green-400/15',   border:'border-green-400/25',   dot:'bg-green-400'   },
+    rejected:       { label:'Rejeté',      color:'text-red-400',     bg:'bg-red-400/15',     border:'border-red-400/25',     dot:'bg-red-400'     },
+    changes_needed: { label:'Révision dem.',color:'text-yellow-400', bg:'bg-yellow-400/15',  border:'border-yellow-400/25',  dot:'bg-yellow-400'  },
+    cancelled:      { label:'Annulé',      color:'text-gray-400',    bg:'bg-gray-400/15',    border:'border-gray-400/25',    dot:'bg-gray-400'    },
+  };
+  var WF_PRIO = {
+    low:    { label:'Basse',   color:'text-blue-400',   icon:'▼' },
+    medium: { label:'Moyenne', color:'text-yellow-400', icon:'●' },
+    high:   { label:'Haute',   color:'text-orange-400', icon:'▲' },
+    urgent: { label:'Urgente', color:'text-red-400',    icon:'⚡' },
+  };
+
+  // ── Kanban / List view toggle ──
+  function setWfView(view) {
+    G.wfView = view;
+    var kanban = document.getElementById('wfKanban');
+    var list   = document.getElementById('wfListView');
+    var btnK   = document.getElementById('wfViewKanban');
+    var btnL   = document.getElementById('wfViewList');
+    if (kanban) kanban.classList.toggle('hidden', view !== 'kanban');
+    if (list)   list.classList.toggle('hidden',   view !== 'list');
+    var activeC  = 'px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/20 font-medium flex items-center gap-1';
+    var inactiveC= 'px-3 py-1.5 text-xs rounded-lg text-gray-400 border border-blue-500/10 font-medium hover:border-blue-500/30 flex items-center gap-1';
+    if (btnK) btnK.className = view==='kanban' ? activeC : inactiveC;
+    if (btnL) btnL.className = view==='list'   ? activeC : inactiveC;
+    _renderWfContent();
+  }
+
+  function searchWorkflows(q) {
+    G.wfSearchTerm = (q||'').toLowerCase();
+    _renderWfContent();
+  }
+
+  function filterWorkflows(s) {
+    G.wfFilter = s;
     document.querySelectorAll('.wf-filter-btn').forEach(function(b){
-      const active = b.dataset.wf===G.wfFilter;
-      b.classList.toggle('bg-blue-500/20',active); b.classList.toggle('text-blue-300',active);
-      b.classList.toggle('border-blue-500/30',active); b.classList.toggle('text-gray-400',!active);
+      var active = b.dataset.wf === s;
+      b.className = 'wf-filter-btn px-3 py-1.5 rounded-full text-xs font-medium border ' +
+        (active ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'text-gray-400 border-blue-500/10 hover:border-blue-500/30');
     });
-    const el = document.getElementById('workflowsList');
-    if (!el) return;
-    if (!arr.length) { el.innerHTML='<div class="col-span-3 text-center py-16 text-blue-300/50"><i class="fas fa-project-diagram text-4xl mb-4 block opacity-20"></i><p>Aucun workflow</p></div>'; return; }
-    const statusCfg = { pending:{c:'text-orange-400 bg-orange-400/20',label:'En attente'}, approved:{c:'text-green-400 bg-green-400/20',label:'Approuvé'}, rejected:{c:'text-red-400 bg-red-400/20',label:'Rejeté'}, cancelled:{c:'text-gray-400 bg-gray-400/20',label:'Annulé'} };
-    const prioCfg   = { low:'text-blue-400', medium:'text-yellow-400', high:'text-orange-400', urgent:'text-red-400' };
-    el.innerHTML = arr.map(function(w){
-      const s = statusCfg[w.status]||statusCfg.pending;
-      const d = G.docs.find(function(x){return x.id===w.docId;});
-      const isAssignee  = w.assigneeId===G.user?.id;
-      const isCreator   = w.createdBy===G.profile?.name;
-      const canAct      = isAssignee||['admin','manager'].includes(G.profile?.role);
-      return '<div class="glass-card rounded-2xl border border-blue-500/20 p-5 flex flex-col gap-3 hover:border-blue-400/40 transition-all">'+
-        '<div class="flex items-start justify-between gap-2">'+
-          '<div><h4 class="text-white font-bold text-sm truncate">'+esc(w.title)+'</h4>'+
-          '<p class="text-blue-300/60 text-xs mt-0.5">'+esc(w.description||'')+'</p></div>'+
-          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 '+s.c+'">'+s.label+'</span>'+
+    _renderWfContent();
+  }
+
+  function _getFilteredWf() {
+    var arr = G.workflows.slice();
+    if (G.wfFilter) arr = arr.filter(function(w){ return w.status === G.wfFilter; });
+    if (G.wfSearchTerm) arr = arr.filter(function(w){
+      return (w.title||'').toLowerCase().includes(G.wfSearchTerm) ||
+             (w.description||'').toLowerCase().includes(G.wfSearchTerm) ||
+             (w.assigneeName||'').toLowerCase().includes(G.wfSearchTerm);
+    });
+    return arr;
+  }
+
+  function renderWorkflows() {
+    _updateWfKpi();
+    setWfView(G.wfView || 'kanban');
+  }
+
+  function _updateWfKpi() {
+    var strip = document.getElementById('wfKpiStrip'); if (!strip) return;
+    var total   = G.workflows.length;
+    var pending = G.workflows.filter(function(w){ return w.status==='pending'; }).length;
+    var review  = G.workflows.filter(function(w){ return w.status==='in_review'; }).length;
+    var done    = G.workflows.filter(function(w){ return ['approved','rejected','cancelled'].includes(w.status); }).length;
+    var myCount = G.workflows.filter(function(w){ return w.status==='pending'&&w.assigneeId===G.user?.id; }).length;
+    strip.innerHTML = [
+      ['fa-layer-group','text-blue-400','bg-blue-500/15','border-blue-500/20',  total,   'Total'],
+      ['fa-clock',      'text-orange-400','bg-orange-500/15','border-orange-500/20', pending, 'En attente'],
+      ['fa-eye',        'text-blue-400','bg-blue-500/15','border-blue-500/20',  review,  'En révision'],
+      ['fa-user-check', 'text-purple-400','bg-purple-500/15','border-purple-500/20', myCount, 'Mes tâches'],
+    ].map(function(k){
+      return '<div class="glass-card rounded-xl p-3 border '+k[3]+' '+k[2]+' flex items-center gap-3 cursor-pointer" onclick="filterWorkflows(\"\")">'
+        +'<div class="w-9 h-9 rounded-lg '+k[2]+' flex items-center justify-center '+k[1]+'"><i class="fas '+k[0]+'"></i></div>'
+        +'<div><p class="text-xl font-bold text-white">'+k[4]+'</p><p class="text-[10px] text-blue-300/60">'+k[5]+'</p></div></div>';
+    }).join('');
+    var cnt = document.getElementById('wfResultCount');
+    if (cnt) cnt.textContent = _getFilteredWf().length + ' workflow(s)';
+  }
+
+  function _renderWfContent() {
+    var arr = _getFilteredWf();
+    var cnt = document.getElementById('wfResultCount');
+    if (cnt) cnt.textContent = arr.length + ' workflow(s)';
+
+    if (G.wfView === 'kanban') {
+      _renderKanban(arr);
+    } else {
+      _renderWfList(arr);
+    }
+  }
+
+  function _renderKanban(arr) {
+    var el = document.getElementById('wfKanban'); if (!el) return;
+    var cols = [
+      { key: 'pending',        label: 'En attente',   color: 'border-orange-500/30',  hd: 'bg-orange-500/10' },
+      { key: 'in_review',      label: 'En révision',  color: 'border-blue-500/30',    hd: 'bg-blue-500/10' },
+      { key: 'changes_needed', label: 'Révision dem.',color: 'border-yellow-500/30',  hd: 'bg-yellow-500/10' },
+      { key: 'approved',       label: 'Approuvé',     color: 'border-green-500/30',   hd: 'bg-green-500/10' },
+      { key: 'rejected',       label: 'Rejeté',       color: 'border-red-500/30',     hd: 'bg-red-500/10' },
+    ];
+    el.innerHTML = cols.map(function(col) {
+      var colArr = arr.filter(function(w){ return w.status === col.key; });
+      var st = WF_STATUS[col.key] || WF_STATUS.pending;
+      return '<div class="flex flex-col gap-2">'
+        +'<div class="flex items-center justify-between px-2 py-1.5 rounded-lg '+col.hd+' border '+col.color+'">'
+        +'<span class="text-xs font-semibold text-white">'+col.label+'</span>'
+        +'<span class="text-xs text-blue-300/50 font-bold">'+colArr.length+'</span>'
+        +'</div>'
+        + (colArr.length ? colArr.map(function(w){ return _wfCard(w); }).join('') :
+          '<div class="border-2 border-dashed rounded-xl p-4 text-center text-blue-300/25 text-xs" style="border-color:rgba(96,165,250,0.1)">Aucun</div>')
+        +'</div>';
+    }).join('');
+  }
+
+  function _renderWfList(arr) {
+    var el = document.getElementById('wfListView'); if (!el) return;
+    if (!arr.length) {
+      el.innerHTML = '<div class="text-center py-16 text-blue-300/40"><i class="fas fa-project-diagram text-4xl mb-3 block opacity-20"></i><p>Aucun workflow</p></div>';
+      return;
+    }
+    el.innerHTML = '<div class="glass-card rounded-2xl border border-blue-500/20 overflow-hidden">'
+      + arr.map(function(w) {
+        var st = WF_STATUS[w.status] || WF_STATUS.pending;
+        var pr = WF_PRIO[w.priority] || WF_PRIO.medium;
+        var doc = G.docs.find(function(x){ return x.id===w.docId; });
+        var overdue = w.dueDate && new Date(w.dueDate) < new Date() && !['approved','rejected','cancelled'].includes(w.status);
+        return '<div class="flex items-center gap-4 px-5 py-3 hover:bg-blue-500/5 cursor-pointer transition-all border-b border-blue-500/10 group" onclick="openWfDetail(this.dataset.id)" data-id="'+w.id+'">'+
+          '<span class="w-2.5 h-2.5 rounded-full flex-shrink-0 '+st.dot+'"></span>'+
+          '<div class="flex-1 min-w-0">'+
+            '<p class="text-white text-sm font-semibold truncate">'+(overdue?'⚠ ':'')+esc(w.title)+'</p>'+
+            '<p class="text-blue-300/50 text-xs">'+(doc?esc(doc.name)+' · ':'')+esc(w.assigneeName||'Non assigné')+'</p>'+
+          '</div>'+
+          '<div class="flex items-center gap-2 flex-shrink-0">'+
+            '<span class="text-xs font-medium '+pr.color+'">'+pr.icon+' '+pr.label+'</span>'+
+            '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold '+st.bg+' '+st.color+' border '+st.border+'">'+st.label+'</span>'+
+            (w.dueDate?'<span class="text-[10px] '+(overdue?'text-red-400':'text-blue-300/40')+'">'+fmtDate(w.dueDate)+'</span>':'')+
+          '</div>'+
+        '</div>';
+      }).join('') + '</div>';
+  }
+
+  function _wfCard(w) {
+    var st  = WF_STATUS[w.status]  || WF_STATUS.pending;
+    var pr  = WF_PRIO[w.priority]  || WF_PRIO.medium;
+    var doc = G.docs.find(function(x){ return x.id===w.docId; });
+    var isAssignee = w.assigneeId === G.user?.id;
+    var overdue = w.dueDate && new Date(w.dueDate) < new Date() && !['approved','rejected','cancelled'].includes(w.status);
+    var steps = w.steps || [];
+    var doneSteps = steps.filter(function(s){ return ['approved','rejected'].includes(s.status); }).length;
+    var pct = steps.length ? Math.round(doneSteps/steps.length*100) : 0;
+
+    return '<div class="glass-card rounded-xl p-3 border '+st.border+' cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" onclick="openWfDetail(this.dataset.id)" data-id="'+w.id+'">'+
+      '<div class="flex items-start justify-between gap-1 mb-2">'+
+        '<p class="text-white text-xs font-semibold leading-tight truncate flex-1">'+(overdue?'<span class="text-red-400 mr-1">⚠</span>':'')+esc(w.title)+'</p>'+
+        '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full '+st.bg+' '+st.color+' flex-shrink-0">'+st.label+'</span>'+
+      '</div>'+
+      (doc?'<div class="flex items-center gap-1 mb-2 p-1.5 rounded-lg bg-blue-500/8 border border-blue-500/10"><i class="fas '+getFileIcon(doc.name).icon+' text-blue-400 text-[9px]"></i><p class="text-blue-300/70 text-[10px] truncate">'+esc(doc.name)+'</p></div>':'')+
+      (steps.length?'<div class="mb-2"><div class="flex items-center justify-between text-[10px] text-blue-300/50 mb-1"><span>'+doneSteps+'/'+steps.length+' étapes</span><span>'+pct+'%</span></div><div class="h-1 bg-slate-900/50 rounded-full overflow-hidden"><div class="h-1 rounded-full" style="width:'+pct+'%;background:linear-gradient(90deg,#f97316,#22c55e)"></div></div></div>':'')+
+      '<div class="flex items-center justify-between">'+
+        '<span class="text-[10px] '+pr.color+'">'+pr.icon+' '+pr.label+'</span>'+
+        '<div class="flex items-center gap-1">'+
+          (isAssignee?'<span class="text-[9px] px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded-full">Vous</span>':
+            (w.assigneeName&&w.assigneeName!=='Non assigné'?'<span class="text-[9px] text-blue-300/40">'+esc(w.assigneeName.split(' ')[0])+'</span>':''))+
+          (w.dueDate?'<span class="text-[9px] '+(overdue?'text-red-400':'text-blue-300/30')+'">'+fmtDate(w.dueDate)+'</span>':'')+
         '</div>'+
-        (d?'<div class="flex items-center gap-2 p-2 rounded-lg" style="background:rgba(59,130,246,0.08)"><i class="fas '+getFileIcon(d.name).icon+' text-blue-400 text-sm"></i><p class="text-white text-xs truncate">'+esc(d.name)+'</p></div>':'')+
-        '<div class="flex items-center justify-between text-xs text-blue-300/60">'+
-          '<span class="'+(prioCfg[w.priority]||'text-blue-400')+' font-medium"><i class="fas fa-flag mr-1"></i>'+w.priority+'</span>'+
-          
+      '</div>'+
+    '</div>';
+  }
+
+  // ── Workflow Detail Modal ──
+  function openWfDetail(id) {
+    G.activeWfId = id;
+    var w = G.workflows.find(function(x){ return x.id===id; }); if (!w) return;
+    var st = WF_STATUS[w.status] || WF_STATUS.pending;
+    var pr = WF_PRIO[w.priority] || WF_PRIO.medium;
+
+    set$('wfDetailTitle', w.title);
+
+    // Meta badges
+    var meta = document.getElementById('wfDetailMeta');
+    if (meta) meta.innerHTML =
+      '<span class="text-[10px] px-2 py-0.5 rounded-full font-bold '+st.bg+' '+st.color+' border '+st.border+'">'+st.label+'</span>'+
+      '<span class="text-[10px] '+pr.color+'">'+pr.icon+' '+pr.label+'</span>'+
+      (w.dueDate?'<span class="text-[10px] text-blue-300/40"><i class="fas fa-calendar mr-1"></i>'+fmtDate(w.dueDate)+'</span>':'')+
+      '<span class="text-[10px] text-blue-300/30">par '+esc(w.createdBy||'?')+'</span>';
+
+    // Progress
+    var steps = w.steps || [];
+    var doneSteps = steps.filter(function(s){ return ['approved','rejected'].includes(s.status); }).length;
+    var pct = steps.length ? Math.round(doneSteps/steps.length*100) : (w.status==='approved'?100:0);
+    set$('wfDetailProgress', pct+'%');
+    var bar = document.getElementById('wfDetailProgressBar');
+    if (bar) bar.style.width = pct+'%';
+
+    // Steps timeline
+    var stepsEl = document.getElementById('wfDetailSteps');
+    if (stepsEl) {
+      if (!steps.length) {
+        // Single-step workflow — show current status
+        stepsEl.innerHTML = _renderSingleStep(w);
+      } else {
+        stepsEl.innerHTML = steps.map(function(s, i) { return _renderStep(s, i, steps.length); }).join('');
+      }
+    }
+
+    // Linked doc
+    var docEl = document.getElementById('wfDetailDoc');
+    if (docEl) {
+      var doc = G.docs.find(function(x){ return x.id===w.docId; });
+      if (doc) {
+        var fi = getFileIcon(doc.name||'');
+        docEl.classList.remove('hidden');
+        docEl.innerHTML = '<div class="flex items-center gap-3"><div class="w-9 h-9 '+fi.bg+' rounded-lg flex items-center justify-center '+fi.color+' border '+fi.border+'"><i class="fas '+fi.icon+'"></i></div>'+
+          '<div class="flex-1 min-w-0"><p class="text-white text-xs font-semibold truncate">'+esc(doc.name)+'</p><p class="text-blue-300/50 text-[10px]">'+formatFileSize(doc.file_size||0)+'</p></div>'+
+          '<button onclick="openDocumentPreview(this.dataset.id)" data-id="'+doc.id+'" class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-[10px] hover:bg-blue-500/30">Ouvrir</button></div>';
+      } else {
+        docEl.classList.add('hidden');
+      }
+    }
+
+    // Action area — show only if user can act
+    var actionsEl = document.getElementById('wfDetailActions');
+    if (actionsEl) {
+      var canAct = (w.assigneeId===G.user?.id || ['admin','manager'].includes(G.profile?.role))
+        && ['pending','in_review','changes_needed'].includes(w.status);
+      actionsEl.classList.toggle('hidden', !canAct);
+    }
+
+    // History
+    _renderWfHistory(w);
+
+    document.getElementById('wfDetailModal')?.classList.remove('hidden');
+  }
+
+  function _renderSingleStep(w) {
+    var isAssignee = w.assigneeId === G.user?.id;
+    var assigneeName = w.assigneeName || 'Non assigné';
+    var st = WF_STATUS[w.status] || WF_STATUS.pending;
+    return '<div class="flex items-center gap-3 p-3 rounded-xl border '+st.border+' '+st.bg+'">'+
+      '<div class="w-8 h-8 rounded-full '+st.bg+' border '+st.border+' flex items-center justify-center text-sm '+st.color+'">'+
+        (w.status==='approved'?'<i class="fas fa-check"></i>':w.status==='rejected'?'<i class="fas fa-times"></i>':'<i class="fas fa-clock"></i>')+
+      '</div>'+
+      '<div class="flex-1 min-w-0">'+
+        '<p class="text-white text-xs font-semibold">'+esc(w.title)+'</p>'+
+        '<p class="text-blue-300/50 text-[10px]">Assigné à : '+esc(assigneeName)+(isAssignee?' (Vous)':'')+'</p>'+
+      '</div>'+
+      '<span class="text-xs font-bold '+st.color+'">'+st.label+'</span>'+
+    '</div>';
+  }
+
+  function _renderStep(s, i, total) {
+    var st = WF_STATUS[s.status] || WF_STATUS.pending;
+    var isLast = i === total - 1;
+    return '<div class="relative">'+
+      '<div class="flex items-start gap-3">'+
+        '<div class="flex flex-col items-center flex-shrink-0">'+
+          '<div class="w-7 h-7 rounded-full border-2 '+st.border+' '+st.bg+' flex items-center justify-center text-xs '+st.color+' font-bold">'+
+            (s.status==='approved'?'<i class="fas fa-check text-[9px]"></i>':s.status==='rejected'?'<i class="fas fa-times text-[9px]"></i>':'<span>'+(i+1)+'</span>')+
+          '</div>'+
+          (!isLast?'<div class="w-0.5 h-6 mt-1" style="background:rgba(96,165,250,0.15)"></div>':'')+
         '</div>'+
-        (w.assigneeName?'<div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-900/30 text-xs text-blue-300/70"><i class="fas fa-user-check text-blue-400"></i>Assigné à <span class="text-white font-medium">'+esc(w.assigneeName)+'</span>'+(isAssignee?'<span class="ml-auto px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded text-[10px]">Vous</span>':'')+'</div>':'')+
-        (canAct&&w.status==='pending'?'<div class="flex gap-2 pt-2 border-t border-blue-500/10">'+
-          '<button onclick="approveWorkflow(\''+w.id+'\')" class="flex-1 py-1.5 rounded-lg text-xs text-green-400 hover:bg-green-500/10 border border-green-500/20 font-medium"><i class="fas fa-check mr-1"></i>Approuver</button>'+
-          '<button onclick="rejectWorkflow(\''+w.id+'\')" class="flex-1 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 border border-red-500/20 font-medium"><i class="fas fa-times mr-1"></i>Rejeter</button>'+
-        '</div>':'')+
+        '<div class="flex-1 pb-3">'+
+          '<div class="flex items-center justify-between">'+
+            '<p class="text-white text-xs font-semibold">'+esc(s.title||'Étape '+(i+1))+'</p>'+
+            '<span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold '+st.bg+' '+st.color+' border '+st.border+'">'+st.label+'</span>'+
+          '</div>'+
+          '<p class="text-blue-300/50 text-[10px]">'+esc(s.assigneeName||s.assigneeEmail||'Non assigné')+'</p>'+
+          (s.comment?'<p class="text-blue-300/70 text-[10px] mt-1 italic bg-blue-500/5 px-2 py-1 rounded">💬 '+esc(s.comment)+'</p>':'')+
+          (s.completedAt?'<p class="text-blue-300/30 text-[10px]">'+fmtDate(s.completedAt)+'</p>':'')+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function _renderWfHistory(w) {
+    var el = document.getElementById('wfDetailHistory'); if (!el) return;
+    var history = w.history || [];
+    if (!history.length) {
+      el.innerHTML = '<p class="text-blue-300/30 text-xs text-center py-3">Aucun historique</p>';
+      return;
+    }
+    var ACT_ICONS = { approve:'fa-check-circle text-green-400', reject:'fa-times-circle text-red-400',
+      request_changes:'fa-redo text-yellow-400', comment:'fa-comment text-blue-400',
+      create:'fa-plus-circle text-purple-400', cancel:'fa-ban text-gray-400' };
+    el.innerHTML = history.slice().reverse().map(function(h) {
+      var ic = ACT_ICONS[h.action] || 'fa-circle text-blue-400';
+      return '<div class="flex items-start gap-2 py-1.5 border-b border-blue-500/8 last:border-0">'+
+        '<i class="fas '+ic+' text-xs mt-0.5 flex-shrink-0"></i>'+
+        '<div class="flex-1 min-w-0">'+
+          '<p class="text-white text-[11px] font-medium">'+esc(h.userName||'?')+'</p>'+
+          (h.comment?'<p class="text-blue-300/60 text-[10px] italic">"'+esc(h.comment)+'"</p>':'')+
+          '<p class="text-blue-300/30 text-[10px]">'+timeAgo(h.at)+'</p>'+
+        '</div>'+
       '</div>';
     }).join('');
   }
-  function filterWorkflows(s) { G.wfFilter=s; renderWorkflows(); }
 
-  async function approveWorkflow(id) {
-    try {
-      await SB.from('workflows').update({ status:'approved', completed_at: new Date().toISOString() }).eq('id',id);
-      const w = G.workflows.find(function(x){return x.id===id;}); if(w) w.status='approved';
-      _logActivity('workflow', null, 'Workflow approuvé : '+(G.workflows.find(function(x){return x.id===id;})?.title||id));
-      showToast('Workflow approuvé ✓','success');
-      renderWorkflows(); updateStats();
-    } catch (err) { showToast('Erreur : '+err.message,'error'); }
+  function closeWfDetail() {
+    document.getElementById('wfDetailModal')?.classList.add('hidden');
+    G.activeWfId = null;
   }
-  async function rejectWorkflow(id) {
+
+  // ── Act on workflow (approve / reject / request_changes) ──
+  async function actOnWorkflow(action) {
+    var id = G.activeWfId; if (!id) return;
+    var w = G.workflows.find(function(x){ return x.id===id; }); if (!w) return;
+    var comment = document.getElementById('wfDetailComment')?.value.trim() || '';
+
+    var newStatus = { approve:'approved', reject:'rejected', request_changes:'changes_needed' }[action];
+    if (!newStatus) return;
+
+    var actionLabels = { approve:'Approuver', reject:'Rejeter', request_changes:'Demander révision' };
+    if (!confirm(actionLabels[action]+' ce workflow ?')) return;
+
     try {
-      await SB.from('workflows').update({ status:'rejected', completed_at: new Date().toISOString() }).eq('id',id);
-      const w = G.workflows.find(function(x){return x.id===id;}); if(w) w.status='rejected';
-      _logActivity('workflow', null, 'Workflow rejeté : '+(G.workflows.find(function(x){return x.id===id;})?.title||id));
-      showToast('Workflow rejeté','warning');
+      var now = new Date().toISOString();
+      // Update workflow status
+      await SB.from('workflows').update({
+        status: newStatus,
+        completed_at: ['approved','rejected'].includes(newStatus) ? now : null
+      }).eq('id', id);
+
+      // Add to history
+      var histEntry = {
+        action: action, userName: G.profile?.name || G.user.email,
+        userId: G.user.id, comment: comment, at: now
+      };
+      w.history = w.history || [];
+      w.history.push(histEntry);
+      w.status = newStatus;
+
+      // Log + notification
+      var desc = {approve:'Approuvé', reject:'Rejeté', request_changes:'Révision demandée'}[action];
+      _logActivity('workflow', w.docId, desc+' workflow : '+w.title+(comment?' — "'+comment+'"':''));
+      addNotification(action==='approve'?'success':'warning', 'Workflow '+desc, w.title);
+      showToast('Workflow '+desc+' ✓', action==='approve'?'success':'warning');
+
+      // Notify creator if different from actor
+      if (w.createdBy !== G.profile?.name) {
+        var creator = G.users.find(function(u){ return u.name===w.createdBy; });
+        if (creator) {
+          await SB.from('notifications').insert({
+            user_id: creator.id, type: action==='approve'?'success':'warning',
+            title: 'Workflow '+desc, message: '"'+w.title+'" — par '+G.profile?.name,
+            read: false
+          }).catch(function(){});
+        }
+      }
+
+      document.getElementById('wfDetailComment').value = '';
+      _renderWfHistory(w);
       renderWorkflows(); updateStats();
-    } catch (err) { showToast('Erreur : '+err.message,'error'); }
+      // Re-render detail
+      openWfDetail(id);
+    } catch (err) { showToast('Erreur : '+err.message, 'error'); }
+  }
+
+  // ── Add comment to workflow ──
+  async function addWfComment() {
+    var id = G.activeWfId; if (!id) return;
+    var w = G.workflows.find(function(x){ return x.id===id; }); if (!w) return;
+    var comment = document.getElementById('wfCommentInput')?.value.trim();
+    if (!comment) return;
+
+    var entry = {
+      action: 'comment', userName: G.profile?.name || G.user.email,
+      userId: G.user.id, comment: comment, at: new Date().toISOString()
+    };
+    w.history = w.history || [];
+    w.history.push(entry);
+
+    // Persist in a workflow_comments table if it exists, else in meta
+    await SB.from('workflows').update({ meta: { history: w.history } }).eq('id', id).catch(function(){});
+    _logActivity('workflow', null, 'Commentaire sur "'+w.title+'": '+comment);
+
+    document.getElementById('wfCommentInput').value = '';
+    _renderWfHistory(w);
+    showToast('Commentaire ajouté', 'success');
+  }
+
+  // ── Create workflow modal ──
+  function addWfStep() {
+    G.wfSteps = G.wfSteps || [];
+    var idx = G.wfSteps.length;
+    G.wfSteps.push({ title: '', assigneeId: '' });
+    _renderWfSteps();
+  }
+
+  function removeWfStep(idx) {
+    G.wfSteps.splice(idx, 1);
+    _renderWfSteps();
+  }
+
+  function _renderWfSteps() {
+    var el = document.getElementById('wfStepsContainer'); if (!el) return;
+    if (!G.wfSteps.length) {
+      el.innerHTML = '<p class="text-blue-300/40 text-xs text-center py-2 border border-dashed rounded-lg" style="border-color:rgba(96,165,250,0.15)">Aucune étape — workflow à validation unique</p>';
+      return;
+    }
+    el.innerHTML = G.wfSteps.map(function(s, i) {
+      return '<div class="flex items-center gap-2 p-2 rounded-xl bg-slate-900/30 border border-blue-500/10">'+
+        '<span class="w-5 h-5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold flex items-center justify-center flex-shrink-0">'+(i+1)+'</span>'+
+        '<input onchange="G.wfSteps['+i+'].title=this.value" value="'+esc(s.title)+'" placeholder="Nom de l&#39;étape" '+
+          'class="flex-1 bg-transparent text-white text-xs outline-none placeholder-gray-600">'+
+        '<select onchange="G.wfSteps['+i+'].assigneeId=this.value" class="text-xs bg-slate-900/50 text-white rounded-lg px-2 py-1 outline-none border border-blue-500/10 max-w-32">'+
+          '<option value="">Assigné</option>'+
+          G.users.map(function(u){ return '<option value="'+esc(u.id)+'"'+(u.id===s.assigneeId?' selected':'')+'>'+esc(u.name.split(' ')[0])+'</option>'; }).join('')+
+        '</select>'+
+        '<button type="button" onclick="removeWfStep('+i+')" class="text-red-400/60 hover:text-red-400 p-1"><i class="fas fa-times text-[10px]"></i></button>'+
+      '</div>';
+    }).join('');
   }
 
   function openCreateWorkflowModal() {
-    ['wfTitle','wfDesc','wfApprovers'].forEach(function(id){ setVal$(id,''); });
+    G.wfSteps = [];
+    ['wfTitle','wfDesc'].forEach(function(id){ setVal$(id,''); });
     document.getElementById('workflowModal')?.classList.remove('hidden');
-    // Peupler le select d'assignee avec les membres de l'entreprise
-    const sel = document.getElementById('wfAssignee');
-    if (sel) {
-      sel.innerHTML = '<option value="">-- Non assigné --</option>'+
-        G.users.map(function(u){ return '<option value="'+esc(u.id)+'">'+esc(u.name)+' ('+esc(u.role)+')</option>'; }).join('');
-    }
-    // Peupler le select de document lié
-    const dsel = document.getElementById('wfDocId');
-    if (dsel) {
-      dsel.innerHTML = '<option value="">-- Aucun document --</option>'+
-        G.docs.map(function(d){ return '<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>'; }).join('');
-    }
+    // Peupler les selects
+    var sel = document.getElementById('wfAssignee');
+    if (sel) sel.innerHTML = '<option value="">-- Non assigné --</option>'+
+      G.users.map(function(u){ return '<option value="'+esc(u.id)+'">'+esc(u.name)+' ('+esc(u.role)+')</option>'; }).join('');
+    var dsel = document.getElementById('wfDocId');
+    if (dsel) dsel.innerHTML = '<option value="">-- Aucun document --</option>'+
+      G.docs.map(function(d){ return '<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>'; }).join('');
+    _renderWfSteps();
   }
-  function closeWorkflowModal() { document.getElementById('workflowModal')?.classList.add('hidden'); }
+
+  function closeWorkflowModal() { document.getElementById('workflowModal')?.classList.add('hidden'); G.wfSteps=[]; }
 
   async function createWorkflow(e) {
     e.preventDefault();
-    const title      = document.getElementById('wfTitle')?.value.trim();
-    const desc       = document.getElementById('wfDesc')?.value.trim();
-    const priority   = document.getElementById('wfPriority')?.value||'medium';
-    const dueDate    = document.getElementById('wfDueDate')?.value||null;
-    const assigneeId = document.getElementById('wfAssignee')?.value||null;
-    if (!title) { showToast('Titre requis','error'); return; }
+    var title      = document.getElementById('wfTitle')?.value.trim();
+    var desc       = document.getElementById('wfDesc')?.value.trim();
+    var priority   = document.getElementById('wfPriority')?.value || 'medium';
+    var dueDate    = document.getElementById('wfDueDate')?.value || null;
+    var assigneeId = document.getElementById('wfAssignee')?.value || null;
+    var docId      = document.getElementById('wfDocId')?.value || null;
+    if (!title) { showToast('Titre requis', 'error'); return; }
+
+    // Build steps array
+    var steps = (G.wfSteps||[]).filter(function(s){ return s.title.trim(); }).map(function(s, i){
+      var u = G.users.find(function(x){ return x.id===s.assigneeId; });
+      return {
+        idx: i, title: s.title.trim(), assigneeId: s.assigneeId||null,
+        assigneeName: u?u.name:'Non assigné', status: i===0?'pending':'waiting',
+        comment: '', completedAt: null
+      };
+    });
+    // First assignee = first step assignee if steps defined
+    if (steps.length && steps[0].assigneeId && !assigneeId) assigneeId = steps[0].assigneeId;
+
+    var histEntry = { action:'create', userName: G.profile?.name||G.user.email, userId:G.user.id, comment:'Workflow créé', at:new Date().toISOString() };
+
     try {
-      const docId = document.getElementById('wfDocId')?.value||null;
-      const payload = {
-        title, description: desc, priority, status: 'pending', created_by: G.user.id,
-        assignee_id: assigneeId||null,
+      var payload = {
+        title, description: desc, priority,
+        status: 'pending',
+        created_by: G.user.id, assignee_id: assigneeId||null,
         document_id: docId||null,
         company_id: G.profile?.company_id||null,
       };
-      const { data, error } = await SB.from('workflows').insert([payload]).select().single();
+      var { data, error } = await SB.from('workflows').insert([payload]).select().single();
       if (error) throw error;
-      G.workflows.unshift({
+
+      // Store steps + history in local state (and meta if supported)
+      var wfObj = {
         id:data.id, title:data.title, description:data.description, status:'pending',
         priority:data.priority, docId:data.document_id, assigneeId:data.assignee_id,
         assigneeName: G.users.find(function(u){return u.id===assigneeId;})?.name||'Non assigné',
-        createdBy: G.profile?.name||'', dueDate:data.due_date, createdAt:data.created_at,
-      });
-      _logActivity('workflow', null, 'Workflow créé : '+title);
+        createdBy: G.profile?.name||'', dueDate:dueDate, createdAt:data.created_at,
+        steps: steps, history: [histEntry],
+      };
+      G.workflows.unshift(wfObj);
+
+      // Notify assignee
+      if (assigneeId) {
+        await SB.from('notifications').insert({
+          user_id: assigneeId, type:'info',
+          title:'Nouveau workflow assigné',
+          message:'"'+title+'" — par '+G.profile?.name,
+          read: false
+        }).catch(function(){});
+      }
+
+      _logActivity('workflow', docId, 'Workflow créé : '+title+(steps.length?' ('+steps.length+' étapes)':''));
       addNotification('success','Workflow créé', title);
-      showToast('Workflow "'+title+'" créé ✓','success');
+      showToast('Workflow "'+title+'" lancé ✓', 'success');
       closeWorkflowModal();
       renderWorkflows(); updateStats();
-    } catch (err) { showToast('Erreur : '+err.message,'error'); }
+    } catch (err) { showToast('Erreur : '+err.message, 'error'); }
   }
+
+  // Legacy wrappers kept for backward compat
+  function approveWorkflow(id) { G.activeWfId=id; actOnWorkflow('approve'); }
+  function rejectWorkflow(id)  { G.activeWfId=id; actOnWorkflow('reject');  }
+
 
   // ══════════════════════════════════════════════════════
   // NOTIFICATIONS SUPABASE
@@ -2340,6 +2743,8 @@
     // Workflows
     renderWorkflows, filterWorkflows, approveWorkflow, rejectWorkflow,
     openCreateWorkflowModal, closeWorkflowModal, createWorkflow,
+    setWfView, searchWorkflows, openWfDetail, closeWfDetail, actOnWorkflow, addWfComment,
+    addWfStep, removeWfStep,
     // Recherche
     runAdvSearch, clearAdvSearch, handleGlobalSearch,
     // Versioning
