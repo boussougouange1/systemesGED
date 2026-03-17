@@ -1238,6 +1238,11 @@ create table if not exists workflows (
         </div>
         <div><label class="text-blue-200 text-xs font-medium block mb-1">Échéance</label><input id="wfDueDate" type="date" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div>
       </div>
+      <div><label class="text-blue-200 text-xs font-medium block mb-1">Document lié (optionnel)</label>
+        <select id="wfDocId" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="">-- Aucun document --</option>
+        </select>
+      </div>
       <div><label class="text-blue-200 text-xs font-medium block mb-1">Assigner à un membre</label>
         <select id="wfAssignee" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
           <option value="">-- Non assigné --</option>
