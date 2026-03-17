@@ -883,6 +883,7 @@
           '<button onclick="event.stopPropagation();downloadDocument(\''+doc.id+'\')" class="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg" title="Télécharger"><i class="fas fa-download"></i></button>'+
           '<button onclick="event.stopPropagation();openShareModal(\''+doc.id+'\')" class="p-2 text-purple-400 hover:bg-purple-500/10 rounded-lg" title="Partager"><i class="fas fa-share-alt"></i></button>'+
           '<button onclick="event.stopPropagation();openPermModal(\''+doc.id+'\')" class="p-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg" title="Collaborateurs"><i class="fas fa-users"></i></button>'+
+          (isOwner ? '<button onclick="event.stopPropagation();toggleDocScope(\''+doc.id+'\')" class="p-2 text-yellow-400 hover:bg-yellow-500/10 rounded-lg" title="'+(isCompany?'Rendre personnel':'Rendre entreprise')+'"><i class="fas '+(isCompany?'fa-user-slash':'fa-building')+'"></i></button>' : '')+
           (isOwner||['admin','manager'].includes(G.profile?.role) ? '<button onclick="event.stopPropagation();confirmDeleteDocument(\''+doc.id+'\')" class="p-2 text-red-400 hover:bg-red-500/10 rounded-lg" title="Supprimer"><i class="fas fa-trash"></i></button>' : '')+
         '</div>'+
       '</div>'+
@@ -950,6 +951,31 @@
   }
 
   function openUploadModal()  { document.getElementById('uploadModal')?.classList.remove('hidden'); document.body.style.overflow='hidden'; }
+  // Scope par défaut = Entreprise si l'utilisateur a un company_id, sinon Personnel
+  var _uploadScope = 'company';
+
+  function setDocScope(scope) {
+    _uploadScope = scope;
+    var cBtn = document.getElementById('scopeCompany');
+    var pBtn = document.getElementById('scopePersonal');
+    if (!cBtn || !pBtn) return;
+    if (scope === 'company') {
+      cBtn.className = 'scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-blue-500/40 bg-blue-500/15 text-blue-300 font-medium text-sm transition-all';
+      pBtn.className = 'scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-transparent bg-slate-800/40 text-gray-400 font-medium text-sm transition-all hover:border-purple-500/30';
+    } else {
+      pBtn.className = 'scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-purple-500/40 bg-purple-500/15 text-purple-300 font-medium text-sm transition-all';
+      cBtn.className = 'scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-transparent bg-slate-800/40 text-gray-400 font-medium text-sm transition-all hover:border-blue-500/30';
+    }
+  }
+
+  function openUploadModal() {
+    document.getElementById('uploadModal')?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    // Initialiser le scope selon le profil
+    _uploadScope = G.profile?.company_id ? 'company' : 'personal';
+    setDocScope(_uploadScope);
+  }
+
   function closeUploadModal() {
     document.getElementById('uploadModal')?.classList.add('hidden'); document.body.style.overflow='';
     G.selectedFiles=[]; G.uploadTags=[];
@@ -1025,11 +1051,14 @@
         if (storageErr) throw storageErr;
         const { data: urlData } = SB.storage.from('documents').getPublicUrl(storagePath);
         const fileHash = await _sha256(file);
+        // company_id selon le scope choisi par l'utilisateur
+        var scopedCompanyId = (_uploadScope === 'company' && G.profile?.company_id)
+          ? G.profile.company_id : null;
         const payload = {
           name: finalName, description: desc||'Document importé',
           file_url: urlData.publicUrl, file_size: file.size, file_type: file.type,
           storage_path: storagePath, owner_id: G.user.id,
-          company_id: G.profile?.company_id||null,
+          company_id: scopedCompanyId,
           version_number: 1,
         };
         if (fileHash) payload.sha256 = fileHash;
@@ -1119,6 +1148,28 @@
   function downloadCurrentDocument() { if (G.previewDocId) downloadDocument(G.previewDocId); }
   function shareCurrentDocument()    { if (G.previewDocId) { closePreviewModal(); openShareModal(G.previewDocId); } }
 
+  // ── Changer le statut entreprise/personnel d'un document existant ──
+  async function toggleDocScope(docId) {
+    const doc = G.docs.find(function(x){ return x.id === docId; });
+    if (!doc) return;
+    const isCompany = !!doc.company_id;
+    const newCompanyId = isCompany ? null : (G.profile?.company_id || null);
+    const label = isCompany ? 'Personnel (privé)' : 'Entreprise (partagé équipe)';
+    if (!confirm('Changer ce document en : ' + label + ' ?')) return;
+    try {
+      const { error } = await SB.from('documents')
+        .update({ company_id: newCompanyId })
+        .eq('id', docId);
+      if (error) throw error;
+      doc.company_id = newCompanyId;
+      showToast('Document déplacé : ' + label + ' ✓', 'success');
+      _logActivity('update', docId, 'Changement portée → ' + label + ' : ' + doc.name);
+      await _loadDocuments();
+      if (G.currentView === 'documents') renderDocuments();
+      renderTeamDocs();
+    } catch (err) { showToast('Erreur : ' + err.message, 'error'); }
+  }
+
   async function confirmDeleteDocument(id) {
     const d = G.docs.find(function(x){ return x.id===id; }); if (!d) return;
     if (!confirm('Supprimer "'+d.name+'" ? Cette action est irréversible.')) return;
@@ -1141,14 +1192,111 @@
   function openShareModal(id) {
     G.shareDocId = id;
     const d = G.docs.find(function(x){ return x.id===id; }); if (!d) return;
-    const fi = getFileIcon(d.name||'');
     const infoEl = document.getElementById('shareDocInfo');
-    if (infoEl) infoEl.innerHTML = '<div class="w-10 h-10 rounded-xl '+fi.bg+' '+fi.color+' border '+fi.border+' flex items-center justify-center flex-shrink-0"><i class="fas '+fi.icon+'"></i></div><div><p class="text-white font-semibold text-sm">'+esc(d.name)+'</p><p class="text-blue-400/60 text-xs">'+formatFileSize(d.file_size||0)+'</p></div>';
+    if (infoEl) infoEl.textContent = d.name + ' · ' + formatFileSize(d.file_size||0);
     const emailEl = document.getElementById('shareEmail'); if(emailEl) emailEl.value='';
+    const msgEl = document.getElementById('shareMessage'); if(msgEl) msgEl.value='';
     document.getElementById('generatedLink')?.classList.add('hidden');
+    switchShareTab('send');
     document.getElementById('shareModal')?.classList.remove('hidden');
   }
+
   function closeShareModal() { document.getElementById('shareModal')?.classList.add('hidden'); G.shareDocId=null; }
+
+  function switchShareTab(tab) {
+    ['send','history'].forEach(function(t) {
+      var btn   = document.getElementById('shareTab-'+t);
+      var panel = document.getElementById('sharePanel-'+t);
+      if (btn) btn.className = t===tab
+        ? 'px-4 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2'
+        : 'px-4 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px flex items-center gap-2 hover:text-blue-400';
+      if (panel) panel.classList.toggle('hidden', t !== tab);
+    });
+    if (tab === 'history') loadShareHistory();
+  }
+
+  async function loadShareHistory() {
+    if (!G.shareDocId) return;
+    var el = document.getElementById('shareHistoryList');
+    if (el) el.innerHTML = '<div class="text-center py-6 text-blue-300/40"><i class="fas fa-spinner fa-spin text-xl mb-2 block"></i><p class="text-xs">Chargement…</p></div>';
+    try {
+      var { data: perms } = await SB.from('document_permissions')
+        .select('id, user_id, permission, expires_at, created_at')
+        .eq('document_id', G.shareDocId)
+        .order('created_at', { ascending: false });
+      var { data: sharedDocs } = await SB.from('shared_documents')
+        .select('id, shared_with_email, permission, expires_at, created_at')
+        .eq('document_id', G.shareDocId)
+        .order('created_at', { ascending: false });
+      var rows = [];
+      var now = new Date();
+      (perms||[]).forEach(function(p) {
+        var u = G.users.find(function(x){ return x.id === p.user_id; });
+        var email = u ? u.email : (p.user_id||'?');
+        var name  = u ? u.name  : email;
+        rows.push({ id:p.id, table:'document_permissions', name:name, email:email,
+          permission:p.permission, expiresAt:p.expires_at, createdAt:p.created_at,
+          expired: !!(p.expires_at && new Date(p.expires_at)<now) });
+      });
+      (sharedDocs||[]).forEach(function(s) {
+        rows.push({ id:s.id, table:'shared_documents', name:s.shared_with_email, email:s.shared_with_email,
+          permission:s.permission, expiresAt:s.expires_at, createdAt:s.created_at,
+          expired: !!(s.expires_at && new Date(s.expires_at)<now) });
+      });
+      var countBadge = document.getElementById('shareHistoryCount');
+      if (countBadge) { countBadge.textContent = rows.length; countBadge.classList.toggle('hidden', rows.length===0); }
+      if (!el) return;
+      if (!rows.length) {
+        el.innerHTML = '<div class="text-center py-8 text-blue-300/40"><i class="fas fa-share-alt text-3xl mb-2 block opacity-20"></i><p class="text-sm">Aucun partage pour ce document</p></div>';
+        return;
+      }
+      var PERM_ICONS = { view:'fa-eye', download:'fa-download', edit:'fa-pen', viewer:'fa-eye', editor:'fa-pen' };
+      var PERM_CLR   = { view:'text-blue-400 bg-blue-500/15 border-blue-500/20', download:'text-green-400 bg-green-500/15 border-green-500/20', edit:'text-orange-400 bg-orange-500/15 border-orange-500/20', viewer:'text-blue-400 bg-blue-500/15 border-blue-500/20', editor:'text-orange-400 bg-orange-500/15 border-orange-500/20' };
+      el.innerHTML = rows.map(function(r) {
+        var expLabel = r.expiresAt
+          ? (r.expired
+            ? '<span class="text-red-400 text-[10px]"><i class="fas fa-times-circle mr-1"></i>Expiré le ' + fmtDate(r.expiresAt) + '</span>'
+            : '<span class="text-green-400 text-[10px]"><i class="fas fa-clock mr-1"></i>Expire ' + fmtDate(r.expiresAt) + '</span>')
+          : '<span class="text-blue-300/50 text-[10px]"><i class="fas fa-infinity mr-1"></i>Illimité</span>';
+        var permClr  = PERM_CLR[r.permission]  || 'text-blue-400 bg-blue-500/15 border-blue-500/20';
+        var permIcon = PERM_ICONS[r.permission] || 'fa-key';
+        return '<div class="flex items-center gap-3 p-3 rounded-xl group border '+(r.expired?'bg-red-500/5 border-red-500/15':'bg-slate-900/30 border-blue-500/10')+'">'+
+          '<div class="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-300 font-bold text-xs flex-shrink-0">'+esc(avatarInitials(r.name))+'</div>'+
+          '<div class="flex-1 min-w-0">'+
+            '<p class="text-white text-xs font-semibold truncate">'+esc(r.name)+'</p>'+
+            '<p class="text-blue-300/50 text-[10px] truncate">'+esc(r.email)+'</p>'+
+            '<div class="flex items-center gap-2 mt-1 flex-wrap">'+
+              '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border '+permClr+'"><i class="fas '+permIcon+'"></i>'+esc(PERM_LABELS[r.permission]||r.permission)+'</span>'+
+              expLabel+
+              '<span class="text-[10px] text-blue-300/30">· '+fmtDate(r.createdAt)+'</span>'+
+            '</div>'+
+          '</div>'+
+          (!r.expired
+            ? '<button onclick="revokeShareEntry(this)" data-id="'+r.id+'" data-table="'+r.table+'" class="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1.5 bg-red-500/15 text-red-400 rounded-lg text-[10px] hover:bg-red-500/25 font-medium flex-shrink-0 border border-red-500/20"><i class="fas fa-ban mr-1"></i>Révoquer</button>'
+            : '<span class="text-[10px] text-red-400/40 flex-shrink-0">Révoqué</span>')+
+        '</div>';
+      }).join('');
+    } catch (err) {
+      if (el) el.innerHTML = '<div class="text-center py-4 text-red-400/70 text-xs">Erreur : '+esc(err.message)+'</div>';
+    }
+  }
+
+  async function revokeShareEntry(btn) {
+    // Accept either a button element (data-id, data-table) or direct id/table args
+    var id    = (btn && btn.dataset) ? btn.dataset.id    : btn;
+    var table = (btn && btn.dataset) ? btn.dataset.table : arguments[1];
+    if (!id || !table) return;
+    if (!confirm('Révoquer ce partage immédiatement ?')) return;
+    try {
+      var { error } = await SB.from(table).delete().eq('id', id);
+      if (error) throw error;
+      G.sentShares = (G.sentShares||[]).filter(function(s){ return s.id !== id; });
+      showToast('Partage révoqué ✓', 'success');
+      loadShareHistory();
+      if (G.currentView === 'shared') renderSentShares();
+    } catch (err) { showToast('Erreur : ' + err.message, 'error'); }
+  }
+
 
   async function shareDocument() {
     const email = document.getElementById('shareEmail')?.value.trim();
@@ -2003,13 +2151,14 @@
     switchView, switchDocsTab,
     // Documents
     renderDocuments, applyFilters, clearFilters, filterByTag, filterByType, toggleViewMode,
-    downloadDocument, downloadCurrentDocument, shareCurrentDocument,
+    downloadDocument, downloadCurrentDocument, shareCurrentDocument, toggleDocScope,
     confirmDeleteDocument, openDocumentPreview, closePreviewModal,
     // Upload
-    openUploadModal, closeUploadModal, handleFileSelect, handleFilePickerSelect,
+    openUploadModal, closeUploadModal, setDocScope, handleFileSelect, handleFilePickerSelect,
     handleDocDrop, handleDrop, handleDragOver, handleDragLeave, addUploadTag, uploadDocument,
     // Partage
     openShareModal, closeShareModal, shareDocument, copyShareLink,
+    switchShareTab, loadShareHistory, revokeShareEntry,
     renderSharedView, switchSharedTab, revokeShare,
     // Permissions collaborateurs
     openPermModal, closePermModal, addCollaborator, removeCollaborator,
