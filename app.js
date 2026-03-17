@@ -555,6 +555,7 @@
       b.classList.toggle('text-blue-400', b.dataset.bnav===v);
       b.classList.toggle('text-blue-400/60', b.dataset.bnav!==v);
     });
+    // ── Vues core v5 ──────────────────────────────────────────
     if (v==='dashboard')  { renderActivityList(); updateStats(); updateQuickAccess(); renderPopularTags(); }
     if (v==='documents')  renderDocuments();
     if (v==='workflows')  renderWorkflows();
@@ -569,6 +570,21 @@
       setVal$('profileName', G.profile?.name||'');
       setVal$('profileEmail', G.user.email||'');
     }
+    // ── Vues v5.1 (app_collab.js) ─────────────────────────────
+    if (v==='analytics'   && typeof window.loadAnalytics    ==='function') window.loadAnalytics();
+    // ── Vues v6 (app_v6.js) ───────────────────────────────────
+    if (v==='folders'     && typeof window.renderFoldersView==='function') window.renderFoldersView();
+    if (v==='apikeys'     && typeof window.renderApiKeysView==='function') window.renderApiKeysView();
+    if (v==='billing2'    && typeof window.renderBillingV6  ==='function') window.renderBillingV6();
+    if (v==='auditv6'     && typeof window.renderAuditV6    ==='function') window.renderAuditV6();
+    // ── Vues v7 (app_v7.js) ───────────────────────────────────
+    if (v==='signatures'  && typeof window.renderSignaturesView  ==='function') window.renderSignaturesView();
+    if (v==='search'      && typeof window.initSearchView        ==='function') window.initSearchView();
+    if (v==='ai'          && typeof window.renderAIView          ==='function') window.renderAIView();
+    if (v==='automation'  && typeof window.renderAutomationView  ==='function') window.renderAutomationView();
+    if (v==='integrations'&& typeof window.renderIntegrationsView==='function') window.renderIntegrationsView();
+    if (v==='backups'     && typeof window.renderBackupsView     ==='function') window.renderBackupsView();
+    if (v==='rbacv7'      && typeof window.renderRbacV7          ==='function') window.renderRbacV7();
   }
 
   // ══════════════════════════════════════════════════════
