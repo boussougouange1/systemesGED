@@ -457,19 +457,34 @@
       companyDocs.forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
       (myOwnDocs||[]).forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
 
-      G.companyDocs  = merged.map(_normalizeDoc);
-      G.myDocs       = (myOwnDocs||[]).map(_normalizeDoc);
-      G.sharedWithMe = sharedDocs.map(_normalizeDoc);
-      // Personnel = mes docs sans company_id (scope privé)
-      G.personalDocs = (myOwnDocs||[]).filter(function(d){ return !d.company_id; }).map(_normalizeDoc);
+      // ── Normaliser chaque liste indépendamment ──
+      var companyNorm  = merged.map(_normalizeDoc);
+      var myNorm       = (myOwnDocs||[]).map(_normalizeDoc);
+      var sharedNorm   = sharedDocs.map(_normalizeDoc);
+      // Personnel = mes docs sans company_id UNIQUEMENT (éviter doublon avec companyDocs)
+      var personalNorm = myNorm.filter(function(d){ return !d.company_id; });
 
-      // G.docs = union complète des docs visibles
-      var visibleIds = new Set();
-      G.docs = [];
-      G.companyDocs.forEach(function(d){ if(!visibleIds.has(d.id)){ visibleIds.add(d.id); G.docs.push(d); } });
-      // Ajouter les docs perso pas déjà dans companyDocs
-      G.personalDocs.forEach(function(d){ if(!visibleIds.has(d.id)){ visibleIds.add(d.id); G.docs.push(d); } });
-      G.sharedWithMe.forEach(function(d){ if(!visibleIds.has(d.id)){ visibleIds.add(d.id); G.docs.push(d); } });
+      G.companyDocs  = companyNorm;
+      G.myDocs       = myNorm;
+      G.sharedWithMe = sharedNorm;
+      G.personalDocs = personalNorm;
+
+      // ── G.docs = SOURCE DE VÉRITÉ : fusion dédupliquée, triée par date ──
+      var seen = new Set();
+      var allDocs = [];
+      function _addUniq(arr){
+        arr.forEach(function(d){
+          if (!seen.has(d.id)){ seen.add(d.id); allDocs.push(d); }
+        });
+      }
+      _addUniq(companyNorm);   // docs entreprise en premier
+      _addUniq(personalNorm);  // docs perso pas encore dans companyDocs
+      _addUniq(sharedNorm);    // docs partagés pas encore présents
+      // Tri chronologique décroissant
+      allDocs.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
+      G.docs = allDocs;  // écriture atomique
+
+      log.info('_loadDocuments: company='+companyNorm.length+' personal='+personalNorm.length+' shared='+sharedNorm.length+' total='+G.docs.length);
 
     } catch (err) {
       log.error('loadDocuments: ' + err.message);
@@ -486,6 +501,39 @@
       // Les collaborateurs sont chargés à la demande via openPermModal()
       collaborators: [],
     });
+  }
+
+  // ── _patchDoc : met à jour un doc dans toutes les listes sans reload réseau ──
+  function _patchDoc(id, changes) {
+    ['docs','companyDocs','myDocs','personalDocs','sharedWithMe'].forEach(function(k){
+      var idx = G[k].findIndex(function(d){ return d.id === id; });
+      if (idx >= 0) G[k][idx] = Object.assign({}, G[k][idx], changes);
+    });
+  }
+
+  // ── _removeDocLocal : retire un doc de toutes les listes sans reload réseau ──
+  function _removeDocLocal(id) {
+    ['docs','companyDocs','myDocs','personalDocs','sharedWithMe'].forEach(function(k){
+      G[k] = G[k].filter(function(d){ return d.id !== id; });
+    });
+  }
+
+  // ── _mergeDocIntoState : insère un nouveau doc dans G.docs (dédupliqué) ──
+  function _mergeDocIntoState(rawDoc) {
+    if (!rawDoc || !rawDoc.id) return;
+    var normalized = _normalizeDoc(rawDoc);
+    // Déjà présent → patch
+    if (G.docs.find(function(d){ return d.id === normalized.id; })) {
+      _patchDoc(normalized.id, normalized);
+      return;
+    }
+    // Nouveau doc → insérer en tête et mettre à jour les listes dérivées
+    G.docs.unshift(normalized);
+    if (normalized.company_id === G.profile?.company_id) G.companyDocs.unshift(normalized);
+    if (normalized.owner_id === G.user?.id) {
+      G.myDocs.unshift(normalized);
+      if (!normalized.company_id) G.personalDocs.unshift(normalized);
+    }
   }
 
   async function _loadWorkflows() {
@@ -570,48 +618,101 @@
   // REALTIME SUPABASE
   // ══════════════════════════════════════════════════════
   function _startRealtime() {
-    // Notifications en temps réel
-    const notifChannel = SB.channel('notifs:'+G.user.id)
+    log.info('_startRealtime: démarrage ('+G.realtimeChannels.length+' channels existants)');
+
+    // ── 1. Notifications personnelles ──────────────────────────
+    var notifCh = SB.channel('notifs:'+G.user.id)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
         filter: 'user_id=eq.'+G.user.id
       }, function(payload) {
-        const n = payload.new;
+        var n = payload.new;
         G.notifications.unshift({ id:n.id, type:n.type, title:n.title, msg:n.message, read:false, at:n.created_at, category:n.category });
         _updateNotifBadge();
         showToast('🔔 '+n.title, n.type||'info');
       })
-      .subscribe();
-    G.realtimeChannels.push(notifChannel);
+      .subscribe(function(status){ log.debug('notif channel: '+status); });
+    G.realtimeChannels.push(notifCh);
 
-    // Documents de l'entreprise en temps réel
-    if (G.profile?.company_id) {
-      const docChannel = SB.channel('docs:'+G.profile.company_id)
-        .on('postgres_changes', {
-          event: '*', schema: 'public', table: 'documents',
-          filter: 'company_id=eq.'+G.profile.company_id
-        }, async function(payload) {
-          await _loadDocuments();
-          if (G.currentView === 'documents') renderDocuments();
-          if (G.currentView === 'dashboard') { updateStats(); renderActivityList(); renderTeamDocs(); }
-        })
-        .subscribe();
-      G.realtimeChannels.push(docChannel);
+    if (!G.profile?.company_id) return;
 
-      // Workflows en temps réel
-      const wfChannel = SB.channel('wf:'+G.profile.company_id)
-        .on('postgres_changes', {
-          event: '*', schema: 'public', table: 'workflows',
-          filter: 'company_id=eq.'+G.profile.company_id
-        }, async function() {
-          await _loadWorkflows();
-          if (G.currentView === 'workflows') renderWorkflows();
-          if (G.currentView === 'dashboard') renderMyWorkflows();
-          updateStats();
-        })
-        .subscribe();
-      G.realtimeChannels.push(wfChannel);
-    }
+    // ── 2. Documents entreprise — INSERT / UPDATE / DELETE ─────
+    var docCh = SB.channel('docs:'+G.profile.company_id)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'documents',
+        filter: 'company_id=eq.'+G.profile.company_id
+      }, function(payload) {
+        log.debug('RT INSERT company doc: '+payload.new?.id);
+        _mergeDocIntoState(payload.new);
+        _refreshCurrentView();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'documents',
+        filter: 'company_id=eq.'+G.profile.company_id
+      }, function(payload) {
+        log.debug('RT UPDATE company doc: '+payload.new?.id);
+        // Si is_deleted passe à true → retirer du state local
+        if (payload.new?.is_deleted) {
+          _removeDocLocal(payload.new.id);
+        } else {
+          _patchDoc(payload.new.id, _normalizeDoc(payload.new));
+        }
+        _refreshCurrentView();
+      })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'documents',
+        filter: 'company_id=eq.'+G.profile.company_id
+      }, function(payload) {
+        log.debug('RT DELETE company doc: '+payload.old?.id);
+        if (payload.old?.id) _removeDocLocal(payload.old.id);
+        _refreshCurrentView();
+      })
+      .subscribe(function(status){ log.debug('docs channel: '+status); });
+    G.realtimeChannels.push(docCh);
+
+    // ── 3. Docs personnels (owner_id = moi, pas de company_id) ─
+    var myDocCh = SB.channel('mydocs:'+G.user.id)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'documents',
+        filter: 'owner_id=eq.'+G.user.id
+      }, function(payload) {
+        log.debug('RT INSERT own doc: '+payload.new?.id);
+        _mergeDocIntoState(payload.new);
+        _refreshCurrentView();
+      })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'documents',
+        filter: 'owner_id=eq.'+G.user.id
+      }, function(payload) {
+        log.debug('RT DELETE own doc: '+payload.old?.id);
+        if (payload.old?.id) _removeDocLocal(payload.old.id);
+        _refreshCurrentView();
+      })
+      .subscribe(function(status){ log.debug('mydocs channel: '+status); });
+    G.realtimeChannels.push(myDocCh);
+
+    // ── 4. Workflows ──────────────────────────────────────────
+    var wfCh = SB.channel('wf:'+G.profile.company_id)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'workflows',
+        filter: 'company_id=eq.'+G.profile.company_id
+      }, async function() {
+        await _loadWorkflows();
+        if (G.currentView === 'workflows') renderWorkflows();
+        if (G.currentView === 'dashboard') renderMyWorkflows();
+        updateStats();
+      })
+      .subscribe(function(status){ log.debug('wf channel: '+status); });
+    G.realtimeChannels.push(wfCh);
+
+    log.info('_startRealtime: '+G.realtimeChannels.length+' channels actifs');
+  }
+
+  // Appelé par tous les handlers realtime
+  function _refreshCurrentView() {
+    updateStats();
+    if (G.currentView === 'documents') renderDocuments();
+    if (G.currentView === 'dashboard') { renderTeamDocs(); renderActivityList(); }
   }
 
   function _unsubscribeRealtime() {
@@ -1111,8 +1212,10 @@
 
     if (uploaded>0) showToast(uploaded+' fichier(s) importé(s) ✓','success');
     closeUploadModal();
+    // Reload complet pour récupérer les tags et métadonnées complètes
     await _loadDocuments();
     if (G.currentView==='documents') renderDocuments();
+    if (G.currentView==='dashboard') { renderTeamDocs(); renderActivityList(); updateQuickAccess(); }
     updateStats();
   }
 
@@ -1189,9 +1292,12 @@
       doc.company_id = newCompanyId;
       showToast('Document déplacé : ' + label + ' ✓', 'success');
       _logActivity('update', docId, 'Changement portée → ' + label + ' : ' + doc.name);
+      // Mise à jour locale optimiste (pas besoin de reload réseau)
+      _patchDoc(docId, { company_id: newCompanyId });
+      // Reconstruire les listes dérivées (personalDocs / companyDocs)
       await _loadDocuments();
       if (G.currentView === 'documents') renderDocuments();
-      renderTeamDocs();
+      if (G.currentView === 'dashboard') renderTeamDocs();
     } catch (err) { showToast('Erreur : ' + err.message, 'error'); }
   }
 
@@ -1237,10 +1343,8 @@
       await SB.from('document_permissions').delete().eq('document_id', id).catch(function(){});
       await SB.from('shared_documents').delete().eq('document_id', id).catch(function(){});
 
-      // Retirer de l'état local
-      ['docs','companyDocs','myDocs','personalDocs'].forEach(function(k){
-        G[k] = (G[k]||[]).filter(function(x){ return x.id !== id; });
-      });
+      // Retirer atomiquement de toutes les listes
+      _removeDocLocal(id);
 
       _logActivity('delete', id, 'Suppression (corbeille) : '+d.name + (isCompanyDoc?' [Entreprise]':' [Personnel]'));
       showToast('"'+d.name+'" déplacé en corbeille ✓', 'success');
@@ -2729,6 +2833,7 @@
     // Documents
     renderDocuments, applyFilters, clearFilters, filterByTag, filterByType, toggleViewMode,
     downloadDocument, downloadCurrentDocument, shareCurrentDocument, toggleDocScope,
+    _patchDoc, _removeDocLocal, _mergeDocIntoState,
     confirmDeleteDocument, restoreDocument, loadDeletedDocs, switchSecurityTab,
     openDocumentPreview, closePreviewModal,
     // Upload
