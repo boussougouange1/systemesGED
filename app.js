@@ -387,7 +387,8 @@
     try {
       // Jointure users_profiles retirée de document_permissions (FK potentiellement absente
       // dans Supabase → erreur 400 silencieuse qui vide tout le résultat)
-      const SEL = '*, document_tags(tags(id,name,color)), document_permissions(user_id,permission)';
+      // SELECT sans jointure document_permissions (plusieurs FK → ambiguïté PostgREST)
+      const SEL = '*, document_tags(tags(id,name,color))';
 
       // 1. Docs de l'entreprise (filtrés par company_id)
       var companyDocs = [];
@@ -418,14 +419,31 @@
         myOwnDocs = [];
       }
 
-      // 3. Docs partagés avec moi via document_permissions
-      var { data: permDocs, error: pe } = await SB.from('document_permissions')
-        .select('*, documents!inner(*, document_tags(tags(id,name,color)))')
+      // 3. Docs partagés avec moi — 2 étapes pour éviter la jointure ambiguë
+      //    (plusieurs FK entre document_permissions et documents → erreur PostgREST)
+      var sharedDocs = [];
+      var { data: myPerms, error: pe } = await SB.from('document_permissions')
+        .select('document_id, permission, expires_at')
         .eq('user_id', G.user.id)
         .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
       if (pe) {
-        log.error('loadDocuments shared: ' + pe.message);
-        permDocs = [];
+        log.error('loadDocuments perms: ' + pe.message);
+        myPerms = [];
+      }
+      if (myPerms && myPerms.length > 0) {
+        var sharedIds = myPerms.map(function(p){ return p.document_id; }).filter(Boolean);
+        if (sharedIds.length > 0) {
+          var { data: sharedRaw, error: se } = await SB.from('documents')
+            .select('*, document_tags(tags(id,name,color))')
+            .eq('is_deleted', false)
+            .in('id', sharedIds);
+          if (!se && sharedRaw) {
+            sharedDocs = sharedRaw.map(function(doc) {
+              var perm = myPerms.find(function(p){ return p.document_id === doc.id; });
+              return Object.assign({}, doc, { myPermission: perm ? perm.permission : 'viewer' });
+            });
+          }
+        }
       }
 
       // Fusionner companyDocs + myOwnDocs sans doublons → G.companyDocs
@@ -436,9 +454,7 @@
 
       G.companyDocs  = merged.map(_normalizeDoc);
       G.myDocs       = (myOwnDocs||[]).map(_normalizeDoc);
-      G.sharedWithMe = (permDocs||[])
-        .filter(function(p){ return p.documents; })
-        .map(function(p){ return Object.assign(_normalizeDoc(p.documents), { myPermission: p.permission }); });
+      G.sharedWithMe = sharedDocs.map(_normalizeDoc);
 
       // G.docs = union complète des docs visibles
       var visibleIds = new Set();
@@ -457,9 +473,9 @@
     if (!d) return d;
     return Object.assign({}, d, {
       tags: (d.document_tags||[]).map(function(dt){ return dt.tags?.name||''; }).filter(Boolean),
-      collaborators: (d.document_permissions||[]).map(function(dp){
-        return { user_id: dp.user_id, permission: dp.permission, name: dp.users_profiles?.name||dp.users_profiles?.email||'?' };
-      }),
+      // document_permissions retiré du SELECT principal (jointure ambiguë)
+      // Les collaborateurs sont chargés à la demande via openPermModal()
+      collaborators: [],
     });
   }
 
