@@ -22,7 +22,7 @@
   'use strict';
 
   function _ready(fn) {
-    if (typeof window.G !== 'undefined' && typeof window.SB !== 'undefined') fn();
+    if (typeof window.G !== 'undefined' && typeof window.showToast !== 'undefined') fn();
     else setTimeout(function () { _ready(fn); }, 80);
   }
 
