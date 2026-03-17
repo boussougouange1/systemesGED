@@ -5,6 +5,10 @@
  * Architecture : IIFE + module-scoped state
  * Backend : Supabase (Auth · Database · Storage · Realtime)
  * ─────────────────────────────────────────────────────────
+ * CHANGELOG v5.0.1 :
+ *   - Suppression des bloqueurs DevTools (anti-patterns)
+ *   - Suppression de copySqlSchema (schéma DB retiré de l'UI)
+ * ─────────────────────────────────────────────────────────
  */
 
 (function () {
@@ -83,13 +87,9 @@
   let logsInterval = null;
 
   // ══════════════════════════════════════════════════════
-  // SÉCURITÉ CLIENT
+  // RACCOURCIS CLAVIER
   // ══════════════════════════════════════════════════════
-  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'F12') { e.preventDefault(); return; }
-    if (e.ctrlKey && e.shiftKey && ['I','i','J','j'].includes(e.key)) { e.preventDefault(); return; }
-    if (e.ctrlKey && ['u','U'].includes(e.key)) { e.preventDefault(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       document.getElementById('globalSearch')?.focus();
@@ -1717,7 +1717,7 @@
   function toggleSetting(s){const v=document.getElementById(s+'setting')?.checked;localStorage.setItem('ged_'+s,v);showToast(s+' '+(v?'activé':'désactivé'),'success');}
   function exportAllData(){const data={documents:G.docs,users:G.users,tags:G.tags,workflows:G.workflows,audit:G.auditLogs,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='systemesged_v5_export_'+new Date().toISOString().slice(0,10)+'.json';a.click();showToast('Export JSON ✓','success');}
   function exportDocumentsCsv(){const csv=['ID,Nom,Taille,Type,Date,Tags,Propriétaire',...G.docs.map(function(d){return'"'+d.id+'","'+d.name+'","'+formatFileSize(d.file_size||0)+'","'+(d.file_type||'')+'","'+fmtDate(d.created_at)+'","'+(d.tags||[]).join(';')+'","'+d.owner_id+'"';})].join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='documents_v5_'+new Date().toISOString().slice(0,10)+'.csv';a.click();showToast('CSV ✓','success');}
-  function copySqlSchema(){navigator.clipboard?.writeText(document.getElementById('sqlSchemaBlock')?.textContent||'').then(function(){showToast('SQL copié !','success');});}
+  // copySqlSchema supprimée — schéma SQL retiré de l'UI (voir README.md)
 
   // ══════════════════════════════════════════════════════
   // ZONE DANGER
@@ -1891,7 +1891,7 @@
     // Billing
     renderBillingView, selectPlan, simulateUpgrade,
     // Settings
-    saveProfile, toggleSetting, exportAllData, exportDocumentsCsv, copySqlSchema,
+    saveProfile, toggleSetting, exportAllData, exportDocumentsCsv,
     // Danger
     openDangerModal, closeDangerModal, checkDangerConfirm, executeDangerAction,
     // Notifications
