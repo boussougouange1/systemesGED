@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://supabase.io wss://*.supabase.co; img-src 'self' data: blob: https:; object-src 'none'; frame-ancestors 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SystemesGED v5.0 — Plateforme Collaborative d'Entreprise</title>
+<title>SystemesGED v5.1 — Plateforme Collaborative d'Entreprise</title>
 <meta name="description" content="SystemesGED — Plateforme GED cloud sécurisée, RGPD conforme, multi-tenant SaaS">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -110,11 +110,15 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
 .collab-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(6,182,212,0.15);color:#22d3ee;border:1px solid rgba(6,182,212,0.2);}
 .wf-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(249,115,22,0.15);color:#fb923c;border:1px solid rgba(249,115,22,0.2);}
 @keyframes pulse2{0%,100%{opacity:0.6;}50%{opacity:1;}}
+/* ── v5.1 Collaboration & Analytics ── */
+.collab-editor{font-family:'JetBrains Mono','Fira Code',monospace;font-size:14px;line-height:1.7;resize:none;outline:none;caret-color:#60a5fa;}
+.collab-cursor-label{position:absolute;font-size:10px;font-weight:700;color:white;padding:1px 6px;border-radius:4px;pointer-events:none;white-space:nowrap;}
+.presence-dot{width:8px;height:8px;border-radius:50%;animation:pulse2 2s infinite;}
+.analytics-bar-wrap{display:flex;align-items:flex-end;gap:3px;height:100px;padding:0 4px;}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+@media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr);}}
+
 .pulse-dot{animation:pulse2 2s infinite;}
-/* ── LOGO ────────────────────────────────────────────────── */
-.ged-logo-img{width:100%;height:100%;object-fit:contain;position:relative;z-index:10;filter:drop-shadow(0 0 14px rgba(59,130,246,0.45));}
-.ged-logo-fallback{display:none;width:100%;height:100%;align-items:center;justify-content:center;background:linear-gradient(135deg,#1d4ed8,#3b82f6);border-radius:inherit;font-weight:800;color:white;letter-spacing:-1px;}
-@keyframes logoGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(59,130,246,0.4));}50%{filter:drop-shadow(0 0 22px rgba(59,130,246,0.75));}}
 </style>
 </head>
 <body class="text-gray-100 font-sans antialiased">
@@ -129,13 +133,8 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     <div class="login-branding-circuits"></div>
     <div style="position:relative;z-index:10;width:100%;max-width:380px">
       <div class="text-center mb-10">
-        <div class="w-24 h-24 mx-auto mb-5 relative" style="filter:drop-shadow(0 0 30px rgba(59,130,246,0.5));">
-          <img src="https://raw.githubusercontent.com/boussougouange1/systemesGED/main/logo-systemesGED.png"
-               alt="SystemesGED"
-               class="ged-logo-img"
-               style="animation:logoGlow 3s ease-in-out infinite;"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-          <div class="ged-logo-fallback rounded-2xl text-2xl" style="display:none;">SC</div>
+        <div class="w-24 h-24 mx-auto mb-5 flex items-center justify-center rounded-2xl" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);box-shadow:0 0 40px rgba(59,130,246,0.4);">
+          <i class="fas fa-file-shield text-white text-4xl"></i>
         </div>
         <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">SYSTEMES<span class="gradient-text">GED</span></h1>
         <p style="color:rgba(147,197,253,0.7);font-size:0.9rem">Gestion Électronique de Documents Cloud</p>
@@ -158,13 +157,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
   <div class="login-form-panel">
     <div class="login-card">
       <div class="lg:hidden text-center mb-6">
-        <div class="w-14 h-14 mx-auto mb-3 relative">
-          <img src="https://raw.githubusercontent.com/boussougouange1/systemesGED/main/logo-systemesGED.png"
-               alt="SystemesGED"
-               class="ged-logo-img"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-          <div class="ged-logo-fallback rounded-2xl text-sm" style="display:none;">SC</div>
-        </div>
+        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl flex items-center justify-center" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)"><i class="fas fa-file-shield text-white text-xl"></i></div>
         <h1 style="font-size:1.5rem;font-weight:800;color:white">SYSTEMES<span class="gradient-text">GED</span></h1>
       </div>
       <div style="display:flex;gap:6px;padding:6px;background:rgba(0,0,0,0.3);border-radius:14px;margin-bottom:24px;border:1px solid rgba(96,165,250,0.1)">
@@ -218,12 +211,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
 <aside class="mobile-sidebar glass-panel border-r border-blue-500/20 flex flex-col" id="mobileSidebar">
   <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 relative flex-shrink-0">
-        <img src="https://raw.githubusercontent.com/boussougouange1/systemesGED/main/logo-systemesGED.png"
-             alt="SystemesGED" class="ged-logo-img rounded-xl"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-        <div class="ged-logo-fallback rounded-xl text-xs" style="display:none;">SC</div>
-      </div>
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)"><i class="fas fa-file-shield text-white"></i></div>
       <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
     </div>
     <button onclick="closeMobileSidebar()" class="p-2 text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
@@ -264,12 +252,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     <div class="flex items-center gap-3">
       <button class="mobile-menu-btn p-2 -ml-2 text-blue-400 hover:text-white" onclick="openMobileSidebar()"><i class="fas fa-bars text-xl"></i></button>
       <div class="hidden sm:flex items-center gap-3">
-        <div class="w-10 h-10 relative flex-shrink-0">
-          <img src="https://raw.githubusercontent.com/boussougouange1/systemesGED/main/logo-systemesGED.png"
-               alt="SystemesGED" class="ged-logo-img rounded-xl"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-          <div class="ged-logo-fallback rounded-xl text-xs" style="display:none;">SC</div>
-        </div>
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)"><i class="fas fa-file-shield text-white"></i></div>
         <div><h1 class="text-xl font-bold tracking-tight"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1><p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v5.0</p></div>
       </div>
     </div>
@@ -352,6 +335,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         <button onclick="switchView('billing')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement</span></button>
         <button onclick="switchView('settings')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="settings"><i class="fas fa-cog w-5 text-center text-blue-400"></i><span>Configuration</span></button>
         <button onclick="switchView('security')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="security"><i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>Sécurité &amp; Audit</span></button>
+      <button onclick="switchView('analytics')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="analytics"><i class="fas fa-chart-bar w-5 text-center text-yellow-400"></i><span>Analytics</span></button>
       </div>
     </nav>
     <div class="p-4 border-t border-blue-500/20">
@@ -459,6 +443,18 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
           </div>
           <div id="myWorkflowsList" class="space-y-2">
             <p class="text-blue-300/50 text-sm text-center py-3">Aucun workflow assigné</p>
+          </div>
+        </div>
+
+        <!-- Raccourci Analytics -->
+        <div class="glass-card rounded-2xl border border-yellow-500/20 p-5 cursor-pointer hover:border-yellow-400/40 transition-all" onclick="switchView('analytics')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-400"><i class="fas fa-chart-bar"></i></div>
+            <div><p class="text-white font-bold text-sm">Analytics</p><p class="text-blue-300/60 text-xs">Vue d'ensemble entreprise</p></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-center">
+            <div class="glass-card p-2 rounded-lg"><p class="text-lg font-bold text-white" id="dashTotalViews">—</p><p class="text-[10px] text-blue-300/60">Vues docs</p></div>
+            <div class="glass-card p-2 rounded-lg"><p class="text-lg font-bold text-white" id="dashActiveUsers">—</p><p class="text-[10px] text-blue-300/60">Actifs</p></div>
           </div>
         </div>
       </div>
@@ -804,6 +800,47 @@ create table if not exists workflows (
       </div>
     </div>
 
+
+    <!-- ══ ANALYTICS v5.1 -->
+    <div id="view-analytics" class="view-section space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3"><i class="fas fa-chart-bar text-yellow-400"></i>Analytics Entreprise</h2>
+          <p class="text-sm text-blue-300/80">Activité de l’entreprise sur 30 jours</p>
+        </div>
+        <button onclick="refreshAnalytics()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2"><i class="fas fa-sync-alt"></i>Actualiser</button>
+      </div>
+      <p id="analyticsLoading" class="text-blue-300/60 text-sm text-center"></p>
+      <div id="analyticsContent">
+        <div id="analyticsKpiCards" class="kpi-grid mb-6"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div class="lg:col-span-2 glass-card rounded-2xl border border-blue-500/20 p-5">
+            <h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-area text-blue-400"></i>Activité 14 derniers jours</h3>
+            <div id="analyticsActivityChart" style="min-height:120px;" class="flex items-end"><p class="text-blue-300/40 text-sm w-full text-center py-10">Chargement...</p></div>
+          </div>
+          <div class="glass-card rounded-2xl border border-orange-500/20 p-5">
+            <h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-project-diagram text-orange-400"></i>Workflows</h3>
+            <div id="analyticsWorkflowChart" class="space-y-3"><p class="text-blue-300/40 text-sm text-center py-4">Chargement...</p></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass-card rounded-2xl border border-cyan-500/20 p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-fire text-cyan-400"></i>Documents les plus consultés</h3>
+              <span class="text-xs text-blue-400/60">30 jours</span>
+            </div>
+            <div id="analyticsTopDocs" class="space-y-1 max-h-72 overflow-y-auto"><p class="text-blue-300/40 text-sm text-center py-6">Chargement...</p></div>
+          </div>
+          <div class="glass-card rounded-2xl border border-purple-500/20 p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-star text-purple-400"></i>Utilisateurs les plus actifs</h3>
+              <span class="text-xs text-blue-400/60">30 jours</span>
+            </div>
+            <div id="analyticsTopUsers" class="space-y-1 max-h-72 overflow-y-auto"><p class="text-blue-300/40 text-sm text-center py-6">Chargement...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -917,7 +954,7 @@ create table if not exists workflows (
     <!-- Actions -->
     <div class="flex gap-3 mt-4 pt-4 border-t border-blue-500/20">
       <button onclick="downloadCurrentDocument()" class="flex-1 px-4 py-2.5 bg-blue-500/20 text-blue-400 rounded-xl text-sm hover:bg-blue-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-download"></i>Télécharger</button>
-      <button onclick="shareCurrentDocument()" class="flex-1 px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-xl text-sm hover:bg-purple-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-share-alt"></i>Partager</button>
+      <button onclick="shareCurrentDocument()" class="flex-1 px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-xl text-sm hover:bg-purple-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-share-alt"></i>Partager</button><button onclick="openCollabEditor(G.previewDocId);closePreviewModal()" class="flex-1 px-4 py-2.5 bg-green-500/20 text-green-400 rounded-xl text-sm hover:bg-green-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-pen-nib"></i>Editer</button>
       <button onclick="closePreviewModal()" class="px-4 py-2.5 bg-slate-700/50 text-gray-400 rounded-xl text-sm hover:bg-slate-600/50"><i class="fas fa-times"></i></button>
     </div>
   </div>
@@ -1092,12 +1129,89 @@ create table if not exists workflows (
 </div>
 
 <!-- ═══════════════════════════════════════════════════════
-     SystemesGED v5.0 — Script principal (IIFE, module-scoped)
+     SystemesGED v5.1 — Script principal (IIFE, module-scoped)
      ─────────────────────────────────────────────────────────
      En production, remplacer par le fichier obfusqué :
        npx javascript-obfuscator app.js --output app.obf.js
      puis pointer vers app.obf.js ci-dessous.
      ═══════════════════════════════════════════════════════ -->
+<script>
+function _collabFormat(type) {
+  var ed=document.getElementById('collabEditorArea');if(!ed)return;
+  var s=ed.selectionStart,e2=ed.selectionEnd,sel=ed.value.substring(s,e2);
+  var before=ed.value.substring(0,s),after=ed.value.substring(e2);
+  var f={bold:{pre:'**',post:'**'},italic:{pre:'_',post:'_'},code:{pre:'`',post:'`'},h1:{pre:'# ',post:''},h2:{pre:'## ',post:''},ul:{pre:'- ',post:''},link:{pre:'[',post:'](url)'}};
+  var fmt=f[type];if(!fmt)return;
+  ed.value=before+fmt.pre+(sel||'texte')+fmt.post+after;
+  ed.focus();
+  if(window.onCollabEditorInput)window.onCollabEditorInput({target:ed});
+}
+function _collabUpdateWordCount(){
+  var ed=document.getElementById('collabEditorArea'),wc=document.getElementById('collabWordCount');
+  if(!ed||!wc)return;
+  var words=ed.value.trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
+  wc.textContent=words+' mot'+(words>1?'s':'');
+}
+function _saveContentNow(){
+  var ed=document.getElementById('collabEditorArea');
+  if(!ed||!window.G||!window.G.collab||!window.G.collab.docId)return;
+  window.SB.from('documents').update({content:ed.value,updated_at:new Date().toISOString()}).eq('id',window.G.collab.docId).then(function(){
+    var el=document.getElementById('collabSaveStatus');
+    if(el)el.innerHTML='<i class="fas fa-check-circle text-green-400 mr-1"></i><span class="text-green-400">Enregistré</span>';
+    var ls=document.getElementById('collabLastSaved');
+    if(ls)ls.textContent='Enregistré à '+new Date().toLocaleTimeString('fr-FR');
+  });
+}
+</script>
+
+<!-- Editeur collaboratif v5.1 -->
+<div id="collabEditorModal" class="modal-overlay hidden" style="align-items:stretch;padding:0;">
+  <div style="width:100%;max-width:900px;margin:auto;display:flex;flex-direction:column;height:100vh;max-height:100vh;background:rgba(8,12,40,0.99);border-left:1px solid rgba(96,165,250,0.2);border-right:1px solid rgba(96,165,250,0.2);">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-blue-500/20 flex-shrink-0" style="background:rgba(12,18,56,0.98);">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-9 h-9 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 flex-shrink-0"><i class="fas fa-pen-nib"></i></div>
+        <div class="min-w-0">
+          <h3 class="text-white font-bold text-sm truncate" id="collabEditorTitle">Document</h3>
+          <p class="text-[10px] text-blue-400/50" id="collabEditorType">text</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 mx-4">
+        <div id="collabPresenceAvatars" class="flex items-center"></div>
+        <span id="collabEditingBadge" class="text-xs px-2 py-1 rounded-full font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">1 éditeur</span>
+      </div>
+      <div id="collabSaveStatus" class="flex items-center text-xs mr-3 min-w-[100px] justify-end"></div>
+      <button onclick="closeCollabEditor()" class="p-2 text-blue-400 hover:text-white hover:bg-blue-500/10 rounded-lg transition-colors flex-shrink-0"><i class="fas fa-times text-lg"></i></button>
+    </div>
+    <div class="flex items-center gap-1 px-4 py-2 border-b border-blue-500/10 flex-wrap flex-shrink-0" style="background:rgba(10,16,50,0.8);">
+      <button onclick="_collabFormat('bold')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Gras"><i class="fas fa-bold"></i></button>
+      <button onclick="_collabFormat('italic')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Italique"><i class="fas fa-italic"></i></button>
+      <button onclick="_collabFormat('h1')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-xs font-bold" title="Titre 1">H1</button>
+      <button onclick="_collabFormat('h2')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-xs font-bold" title="Titre 2">H2</button>
+      <button onclick="_collabFormat('ul')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Liste"><i class="fas fa-list-ul"></i></button>
+      <button onclick="_collabFormat('code')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Code"><i class="fas fa-code"></i></button>
+      <button onclick="_collabFormat('link')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Lien"><i class="fas fa-link"></i></button>
+      <div class="flex-1"></div>
+      <span class="text-xs text-blue-400/40" id="collabWordCount">0 mot</span>
+      <button onclick="_saveContentNow()" class="px-3 py-1.5 btn-primary rounded-lg text-xs text-white font-medium flex items-center gap-1 ml-2"><i class="fas fa-save"></i>Sauvegarder</button>
+    </div>
+    <div class="flex-1 relative overflow-hidden">
+      <div id="collabCursorOverlay" class="absolute top-2 left-2 z-10 flex flex-wrap gap-1 pointer-events-none"></div>
+      <textarea id="collabEditorArea"
+        class="collab-editor w-full h-full bg-transparent text-gray-100 p-6"
+        style="border:none;color:#e2e8f0;resize:none;outline:none;"
+        placeholder="Commencez à écrire... Les modifications sont synchronisées en temps réel."
+        oninput="onCollabEditorInput(event)"
+        onkeyup="_collabUpdateWordCount()"
+        spellcheck="true"></textarea>
+    </div>
+    <div class="flex items-center justify-between px-5 py-2 border-t border-blue-500/10 flex-shrink-0 text-xs text-blue-400/40" style="background:rgba(8,12,40,0.99);">
+      <span>SystemesGED v5.1 — Édition collaborative sécurisée</span>
+      <span id="collabLastSaved">Non enregistré</span>
+    </div>
+  </div>
+</div>
+
 <script src="app.js" defer></script>
+<script src="app_collab.js" defer></script>
 </body>
 </html>
