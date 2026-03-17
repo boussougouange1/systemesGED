@@ -323,7 +323,7 @@
     await _loadAllData();
     switchView('dashboard');
     showToast('Bienvenue, '+(G.profile?.name||G.user.email.split('@')[0])+' !','success');
-    __logActivity('login', null, 'Connexion : '+G.user.email);
+    _logActivity('login', null, 'Connexion : '+G.user.email);
     _startInactivityWatch();
     _startRealtime();
     startLiveLogs();
@@ -1882,6 +1882,10 @@
     toggleNotifications, closeNotifPanel, markNotifRead, markAllNotifRead, loadRealNotifications,
     // Sidebar
     openMobileSidebar, closeMobileSidebar, togglePwdInput,
+    // Exposer SB pour app_v6.js et app_v7.js
+    SB,
+    // Exposer logActivity pour app_v7.js
+    logActivity,
     // Exposer G pour le HTML (G.selectedFiles.splice, etc.)
     G,
   };
