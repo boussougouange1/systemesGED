@@ -13,10 +13,12 @@
   // ══════════════════════════════════════════════════════
   // LOGGER SÉCURISÉ (pas de logs en production)
   // ══════════════════════════════════════════════════════
-  const IS_DEV = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || new URLSearchParams(window.location.search).get('debug') === '1';
+  const IS_DEV = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1'
+    || new URLSearchParams(window.location.search).get('debug') === '1';
   const log = {
     warn:  function (m) { if (IS_DEV) console.warn('[GED]', m); },
-    error: function (m) { console.error('[GED]', m); },   // toujours visible pour diagnostiquer
+    error: function (m) { console.error('[GED]', m); }, // toujours visible pour diagnostiquer
     info:  function (m) { if (IS_DEV) console.log('[GED]', m); }
   };
 
@@ -383,12 +385,12 @@
   // ══════════════════════════════════════════════════════
   async function _loadDocuments() {
     try {
-      // ── Champ de sélection simplifié : on évite la jointure imbriquée
-      //    users_profiles dans document_permissions (FK potentiellement absente)
+      // Jointure users_profiles retirée de document_permissions (FK potentiellement absente
+      // dans Supabase → erreur 400 silencieuse qui vide tout le résultat)
       const SEL = '*, document_tags(tags(id,name,color)), document_permissions(user_id,permission)';
 
       // 1. Docs de l'entreprise (filtrés par company_id)
-      var companyRows = [];
+      var companyDocs = [];
       if (G.profile?.company_id) {
         var { data: cd, error: ce } = await SB.from('documents')
           .select(SEL)
@@ -399,12 +401,13 @@
           log.error('loadDocuments company: ' + ce.message);
           showToast('Erreur chargement documents entreprise : ' + ce.message, 'error');
         } else {
-          companyRows = cd || [];
+          companyDocs = cd || [];
         }
       }
 
-      // 2. Tous mes propres docs (owner_id = moi), qu'ils aient un company_id ou non
-      var { data: myRows, error: me } = await SB.from('documents')
+      // 2. Docs dont je suis propriétaire (sans company_id ou avec)
+      //    Récupère TOUS mes docs uploadés, même si company_id est NULL
+      var { data: myOwnDocs, error: me } = await SB.from('documents')
         .select(SEL)
         .eq('is_deleted', false)
         .eq('owner_id', G.user.id)
@@ -412,7 +415,7 @@
       if (me) {
         log.error('loadDocuments mine: ' + me.message);
         showToast('Erreur chargement de vos documents : ' + me.message, 'error');
-        myRows = [];
+        myOwnDocs = [];
       }
 
       // 3. Docs partagés avec moi via document_permissions
@@ -425,14 +428,14 @@
         permDocs = [];
       }
 
-      // ── Fusionner companyRows + myRows sans doublons → G.companyDocs
-      var mergedIds = new Set();
+      // Fusionner companyDocs + myOwnDocs sans doublons → G.companyDocs
+      var allIds = new Set();
       var merged = [];
-      (companyRows).forEach(function(d){ if(!mergedIds.has(d.id)){ mergedIds.add(d.id); merged.push(d); } });
-      (myRows||[]).forEach(function(d){ if(!mergedIds.has(d.id)){ mergedIds.add(d.id); merged.push(d); } });
+      companyDocs.forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
+      (myOwnDocs||[]).forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
 
       G.companyDocs  = merged.map(_normalizeDoc);
-      G.myDocs       = (myRows||[]).map(_normalizeDoc);
+      G.myDocs       = (myOwnDocs||[]).map(_normalizeDoc);
       G.sharedWithMe = (permDocs||[])
         .filter(function(p){ return p.documents; })
         .map(function(p){ return Object.assign(_normalizeDoc(p.documents), { myPermission: p.permission }); });
@@ -469,7 +472,6 @@
       else q = q.or('created_by.eq.'+G.user.id+',assignee_id.eq.'+G.user.id);
       const { data, error: wfe } = await q;
       if (wfe) { log.error('loadWorkflows: '+wfe.message); G.workflows=[]; return; }
-      G.workflows = (data||[]).map(function(w){
         return {
           id:w.id, title:w.title, description:w.description, status:w.status,
           priority:w.priority, docId:w.document_id,
@@ -489,7 +491,6 @@
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
       const { data, error: te } = await q;
       if (te) { log.error('loadTags: '+te.message); G.tags=[]; return; }
-      G.tags = (data||[]).map(function(t){ return { id:t.id, name:t.name, color:t.color||'#3b82f6', count:0 }; });
     } catch (err) { log.error('loadTags: '+err.message); G.tags=[]; }
   }
 
@@ -500,7 +501,6 @@
       else q = q.eq('id', G.user.id);
       const { data, error: ue } = await q;
       if (ue) { log.error('loadUsers: '+ue.message); G.users=[]; return; }
-      G.users = (data||[]).map(function(u){
         return { id:u.id, name:u.name||u.email||'Utilisateur', email:u.email||'', role:u.role||'viewer', active:u.active!==false, lastLogin:u.last_login, docs:0 };
       });
     } catch (err) { log.error('loadUsers: '+err.message); G.users=[]; }
@@ -521,7 +521,7 @@
 
   async function _loadAuditLogs() {
     try {
-      // On évite la jointure users_profiles (FK potentiellement absente)
+      // Jointure users_profiles retirée (FK potentiellement absente → erreur silencieuse)
       let q = SB.from('activity_logs')
         .select('id, user_id, document_id, description, action, created_at, company_id')
         .order('created_at', { ascending: false }).limit(100);
@@ -530,7 +530,7 @@
       else q = q.eq('user_id', G.user.id);
       const { data, error: ale } = await q;
       if (ale) { log.error('loadAuditLogs: '+ale.message); G.auditLogs=[]; return; }
-      // Résoudre le nom de l'utilisateur depuis G.users si disponible
+      // Nom résolu depuis G.users (déjà chargé) — pas de jointure SQL nécessaire
       G.auditLogs = (data||[]).map(function(l){
         var u = G.users.find(function(x){ return x.id === l.user_id; });
         return { id:l.id, action:l.action, description:l.description, user:u?.name||'Système', docId:l.document_id, createdAt:l.created_at };
@@ -681,7 +681,8 @@
     set$('quickDocCount', docC+' fichier(s)');
   }
   function renderTeamDocs() {
-    var el = document.getElementById('teamDocsList'); if (!el) return;
+    var el = document.getElementById('teamDocsList');
+    if (!el) return;
     var recent = G.companyDocs.slice(0, 5);
     if (!recent.length) {
       el.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucun document dans l\'entreprise</p>';
@@ -691,28 +692,37 @@
       var fi = getFileIcon(d.name || '');
       return '<div class="flex items-center gap-3 p-2 rounded-xl hover:bg-cyan-500/5 cursor-pointer transition-all" onclick="openDocumentPreview(\'' + d.id + '\')">' +
         '<div class="w-9 h-9 ' + fi.bg + ' rounded-lg flex items-center justify-center ' + fi.color + ' border ' + fi.border + ' flex-shrink-0"><i class="fas ' + fi.icon + ' text-sm"></i></div>' +
-        '<div class="flex-1 min-w-0"><p class="text-white text-xs font-semibold truncate">' + esc(d.name) + '</p>' +
-        '<p class="text-blue-400/50 text-xs">' + formatFileSize(d.file_size || 0) + ' · ' + fmtDate(d.created_at) + '</p></div>' +
-        '<button onclick="event.stopPropagation();downloadDocument(\'' + d.id + '\')" class="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded-lg flex-shrink-0"><i class="fas fa-download text-xs"></i></button>' +
-        '</div>';
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-white text-xs font-semibold truncate">' + esc(d.name) + '</p>' +
+          '<p class="text-blue-400/50 text-xs">' + formatFileSize(d.file_size || 0) + ' · ' + fmtDate(d.created_at) + '</p>' +
+        '</div>' +
+        '<button onclick="event.stopPropagation();downloadDocument(\'' + d.id + '\')" class="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded-lg flex-shrink-0" title="Télécharger"><i class="fas fa-download text-xs"></i></button>' +
+      '</div>';
     }).join('');
   }
 
   function renderMyWorkflows() {
-    var el = document.getElementById('myWorkflowsList'); if (!el) return;
-    var mine = G.workflows.filter(function(w) { return w.status === 'pending' && (w.assigneeId === G.user?.id || w.createdBy === G.profile?.name); }).slice(0, 4);
+    var el = document.getElementById('myWorkflowsList');
+    if (!el) return;
+    var mine = G.workflows.filter(function(w) {
+      return w.status === 'pending' && (w.assigneeId === G.user?.id || w.createdBy === G.profile?.name);
+    }).slice(0, 4);
     if (!mine.length) {
       el.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucun workflow assigné</p>';
       return;
     }
     var prioCfg = { low: 'text-blue-400', medium: 'text-yellow-400', high: 'text-orange-400', urgent: 'text-red-400' };
+    var statusCfg = { pending: 'bg-orange-500/15 text-orange-400 border-orange-500/20', approved: 'bg-green-500/15 text-green-400 border-green-500/20', rejected: 'bg-red-500/15 text-red-400 border-red-500/20' };
     el.innerHTML = mine.map(function(w) {
+      var sc = statusCfg[w.status] || statusCfg.pending;
       return '<div class="flex items-center gap-3 p-2 rounded-xl hover:bg-orange-500/5 transition-all cursor-pointer" onclick="switchView(\'workflows\')">' +
         '<div class="w-9 h-9 bg-orange-500/20 rounded-lg flex items-center justify-center text-orange-400 flex-shrink-0"><i class="fas fa-project-diagram text-sm"></i></div>' +
-        '<div class="flex-1 min-w-0"><p class="text-white text-xs font-semibold truncate">' + esc(w.title) + '</p>' +
-        '<p class="' + (prioCfg[w.priority] || 'text-blue-400') + ' text-xs"><i class="fas fa-flag mr-1"></i>' + esc(w.priority) + '</p></div>' +
-        '<span class="px-2 py-0.5 bg-orange-500/15 text-orange-400 text-[10px] rounded-full border border-orange-500/20 flex-shrink-0">En attente</span>' +
-        '</div>';
+        '<div class="flex-1 min-w-0">' +
+          '<p class="text-white text-xs font-semibold truncate">' + esc(w.title) + '</p>' +
+          '<p class="' + (prioCfg[w.priority] || 'text-blue-400') + ' text-xs"><i class="fas fa-flag mr-1"></i>' + esc(w.priority) + '</p>' +
+        '</div>' +
+        '<span class="px-2 py-0.5 text-[10px] rounded-full border flex-shrink-0 ' + sc + '">En attente</span>' +
+      '</div>';
     }).join('');
   }
 
