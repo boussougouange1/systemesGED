@@ -267,7 +267,7 @@
     try {
       const { data, error } = await SB.auth.signUp({
         email, password: pwd,
-        options: { data: { full_name: first+' '+last, company: company } }
+        options: { data: { name: first+' '+last, company: company } }
       });
       if (error) throw error;
       showToast('Compte créé ! Vérifiez votre email.','success');
@@ -322,8 +322,8 @@
     document.getElementById('mainApp').style.display = 'block';
     await _loadAllData();
     switchView('dashboard');
-    showToast('Bienvenue, '+(G.profile?.full_name||G.user.email.split('@')[0])+' !','success');
-    _logActivity('login', null, 'Connexion : '+G.user.email);
+    showToast('Bienvenue, '+(G.profile?.name||G.user.email.split('@')[0])+' !','success');
+    __logActivity('login', null, 'Connexion : '+G.user.email);
     _startInactivityWatch();
     _startRealtime();
     startLiveLogs();
@@ -331,9 +331,9 @@
 
   async function _loadProfile() {
     const { data } = await SB.from('users_profiles').select('*').eq('id', G.user.id).single();
-    G.profile = data || { id: G.user.id, email: G.user.email, full_name: G.user.email.split('@')[0], role: 'viewer' };
+    G.profile = data || { id: G.user.id, email: G.user.email, name: G.user.email.split('@')[0], role: 'viewer' };
     // Mettre à jour last_login
-    await SB.from('users_profiles').upsert({ id: G.user.id, email: G.user.email, last_login: new Date().toISOString() });
+    await SB.from('users_profiles').upsert({ id: G.user.id, email: G.user.email, last_login: new Date().toISOString() }, { onConflict: 'id' });
   }
 
   async function _loadCompany() {
@@ -344,7 +344,7 @@
   }
 
   function _updateHeaderUI() {
-    const name = G.profile?.full_name || G.user?.email?.split('@')[0] || 'Utilisateur';
+    const name = G.profile?.name || G.user?.email?.split('@')[0] || 'Utilisateur';
     const role = G.profile?.role || 'viewer';
     set$('userAvatarInitial', avatarInitials(name));
     set$('userNameDisplay', name.split(' ')[0]);
@@ -383,7 +383,7 @@
     try {
       // Docs de l'entreprise (company_id)
       let compQuery = SB.from('documents')
-        .select('*, document_tags(tags(id,name,color)), document_permissions(user_id,permission,users_profiles(full_name,email))')
+        .select('*, document_tags(tags(id,name,color)), document_permissions(user_id,permission,users_profiles(name,email))')
         .eq('is_deleted', false)
         .order('created_at', { ascending: false });
       if (G.profile?.company_id) compQuery = compQuery.eq('company_id', G.profile.company_id);
@@ -398,7 +398,7 @@
 
       // Normaliser
       G.companyDocs = (compDocs||[]).map(_normalizeDoc);
-      G.myDocs      = G.companyDocs.filter(function(d){ return d.owner_id === G.user.id; });
+      G.myDocs      = G.companyDocs.filter(function(d){ return d.owner_id === G.user.id || d.user_id === G.user.id; });
       G.sharedWithMe = (permDocs||[])
         .filter(function(p){ return p.documents; })
         .map(function(p){ return Object.assign(_normalizeDoc(p.documents), { myPermission: p.permission }); });
@@ -416,7 +416,7 @@
     return Object.assign({}, d, {
       tags: (d.document_tags||[]).map(function(dt){ return dt.tags?.name||''; }).filter(Boolean),
       collaborators: (d.document_permissions||[]).map(function(dp){
-        return { user_id: dp.user_id, permission: dp.permission, name: dp.users_profiles?.full_name||dp.users_profiles?.email||'?' };
+        return { user_id: dp.user_id, permission: dp.permission, name: dp.users_profiles?.name||dp.users_profiles?.email||'?' };
       }),
     });
   }
@@ -424,7 +424,7 @@
   async function _loadWorkflows() {
     try {
       let q = SB.from('workflows')
-        .select('*, assignee:users_profiles!workflows_assignee_id_fkey(id,full_name,email), creator:users_profiles!workflows_created_by_fkey(id,full_name)')
+        .select('*, assignee:users_profiles!workflows_assignee_id_fkey(id,name,email), creator:users_profiles!workflows_created_by_fkey(id,name)')
         .order('created_at', { ascending: false });
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
       else q = q.or('created_by.eq.'+G.user.id+',assignee_id.eq.'+G.user.id);
@@ -434,9 +434,9 @@
           id:w.id, title:w.title, description:w.description, status:w.status,
           priority:w.priority, docId:w.document_id,
           assigneeId: w.assignee_id,
-          assigneeName: w.assignee?.full_name||w.assignee?.email||'Non assigné',
-          createdBy: w.creator?.full_name||'?',
-          dueDate: w.due_date, createdAt: w.created_at,
+          assigneeName: w.assignee?.name||w.assignee?.email||'Non assigné',
+          createdBy: w.creator?.name||'?',
+          dueDate: null, createdAt: w.created_at,
           approvers: w.assignee ? [w.assignee.email||''] : [],
         };
       });
@@ -454,12 +454,12 @@
 
   async function _loadUsers() {
     try {
-      let q = SB.from('users_profiles').select('*').order('full_name');
+      let q = SB.from('users_profiles').select('*').order('name');
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
       else q = q.eq('id', G.user.id);
       const { data } = await q;
       G.users = (data||[]).map(function(u){
-        return { id:u.id, name:u.full_name||u.email||'Utilisateur', email:u.email||'', role:u.role||'viewer', active:u.active!==false, lastLogin:u.last_login, docs:0 };
+        return { id:u.id, name:u.name||u.email||'Utilisateur', email:u.email||'', role:u.role||'viewer', active:u.active!==false, lastLogin:u.last_login, docs:0 };
       });
     } catch (err) { log.error('loadUsers: '+err.message); G.users=[]; }
   }
@@ -478,14 +478,14 @@
 
   async function _loadAuditLogs() {
     try {
-      let q = SB.from('activity_logs').select('*, users_profiles(full_name)')
+      let q = SB.from('activity_logs').select('id, user_id, document_id, description, action, created_at, company_id, users_profiles(name)')
         .order('created_at', { ascending: false }).limit(100);
       if (['admin','manager'].includes(G.profile?.role) && G.profile?.company_id)
         q = q.eq('company_id', G.profile.company_id);
       else q = q.eq('user_id', G.user.id);
       const { data } = await q;
       G.auditLogs = (data||[]).map(function(l){
-        return { id:l.id, action:l.action, description:l.description, user:l.users_profiles?.full_name||'Système', docId:l.document_id, createdAt:l.created_at };
+        return { id:l.id, action:l.action, description:l.description, user:l.users_profiles?.name||'Système', docId:l.document_id, createdAt:l.created_at };
       });
     } catch (err) { log.error('loadAuditLogs: '+err.message); G.auditLogs=[]; }
   }
@@ -566,7 +566,7 @@
     if (v==='security')   { renderAuditLog(); updateSecurityStats(); }
     if (v==='billing')    renderBillingView();
     if (v==='settings' && G.user) {
-      setVal$('profileName', G.profile?.full_name||'');
+      setVal$('profileName', G.profile?.name||'');
       setVal$('profileEmail', G.user.email||'');
     }
   }
@@ -741,7 +741,7 @@
     const collab = doc.collaborators?.length ? '<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-cyan-500/15 text-cyan-400 rounded-full border border-cyan-500/20"><i class="fas fa-users"></i>'+doc.collaborators.length+'</span>' : '';
     const wfCount = G.workflows.filter(function(w){ return w.docId===doc.id && w.status==='pending'; }).length;
     const wfBadge = wfCount>0 ? '<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-orange-500/15 text-orange-400 rounded-full border border-orange-500/20"><i class="fas fa-project-diagram"></i>'+wfCount+' WF</span>' : '';
-    const isOwner = doc.owner_id === G.user?.id;
+    const isOwner = doc.owner_id === G.user?.id || doc.user_id === G.user?.id;
     return '<div class="document-card glass-card rounded-xl p-4 border border-blue-500/20 relative group cursor-pointer" onclick="openDocumentPreview(\''+doc.id+'\')">'+
       '<div class="flex items-start justify-between mb-3">'+
         '<div class="w-12 h-12 '+fi.bg+' rounded-xl flex items-center justify-center '+fi.color+' border '+fi.border+'"><i class="fas '+fi.icon+' text-xl"></i></div>'+
@@ -766,7 +766,7 @@
 
   function createDocListItem(doc) {
     const fi = getFileIcon(doc.name||'');
-    const isOwner = doc.owner_id === G.user?.id;
+    const isOwner = doc.owner_id === G.user?.id || doc.user_id === G.user?.id;
     return '<div class="doc-list-item hover:bg-blue-500/5 cursor-pointer transition-all" onclick="openDocumentPreview(\''+doc.id+'\')">'+
       '<div class="doc-icon '+fi.bg+' rounded-lg flex items-center justify-center '+fi.color+' border '+fi.border+'"><i class="fas '+fi.icon+'"></i></div>'+
       '<div class="doc-content">'+
@@ -1053,7 +1053,7 @@
   }
 
   function _openShareEmail(toEmail, doc, permission, duration, expiresAt, signedUrl) {
-    const senderName = G.profile?.full_name||G.user.email;
+    const senderName = G.profile?.name||G.user.email;
     const permLabel  = PERM_LABELS[permission]||permission;
     const expStr     = expiresAt ? new Date(expiresAt).toLocaleDateString('fr-FR') : 'Illimité';
     const durLabel   = duration ? duration+' jour(s)' : 'Illimité';
@@ -1088,12 +1088,12 @@
   async function _renderCollaboratorsList(docId) {
     const el = document.getElementById('collaboratorsList'); if (!el) return;
     const { data } = await SB.from('document_permissions')
-      .select('*, users_profiles(id,full_name,email)')
+      .select('*, users_profiles(id,name,email)')
       .eq('document_id', docId);
     const perms = data||[];
     if (!perms.length) { el.innerHTML='<p class="text-blue-300/50 text-sm text-center py-4">Aucun collaborateur</p>'; return; }
     el.innerHTML = perms.map(function(p){
-      const name = p.users_profiles?.full_name||p.users_profiles?.email||'?';
+      const name = p.users_profiles?.name||p.users_profiles?.email||'?';
       const pclr = PERM_COLORS[p.permission]||'bg-blue-500/20 text-blue-300';
       return '<div class="flex items-center gap-3 p-3 rounded-xl bg-slate-900/30 border border-blue-500/10">'+
         '<div class="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-300 font-bold text-sm flex-shrink-0">'+esc(avatarInitials(name))+'</div>'+
@@ -1110,7 +1110,7 @@
     const perm  = document.getElementById('collabPermission')?.value||'viewer';
     if (!email) { showToast('Email requis','error'); return; }
     // Trouver l'utilisateur par email
-    const { data: targetUser } = await SB.from('users_profiles').select('id,full_name').eq('email', email).single();
+    const { data: targetUser } = await SB.from('users_profiles').select('id,name').eq('email', email).single();
     if (!targetUser) { showToast('Utilisateur introuvable : '+email,'error'); return; }
     const { error } = await SB.from('document_permissions').upsert({
       document_id: _permDocId, user_id: targetUser.id,
@@ -1253,7 +1253,7 @@
       const s = statusCfg[w.status]||statusCfg.pending;
       const d = G.docs.find(function(x){return x.id===w.docId;});
       const isAssignee  = w.assigneeId===G.user?.id;
-      const isCreator   = w.createdBy===G.profile?.full_name;
+      const isCreator   = w.createdBy===G.profile?.name;
       const canAct      = isAssignee||['admin','manager'].includes(G.profile?.role);
       return '<div class="glass-card rounded-2xl border border-blue-500/20 p-5 flex flex-col gap-3 hover:border-blue-400/40 transition-all">'+
         '<div class="flex items-start justify-between gap-2">'+
@@ -1264,7 +1264,7 @@
         (d?'<div class="flex items-center gap-2 p-2 rounded-lg" style="background:rgba(59,130,246,0.08)"><i class="fas '+getFileIcon(d.name).icon+' text-blue-400 text-sm"></i><p class="text-white text-xs truncate">'+esc(d.name)+'</p></div>':'')+
         '<div class="flex items-center justify-between text-xs text-blue-300/60">'+
           '<span class="'+(prioCfg[w.priority]||'text-blue-400')+' font-medium"><i class="fas fa-flag mr-1"></i>'+w.priority+'</span>'+
-          (w.dueDate?'<span><i class="fas fa-calendar mr-1"></i>'+w.dueDate+'</span>':'')+
+          
         '</div>'+
         (w.assigneeName?'<div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-900/30 text-xs text-blue-300/70"><i class="fas fa-user-check text-blue-400"></i>Assigné à <span class="text-white font-medium">'+esc(w.assigneeName)+'</span>'+(isAssignee?'<span class="ml-auto px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded text-[10px]">Vous</span>':'')+'</div>':'')+
         (canAct&&w.status==='pending'?'<div class="flex gap-2 pt-2 border-t border-blue-500/10">'+
@@ -1317,8 +1317,7 @@
     if (!title) { showToast('Titre requis','error'); return; }
     try {
       const payload = {
-        title, description: desc, priority, due_date: dueDate,
-        status: 'pending', created_by: G.user.id,
+        title, description: desc, priority, status: 'pending', created_by: G.user.id,
         assignee_id: assigneeId||null,
         company_id: G.profile?.company_id||null,
       };
@@ -1328,7 +1327,7 @@
         id:data.id, title:data.title, description:data.description, status:'pending',
         priority:data.priority, assigneeId:data.assignee_id,
         assigneeName: G.users.find(function(u){return u.id===assigneeId;})?.name||'Non assigné',
-        createdBy: G.profile?.full_name||'', dueDate:data.due_date, createdAt:data.created_at,
+        createdBy: G.profile?.name||'', dueDate:data.due_date, createdAt:data.created_at,
       });
       _logActivity('workflow', null, 'Workflow créé : '+title);
       addNotification('success','Workflow créé', title);
@@ -1509,7 +1508,7 @@
     const role = document.getElementById('editUserRole')?.value;
     const u = G.users.find(function(x){return x.id===id;}); if (!u) return;
     u.name=name.trim(); u.role=role;
-    await SB.from('users_profiles').update({full_name:name.trim(),role}).eq('id',id);
+    await SB.from('users_profiles').update({name:name.trim(),role}).eq('id',id);
     showToast('Utilisateur mis à jour ✓','success');
     closeEditUserModal(); loadUsers();
   }
@@ -1688,9 +1687,9 @@
     if(pwd&&pwd!==cpwd){showToast('Mots de passe différents','error');return;}
     if(pwd&&pwd.length<8){showToast('Mot de passe trop court','error');return;}
     // Mettre à jour profil Supabase
-    await SB.from('users_profiles').update({full_name:name}).eq('id',G.user.id);
+    await SB.from('users_profiles').update({name:name}).eq('id',G.user.id);
     if(pwd) await SB.auth.updateUser({password:pwd});
-    if(G.profile) G.profile.full_name=name;
+    if(G.profile) G.profile.name=name;
     set$('userNameDisplay',name.split(' ')[0]);
     set$('dropdownUserName',name);
     set$('userAvatarInitial',avatarInitials(name));
@@ -1760,7 +1759,7 @@
   // AUDIT LOG SUPABASE
   // ══════════════════════════════════════════════════════
   function logActivity(action, docId, description) {
-    G.auditLogs.unshift({id:'a-'+Date.now(),action,docId,description,user:G.profile?.full_name||G.user?.email||'Système',createdAt:new Date().toISOString()});
+    G.auditLogs.unshift({id:'a-'+Date.now(),action,docId,description,user:G.profile?.name||G.user?.email||'Système',createdAt:new Date().toISOString()});
     if(G.auditLogs.length>200) G.auditLogs=G.auditLogs.slice(0,200);
     addSysLog('info',description||action);
     if(G.user) _logActivity(action,docId,description);
@@ -1769,9 +1768,12 @@
     if(!G.user) return;
     try {
       await SB.from('activity_logs').insert({
-        user_id:G.user.id, action, document_id:docId||null,
-        description:description||action, company_id:G.profile?.company_id||null,
-        meta:{}
+        user_id: G.user.id,
+        action: action,
+        document_id: docId||null,
+        description: description||action,
+        company_id: G.profile?.company_id||null,
+        meta: {}
       });
     } catch(_) {}
   }
