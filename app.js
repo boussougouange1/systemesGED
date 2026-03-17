@@ -869,10 +869,13 @@
   function createDocCard(doc) {
     const fi = getFileIcon(doc.name||'');
     const tags = (doc.tags||[]).map(function(t){ return '<span class="tag text-[10px]" onclick="event.stopPropagation();filterByTag(\''+esc(t)+'\')">#'+esc(t)+'</span>'; }).join('');
-    const collab = doc.collaborators?.length ? '<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-cyan-500/15 text-cyan-400 rounded-full border border-cyan-500/20"><i class="fas fa-users"></i>'+doc.collaborators.length+'</span>' : '';
     const wfCount = G.workflows.filter(function(w){ return w.docId===doc.id && w.status==='pending'; }).length;
     const wfBadge = wfCount>0 ? '<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-orange-500/15 text-orange-400 rounded-full border border-orange-500/20"><i class="fas fa-project-diagram"></i>'+wfCount+' WF</span>' : '';
     const isOwner = doc.owner_id === G.user?.id || doc.user_id === G.user?.id;
+    const isCompany = !!doc.company_id;
+    const sourceBadge = isCompany
+      ? '<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-blue-500/15 text-blue-300 rounded-full border border-blue-400/20"><i class="fas fa-building text-[9px]"></i>Entreprise</span>'
+      : '<span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-purple-500/15 text-purple-300 rounded-full border border-purple-400/20"><i class="fas fa-user text-[9px]"></i>Personnel</span>';
     return '<div class="document-card glass-card rounded-xl p-4 border border-blue-500/20 relative group cursor-pointer" onclick="openDocumentPreview(\''+doc.id+'\')">'+
       '<div class="flex items-start justify-between mb-3">'+
         '<div class="w-12 h-12 '+fi.bg+' rounded-xl flex items-center justify-center '+fi.color+' border '+fi.border+'"><i class="fas '+fi.icon+' text-xl"></i></div>'+
@@ -886,7 +889,7 @@
       '<h4 class="font-bold text-white mb-1 truncate" title="'+esc(doc.name)+'">'+esc(doc.name)+'</h4>'+
       '<p class="text-xs text-blue-300/70 mb-2 line-clamp-2 h-8">'+esc(doc.description||'Sans description')+'</p>'+
       '<div class="flex flex-wrap gap-1 mb-2 min-h-[20px]">'+tags+'</div>'+
-      '<div class="flex flex-wrap gap-1 mb-2">'+collab+wfBadge+'</div>'+
+      '<div class="flex flex-wrap gap-1 mb-2">'+sourceBadge+wfBadge+'</div>'+
       '<div class="flex items-center justify-between text-xs border-t border-blue-500/10 pt-3">'+
         '<span class="text-blue-400/60">'+formatFileSize(doc.file_size||0)+'</span>'+
         '<span class="text-blue-400/60">'+fmtDate(doc.created_at)+'</span>'+
@@ -901,7 +904,7 @@
     return '<div class="doc-list-item hover:bg-blue-500/5 cursor-pointer transition-all" onclick="openDocumentPreview(\''+doc.id+'\')">'+
       '<div class="doc-icon '+fi.bg+' rounded-lg flex items-center justify-center '+fi.color+' border '+fi.border+'"><i class="fas '+fi.icon+'"></i></div>'+
       '<div class="doc-content">'+
-        '<h4 class="font-bold text-white truncate">'+esc(doc.name)+'</h4>'+
+        '<h4 class="font-bold text-white truncate">'+esc(doc.name)+' <span class="text-[9px] px-1.5 py-0.5 rounded-full '+(doc.company_id ? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300')+'">'+(doc.company_id ? '<i class="fas fa-building"></i>' : '<i class="fas fa-user"></i>')+'</span></h4>'+
         '<p class="text-xs text-blue-300/70">'+esc(doc.description||'')+'&nbsp;·&nbsp;'+formatFileSize(doc.file_size||0)+'&nbsp;·&nbsp;'+fmtDate(doc.created_at)+'</p>'+
       '</div>'+
       '<div class="doc-actions">'+
@@ -1155,11 +1158,24 @@
     const d    = G.docs.find(function(x){ return x.id===G.shareDocId; }); if (!d) return;
     try {
       const expiresAt = exp ? new Date(Date.now()+exp*86400000).toISOString() : null;
-      const { error } = await SB.from('shared_documents').insert({
-        document_id: d.id, shared_by: G.user.id,
-        shared_with_email: email, permission: perm, expires_at: expiresAt
-      });
-      if (error) throw error;
+      // Trouver l'utilisateur par email pour obtenir son user_id
+      const { data: targetUser, error: userErr } = await SB.from('users_profiles')
+        .select('id').eq('email', email).single();
+      if (userErr || !targetUser) {
+        // Fallback: enregistrer quand même dans shared_documents (utilisateur externe)
+        const { error: sdErr } = await SB.from('shared_documents').insert({
+          document_id: d.id, shared_by: G.user.id,
+          shared_with_email: email, permission: perm, expires_at: expiresAt
+        });
+        if (sdErr) throw sdErr;
+      } else {
+        // Utilisateur interne → document_permissions (apparaît dans son onglet "Partagés avec moi")
+        const { error: dpErr } = await SB.from('document_permissions').upsert({
+          document_id: d.id, user_id: targetUser.id,
+          permission: perm, shared_by: G.user.id, expires_at: expiresAt
+        }, { onConflict: 'document_id,user_id' });
+        if (dpErr) throw dpErr;
+      }
       // Signed URL
       let signedUrl = window.location.origin;
       if (d.storage_path) {
@@ -1345,7 +1361,9 @@
   async function revokeShare(id) {
     if (!confirm('Révoquer ce partage ?')) return;
     try {
-      await SB.from('shared_documents').delete().eq('id', id);
+      // Tenter suppression dans les deux tables (selon où le partage a été enregistré)
+      await SB.from('shared_documents').delete().eq('id', id).catch(function(){});
+      await SB.from('document_permissions').delete().eq('id', id).catch(function(){});
     } catch (_) {}
     G.sentShares = (G.sentShares||[]).filter(function(s){ return s.id!==id; });
     showToast('Partage révoqué','success');
@@ -1435,6 +1453,12 @@
       sel.innerHTML = '<option value="">-- Non assigné --</option>'+
         G.users.map(function(u){ return '<option value="'+esc(u.id)+'">'+esc(u.name)+' ('+esc(u.role)+')</option>'; }).join('');
     }
+    // Peupler le select de document lié
+    const dsel = document.getElementById('wfDocId');
+    if (dsel) {
+      dsel.innerHTML = '<option value="">-- Aucun document --</option>'+
+        G.docs.map(function(d){ return '<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>'; }).join('');
+    }
   }
   function closeWorkflowModal() { document.getElementById('workflowModal')?.classList.add('hidden'); }
 
@@ -1447,16 +1471,18 @@
     const assigneeId = document.getElementById('wfAssignee')?.value||null;
     if (!title) { showToast('Titre requis','error'); return; }
     try {
+      const docId = document.getElementById('wfDocId')?.value||null;
       const payload = {
         title, description: desc, priority, status: 'pending', created_by: G.user.id,
         assignee_id: assigneeId||null,
+        document_id: docId||null,
         company_id: G.profile?.company_id||null,
       };
       const { data, error } = await SB.from('workflows').insert([payload]).select().single();
       if (error) throw error;
       G.workflows.unshift({
         id:data.id, title:data.title, description:data.description, status:'pending',
-        priority:data.priority, assigneeId:data.assignee_id,
+        priority:data.priority, docId:data.document_id, assigneeId:data.assignee_id,
         assigneeName: G.users.find(function(u){return u.id===assigneeId;})?.name||'Non assigné',
         createdBy: G.profile?.name||'', dueDate:data.due_date, createdAt:data.created_at,
       });
