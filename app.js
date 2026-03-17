@@ -472,6 +472,7 @@
       else q = q.or('created_by.eq.'+G.user.id+',assignee_id.eq.'+G.user.id);
       const { data, error: wfe } = await q;
       if (wfe) { log.error('loadWorkflows: '+wfe.message); G.workflows=[]; return; }
+      G.workflows = (data||[]).map(function(w){
         return {
           id:w.id, title:w.title, description:w.description, status:w.status,
           priority:w.priority, docId:w.document_id,
@@ -491,6 +492,7 @@
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
       const { data, error: te } = await q;
       if (te) { log.error('loadTags: '+te.message); G.tags=[]; return; }
+      G.tags = (data||[]).map(function(t){ return { id:t.id, name:t.name, color:t.color||'#3b82f6', count:0 }; });
     } catch (err) { log.error('loadTags: '+err.message); G.tags=[]; }
   }
 
@@ -501,6 +503,7 @@
       else q = q.eq('id', G.user.id);
       const { data, error: ue } = await q;
       if (ue) { log.error('loadUsers: '+ue.message); G.users=[]; return; }
+      G.users = (data||[]).map(function(u){
         return { id:u.id, name:u.name||u.email||'Utilisateur', email:u.email||'', role:u.role||'viewer', active:u.active!==false, lastLogin:u.last_login, docs:0 };
       });
     } catch (err) { log.error('loadUsers: '+err.message); G.users=[]; }
