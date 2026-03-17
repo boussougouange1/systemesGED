@@ -153,13 +153,13 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     <div class="login-branding-circuits"></div>
     <div style="position:relative;z-index:10;width:100%;max-width:380px">
       <div class="text-center mb-10">
-        <div class="w-24 h-24 mx-auto mb-5 flex items-center justify-center rounded-2xl" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);box-shadow:0 0 40px rgba(59,130,246,0.4);">
-          <i class="fas fa-file-shield text-white text-4xl"></i>
+        <div class="w-24 h-24 mx-auto mb-5 flex items-center justify-center rounded-2xl" style="box-shadow:0 0 40px rgba(59,130,246,0.4);">
+          <img src="logo-systemesGED.png" alt="SystemesGED" class="w-24 h-24 rounded-2xl object-cover">
         </div>
         <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">SYSTEMES<span class="gradient-text">GED</span></h1>
         <p style="color:rgba(147,197,253,0.7);font-size:0.9rem">Gestion Électronique de Documents Cloud</p>
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px">
-          <span class="version-badge">v4.0 SaaS</span>
+          <span class="version-badge">v7.0 SaaS</span>
           <span style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#34d399;font-weight:600;">RGPD ✓</span>
         </div>
       </div>
@@ -177,7 +177,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
   <div class="login-form-panel">
     <div class="login-card">
       <div class="lg:hidden text-center mb-6">
-        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl flex items-center justify-center" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)"><i class="fas fa-file-shield text-white text-xl"></i></div>
+        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl flex items-center justify-center"><img src="logo-systemesGED.png" alt="SystemesGED" class="w-14 h-14 rounded-2xl object-cover"></div>
         <h1 style="font-size:1.5rem;font-weight:800;color:white">SYSTEMES<span class="gradient-text">GED</span></h1>
       </div>
       <div style="display:flex;gap:6px;padding:6px;background:rgba(0,0,0,0.3);border-radius:14px;margin-bottom:24px;border:1px solid rgba(96,165,250,0.1)">
@@ -231,7 +231,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
 <aside class="mobile-sidebar glass-panel border-r border-blue-500/20 flex flex-col" id="mobileSidebar">
   <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)"><i class="fas fa-file-shield text-white"></i></div>
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"><img src="logo-systemesGED.png" alt="Logo" class="w-10 h-10 object-cover rounded-xl"></div>
       <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
     </div>
     <button onclick="closeMobileSidebar()" class="p-2 text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
@@ -255,6 +255,12 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       <button onclick="switchView('billing');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement</span></button>
       <button onclick="switchView('settings');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="settings"><i class="fas fa-cog w-5 text-center text-blue-400"></i><span>Configuration</span></button>
       <button onclick="switchView('security');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="security"><i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>Sécurité & Audit</span></button>
+      <button onclick="switchView('analytics');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="analytics"><i class="fas fa-chart-bar w-5 text-center text-yellow-400"></i><span>Analytics</span></button>
+      <button onclick="switchView('folders');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="folders"><i class="fas fa-folder-tree w-5 text-center text-yellow-400"></i><span>Dossiers</span></button>
+      <button onclick="switchView('signatures');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="signatures"><i class="fas fa-signature w-5 text-center text-purple-400"></i><span>Signatures</span></button>
+      <button onclick="switchView('ai');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="ai"><i class="fas fa-brain w-5 text-center text-pink-400"></i><span>Intelligence IA</span></button>
+      <button onclick="switchView('automation');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="automation"><i class="fas fa-magic w-5 text-center text-orange-400"></i><span>Automatisation</span></button>
+      <button onclick="switchView('backups');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="backups"><i class="fas fa-database w-5 text-center text-teal-400"></i><span>Sauvegardes</span></button>
     </div>
   </nav>
   <div class="p-4 border-t border-blue-500/20">
@@ -272,8 +278,8 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     <div class="flex items-center gap-3">
       <button class="mobile-menu-btn p-2 -ml-2 text-blue-400 hover:text-white" onclick="openMobileSidebar()"><i class="fas fa-bars text-xl"></i></button>
       <div class="hidden sm:flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)"><i class="fas fa-file-shield text-white"></i></div>
-        <div><h1 class="text-xl font-bold tracking-tight"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1><p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v6.0</p></div>
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"><img src="logo-systemesGED.png" alt="Logo" class="w-10 h-10 object-cover rounded-xl"></div>
+        <div><h1 class="text-xl font-bold tracking-tight"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1><p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v7.0</p></div>
       </div>
     </div>
     <div class="flex-1 max-w-xl mx-2 lg:mx-8">
@@ -1646,6 +1652,7 @@ function _saveContentNow(){
 </div>
 
 <script src="app.js" defer></script>
+<script src="app_collab.js" defer></script>
 <script src="app_v6.js" defer></script>
 <script src="app_v7.js" defer></script>
 </body>
