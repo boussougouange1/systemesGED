@@ -366,29 +366,7 @@
     };
 
 
-    // ──────────────────────────────────────────────────────
-    // PATCH 7 : uploadDocument — owner_id manquant
-    // Problème : le payload n'inclut pas owner_id dans certains
-    // cas, ce qui empêche le document d'apparaître dans "Mes docs"
-    // ──────────────────────────────────────────────────────
-    var _origUpload = window.uploadDocument;
-    window.uploadDocument = async function () {
-      // S'assurer que owner_id = G.user.id sera toujours inclus
-      // On patche SB.from('documents').insert pour intercepter
-      var _origInsert = SB.from.bind(SB);
-      // Solution directe : override via monkey-patch léger du payload
-      // On délègue à l'original mais on s'assure après coup que owner_id est défini
-      if (typeof _origUpload === 'function') {
-        await _origUpload();
-        // Après upload, vérifier que les nouveaux docs ont owner_id
-        try {
-          await SB.from('documents')
-            .update({ owner_id: G.user.id })
-            .eq('user_id', G.user.id)
-            .is('owner_id', null);
-        } catch (_) {}
-      }
-    };
+    // PATCH 7 : supprimé — causait des PATCH 400/403 inutiles
 
 
     // ──────────────────────────────────────────────────────
@@ -735,6 +713,41 @@
         console.warn('[GED Fix] auto-refresh:', err.message);
       }
     }, 5 * 60 * 1000);
+
+
+
+    // ──────────────────────────────────────────────────────
+    // PATCH TIMING : guards pour fonctions modules
+    // Évite "X is not defined" si le bouton est cliqué
+    // avant que app_modules.js ait fini son _ready()
+    // ──────────────────────────────────────────────────────
+    var _moduleGuards = [
+      'openFolderModal','closeFolderModal','createFolder','renderFoldersView',
+      'refreshAnalytics','loadAnalytics',
+      'analyzeAllDocuments','analyzeDocumentAI','renderAIView',
+      'openWfRuleModal','closeWfRuleModal','createWfRule',
+      'createBackup','restoreBackup','renderBackupsView',
+      'createRoleV7','renderRbacV7','deleteCustomRole',
+      'renderAutomationView','renderIntegrationsView',
+      'renderSignaturesView','openSignatureModal',
+      'initSearchView','runFTSearch',
+      'renderBillingV6','upgradeToPlan',
+      'renderAuditV6','setAuditFilter',
+      'renderApiKeysView','generateApiKeyV6',
+    ];
+    _moduleGuards.forEach(function(fnName) {
+      if (typeof window[fnName] !== 'function') {
+        window[fnName] = function() {
+          var args = arguments;
+          console.warn('[GED] ' + fnName + ' pas encore prête, retry dans 400ms');
+          setTimeout(function() {
+            if (typeof window[fnName] === 'function' && window[fnName].toString().indexOf('retry') === -1) {
+              window[fnName].apply(window, args);
+            }
+          }, 400);
+        };
+      }
+    });
 
     console.log('[GED Fixes] ✅ 17 patches appliqués');
   });
