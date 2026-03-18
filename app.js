@@ -19,7 +19,8 @@
   const log = {
     warn:  function (m) { if (IS_DEV) console.warn('[GED]', m); },
     error: function (m) { console.error('[GED]', m); }, // toujours visible pour diagnostiquer
-    info:  function (m) { if (IS_DEV) console.log('[GED]', m); }
+    info:  function (m) { if (IS_DEV) console.log('[GED]', m); },
+    debug: function (m) { if (IS_DEV) console.log('[GED:debug]', m); }
   };
 
   // ══════════════════════════════════════════════════════
@@ -539,21 +540,25 @@
   async function _loadWorkflows() {
     try {
       let q = SB.from('workflows')
-        .select('*, assignee:users_profiles!workflows_assignee_id_fkey(id,name,email), creator:users_profiles!workflows_created_by_fkey(id,name)')
+        .select('*')
         .order('created_at', { ascending: false });
       if (G.profile?.company_id) q = q.eq('company_id', G.profile.company_id);
       else q = q.or('created_by.eq.'+G.user.id+',assignee_id.eq.'+G.user.id);
       const { data, error: wfe } = await q;
       if (wfe) { log.error('loadWorkflows: '+wfe.message); G.workflows=[]; return; }
       G.workflows = (data||[]).map(function(w){
+        var assignee = (G.users||[]).find(function(u){ return u.id===w.assignee_id; });
+        var creator  = (G.users||[]).find(function(u){ return u.id===w.created_by; });
+        var meta = w.meta || {};
         return {
-          id:w.id, title:w.title, description:w.description, status:w.status,
-          priority:w.priority, docId:w.document_id,
+          id:w.id, title:w.title, description:w.description, status:w.status||'pending',
+          priority:w.priority||'medium', docId:w.document_id,
           assigneeId: w.assignee_id,
-          assigneeName: w.assignee?.name||w.assignee?.email||'Non assigné',
-          createdBy: w.creator?.name||'?',
+          assigneeName: assignee ? (assignee.name||assignee.email||'Non assigné') : 'Non assigné',
+          createdBy: creator ? (creator.name||creator.email||'?') : '?',
           dueDate: null, createdAt: w.created_at,
-          approvers: w.assignee ? [w.assignee.email||''] : [],
+          approvers: assignee ? [assignee.email||''] : [],
+          steps: meta.steps||[], history: meta.history||[],
         };
       });
     } catch (err) { log.error('loadWorkflows: '+err.message); G.workflows=[]; }
