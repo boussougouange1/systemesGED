@@ -2203,7 +2203,9 @@
     w.history.push(entry);
 
     // Persist in a workflow_comments table if it exists, else in meta
-    await SB.from('workflows').update({ meta: { history: w.history } }).eq('id', id).catch(function(){});
+    try {
+      await SB.from('workflows').update({ meta: { history: w.history } }).eq('id', id);
+    } catch(_) {}
     _logActivity('workflow', null, 'Commentaire sur "'+w.title+'": '+comment);
 
     document.getElementById('wfCommentInput').value = '';
