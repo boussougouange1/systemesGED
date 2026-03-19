@@ -2890,5 +2890,10 @@
     G,
   };
   Object.keys(_pub).forEach(function (k) { window[k] = _pub[k]; });
+// 🔓 Exposer les objets globaux (OBLIGATOIRE)
+window.G = G;
+window.SB = SB;
+window._loadProfile = _loadProfile;
+window._loadCompany = _loadCompany;
 
 })();
