@@ -1,3 +1,24 @@
+(function() {
+  // Guards immédiats — avant même que _whenReady se résolve
+  var _immediateGuards = [
+    'refreshAnalytics','openFolderModal','closeFolderModal','createFolder',
+    'analyzeAllDocuments','openWfRuleModal','createBackup','createRoleV7',
+    'renderSignaturesView','initSearchView','renderBillingV6','renderAuditV6',
+    'renderApiKeysView','generateApiKeyV6','renderRbacV7','renderAutomationView',
+    'renderIntegrationsView','renderBackupsView','renderFoldersView',
+  ];
+  _immediateGuards.forEach(function(fn) {
+    if (typeof window[fn] !== 'function') {
+      window[fn] = function() {
+        var a = arguments;
+        setTimeout(function() {
+          if (typeof window[fn] === 'function') window[fn].apply(window, a);
+        }, 500);
+      };
+    }
+  });
+})();
+
 /**
  * SystemesGED — app_fixes_v2.js
  * Correctifs JS ciblés — version 2
