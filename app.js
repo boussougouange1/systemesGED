@@ -390,129 +390,114 @@
   // CHARGEMENT DONNÉES SUPABASE
   // ══════════════════════════════════════════════════════
   async function _loadDocuments() {
-  try {
-    const SEL = '*';
+    try {
+      // Jointure users_profiles retirée de document_permissions (FK potentiellement absente
+      // dans Supabase → erreur 400 silencieuse qui vide tout le résultat)
+      // SELECT sans jointure document_permissions (plusieurs FK → ambiguïté PostgREST)
+      const SEL = '*, document_tags(tags(id,name,color))';
 
-    // 1. Documents entreprise
-    let companyDocs = [];
-    if (G.profile?.company_id) {
-      const { data, error } = await SB
-        .from('documents')
+      // 1. Docs de l'entreprise (filtrés par company_id)
+      var companyDocs = [];
+      if (G.profile?.company_id) {
+        var { data: cd, error: ce } = await SB.from('documents')
+          .select(SEL)
+          .eq('is_deleted', false)
+          .eq('company_id', G.profile.company_id)
+          .order('created_at', { ascending: false });
+        if (ce) {
+          log.error('loadDocuments company: ' + ce.message);
+          showToast('Erreur chargement documents entreprise : ' + ce.message, 'error');
+        } else {
+          companyDocs = cd || [];
+        }
+      }
+
+      // 2. Docs dont je suis propriétaire (sans company_id ou avec)
+      //    Récupère TOUS mes docs uploadés, même si company_id est NULL
+      var { data: myOwnDocs, error: me } = await SB.from('documents')
         .select(SEL)
         .eq('is_deleted', false)
-        .eq('company_id', G.profile.company_id)
+        .eq('owner_id', G.user.id)
         .order('created_at', { ascending: false });
-
-      if (error) {
-        log.error('company docs: ' + error.message);
-      } else {
-        companyDocs = data || [];
+      if (me) {
+        log.error('loadDocuments mine: ' + me.message);
+        showToast('Erreur chargement de vos documents : ' + me.message, 'error');
+        myOwnDocs = [];
       }
+
+      // 3. Docs partagés avec moi — 2 étapes pour éviter la jointure ambiguë
+      //    (plusieurs FK entre document_permissions et documents → erreur PostgREST)
+      var sharedDocs = [];
+      var { data: myPerms, error: pe } = await SB.from('document_permissions')
+        .select('document_id, permission, expires_at')
+        .eq('user_id', G.user.id)
+        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+      if (pe) {
+        log.error('loadDocuments perms: ' + pe.message);
+        myPerms = [];
+      }
+      if (myPerms && myPerms.length > 0) {
+        var sharedIds = myPerms.map(function(p){ return p.document_id; }).filter(Boolean);
+        if (sharedIds.length > 0) {
+          var { data: sharedRaw, error: se } = await SB.from('documents')
+            .select('*, document_tags(tags(id,name,color))')
+            .eq('is_deleted', false)
+            .in('id', sharedIds);
+          if (!se && sharedRaw) {
+            sharedDocs = sharedRaw.map(function(doc) {
+              var perm = myPerms.find(function(p){ return p.document_id === doc.id; });
+              return Object.assign({}, doc, { myPermission: perm ? perm.permission : 'viewer' });
+            });
+          }
+        }
+      }
+
+      // Fusionner companyDocs + myOwnDocs sans doublons → G.companyDocs
+      var allIds = new Set();
+      var merged = [];
+      companyDocs.forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
+      (myOwnDocs||[]).forEach(function(d){ if(!allIds.has(d.id)){ allIds.add(d.id); merged.push(d); } });
+
+      // ── Normaliser chaque liste indépendamment ──
+      var companyNorm  = merged.map(_normalizeDoc);
+      var myNorm       = (myOwnDocs||[]).map(_normalizeDoc);
+      var sharedNorm   = sharedDocs.map(_normalizeDoc);
+      // Personnel = mes docs sans company_id UNIQUEMENT (éviter doublon avec companyDocs)
+      var personalNorm = myNorm.filter(function(d){ return !d.company_id; });
+
+      G.companyDocs  = companyNorm;
+      G.myDocs       = myNorm;
+      G.sharedWithMe = sharedNorm;
+      G.personalDocs = personalNorm;
+
+      // ── G.docs = SOURCE DE VÉRITÉ : fusion dédupliquée, triée par date ──
+      var seen = new Set();
+      var allDocs = [];
+      function _addUniq(arr){
+        arr.forEach(function(d){
+          if (!seen.has(d.id)){ seen.add(d.id); allDocs.push(d); }
+        });
+      }
+      _addUniq(companyNorm);   // docs entreprise en premier
+      _addUniq(personalNorm);  // docs perso pas encore dans companyDocs
+      _addUniq(sharedNorm);    // docs partagés pas encore présents
+      // Tri chronologique décroissant
+      allDocs.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
+      G.docs = allDocs;  // écriture atomique
+
+      log.info('_loadDocuments: company='+companyNorm.length+' personal='+personalNorm.length+' shared='+sharedNorm.length+' total='+G.docs.length);
+
+    } catch (err) {
+      log.error('loadDocuments: ' + err.message);
+      showToast('Erreur critique chargement documents : ' + err.message, 'error');
+      G.docs = []; G.companyDocs = []; G.myDocs = []; G.personalDocs = []; G.sharedWithMe = [];
     }
-
-    // 2. Mes documents
-    let myOwnDocs = [];
-    const { data: myData, error: myErr } = await SB
-      .from('documents')
-      .select(SEL)
-      .eq('is_deleted', false)
-      .eq('owner_id', G.user.id)
-      .order('created_at', { ascending: false });
-
-    if (myErr) {
-      log.error('my docs: ' + myErr.message);
-    } else {
-      myOwnDocs = myData || [];
-    }
-
-    // 3. Documents partagés
-    let sharedDocs = [];
-
-    const { data: perms, error: permErr } = await SB
-  .from('document_permissions')
-  .select('document_id')
-  .eq('user_id', G.user.id);
-
-if (permErr) {
-  log.error('permissions error: ' + permErr.message);
-}
-    const ids = (perms || []).map(p => p.document_id);
-
-    if (ids.length > 0) {
-     const { data: sharedData, error: sharedErr } = await SB
-  .from('documents')
-  .select('*')
-  .in('id', ids)
-  .eq('is_deleted', false);
-
-if (sharedErr) {
-  log.error('shared docs error: ' + sharedErr.message);
-} else {
-  sharedDocs = sharedData || [];
- }
-}
-    // 4. Charger tous les tags (OPTIMISÉ)
-  const { data: docTags, error: tagErr } = await SB
-  .from('document_tags')
-  .select('document_id, tag_id');
-
-if (tagErr) log.error(tagErr.message);
-     
-    const { data: tags, error: tagsErr } = await SB
-  .from('tags')
-  .select('id, name');
-
-if (tagsErr) {
-  log.error('tags error: ' + tagsErr.message);
-}
-
-    function attachTags(docs) {
-      if (!docs || !docTags || !tags) return;
-
-  docs.forEach(doc => {
-        const tagIds = (docTags || [])
-          .filter(t => t.document_id === doc.id)
-          .map(t => t.tag_id);
-
-        doc.tags = (tags || [])
-          .filter(t => tagIds.includes(t.id))
-          .map(t => t.name);
-      });
-    }
-
-    companyDocs = companyDocs.map(d => ({ ...d }));
-    myOwnDocs = myOwnDocs.map(d => ({ ...d }));
-    sharedDocs = sharedDocs.map(d => ({ ...d }));
-
-    attachTags(companyDocs);
-    attachTags(myOwnDocs);
-    attachTags(sharedDocs);
-
-    // 5. Fusion sans doublons
-    const map = new Map();
-
-    [...companyDocs, ...myOwnDocs, ...sharedDocs].forEach(d => {
-      if (!map.has(d.id)) map.set(d.id, d);
-    });
-
-    G.companyDocs = companyDocs;
-    G.myDocs = myOwnDocs;
-    G.sharedWithMe = sharedDocs;
-    G.personalDocs = myOwnDocs.filter(d => !d.company_id);
-    G.docs = Array.from(map.values()).map(_normalizeDoc);
-
-    log.info('Documents chargés: ' + G.docs.length);
-     if (G.docs.length === 0) {
-     console.warn('⚠️ Aucun document chargé — vérifier RLS Supabase');
-}
-  } catch (err) {
-    log.error('loadDocuments crash: ' + err.message);
   }
-}      
+
   function _normalizeDoc(d) {
     if (!d) return d;
     return Object.assign({}, d, {
-      tags: d.tags || [],
+      tags: (d.document_tags||[]).map(function(dt){ return dt.tags?.name||''; }).filter(Boolean),
       // document_permissions retiré du SELECT principal (jointure ambiguë)
       // Les collaborateurs sont chargés à la demande via openPermModal()
       collaborators: [],
@@ -949,7 +934,6 @@ if (tagsErr) {
     else if (G.docsTab === 'personal') arr = G.personalDocs;
     else if (G.docsTab === 'mine')     arr = G.myDocs;
     else                               arr = G.sharedWithMe;
-	
     return _applyFilters(arr);
   }
 
@@ -1097,7 +1081,10 @@ if (tagsErr) {
     return { safe:true };
   }
 
- 
+  function openUploadModal()  { document.getElementById('uploadModal')?.classList.remove('hidden'); document.body.style.overflow='hidden'; }
+  // Scope par défaut = Entreprise si l'utilisateur a un company_id, sinon Personnel
+  var _uploadScope = 'company';
+
   function setDocScope(scope) {
     _uploadScope = scope;
     var cBtn = document.getElementById('scopeCompany');
@@ -1213,7 +1200,7 @@ if (tagsErr) {
         for (var ti=0; ti<G.uploadTags.length; ti++) {
           const tagName = G.uploadTags[ti];
           let { data: tagRow } = await SB.from('tags').select('id').eq('name',tagName)
-            .eq('company_id', G.profile?.company_id || null).single();
+            .eq('company_id', G.profile?.company_id||'').single();
           if (!tagRow) {
             const { data: newTag } = await SB.from('tags').insert({name:tagName,color:'#3b82f6',company_id:G.profile?.company_id||null}).select().single();
             tagRow = newTag;
@@ -2903,10 +2890,5 @@ if (tagsErr) {
     G,
   };
   Object.keys(_pub).forEach(function (k) { window[k] = _pub[k]; });
-// 🔓 Exposer les objets globaux (OBLIGATOIRE)
-window.G = G;
-window.SB = SB;
-window._loadProfile = _loadProfile;
-window._loadCompany = _loadCompany;
 
 })();
