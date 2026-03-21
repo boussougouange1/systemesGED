@@ -1,4 +1,4 @@
-// SystemesGED v5.1 - Application principale (CORRIGÉ ET AMÉLIORÉ)
+// SystemesGED v5.2 - Application principale (CORRIGÉ ET AMÉLIORÉ)
 // ============================================
 
 // ─── Configuration & État global ───
@@ -60,8 +60,10 @@ window.G = {
   searchResults: [],
   analytics: { data: null, lastUpdate: null },
   aiAnalysis: { queue: [], results: {} },
-  // NOUVEAU: Stockage des fichiers originaux pour upload
-  originalFiles: new Map() // Map<docId, File>
+  // Stockage des fichiers originaux pour upload
+  originalFiles: new Map(), // Map<docId, File>
+  // NOUVEAU: Compteur de validations en attente
+  pendingUsersCount: 0
 };
 
 // ─── Initialisation Supabase ───
@@ -149,7 +151,7 @@ async function handleLogin(e) {
     await simulateNetworkDelay(800);
     const user = await mockAuthLogin(email, password);
     if (user) {
-      // NOUVEAU: Vérifier si le compte est validé
+      // Vérifier si le compte est validé
       if (user.status === 'pending_validation') {
         showToast('Votre compte est en attente de validation par un administrateur', 'warning');
         btn.disabled = false;
@@ -187,7 +189,7 @@ async function handleRegister(e) {
   try {
     await simulateNetworkDelay(1000);
     const user = await mockAuthRegister(data);
-    // NOUVEAU: Ne pas connecter automatiquement, attendre validation
+    // Ne pas connecter automatiquement, attendre validation
     showToast('Compte créé avec succès. En attente de validation par un administrateur.', 'success');
     addAudit('register_pending', 'user', user.id);
     switchAuthTab('login'); // Retour à la page de login
@@ -233,8 +235,8 @@ async function mockAuthRegister(data) {
     id: generateId(),
     email: data.email,
     name: `${data.firstName} ${data.lastName}`,
-    role: 'viewer', // NOUVEAU: Rôle minimal par défaut
-    status: 'pending_validation', // NOUVEAU: Statut en attente
+    role: 'viewer', // Rôle minimal par défaut
+    status: 'pending_validation', // Statut en attente
     companyId: generateId(),
     plan: 'free',
     createdAt: new Date().toISOString(),
@@ -249,7 +251,7 @@ async function mockAuthRegister(data) {
     createdAt: new Date().toISOString()
   }));
   
-  // NOUVEAU: Créer une notification pour les admins
+  // Créer une notification pour les admins
   const admins = JSON.parse(localStorage.getItem(`admins_${user.companyId}`) || '[]');
   admins.push({ userId: user.id, email: user.email, name: user.name, requestedAt: new Date().toISOString() });
   localStorage.setItem(`admins_${user.companyId}`, JSON.stringify(admins));
@@ -279,6 +281,7 @@ async function initializeApp() {
   
   updateUserDisplay();
   await loadInitialData();
+  updatePendingUsersCount(); // NOUVEAU: Mettre à jour le compteur
   switchView('dashboard');
   startRealtimeSync();
   logInfo('Application initialisée', { user: G.currentUser?.id });
@@ -299,10 +302,51 @@ function updateUserDisplay() {
   planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan || 'free'}`;
   planBadge.textContent = (G.currentUser.plan || 'free').toUpperCase();
   
-  // NOUVEAU: Afficher badge si compte en attente
+  // Afficher badge si compte en attente
   if (G.currentUser.status === 'pending_validation') {
     showToast('Votre compte est limité - en attente de validation', 'warning');
   }
+  
+  // NOUVEAU: Afficher/masquer le menu validation selon les droits
+  updateValidationMenuVisibility();
+}
+
+// NOUVEAU: Mettre à jour la visibilité du menu validation
+function updateValidationMenuVisibility() {
+  const validationMenuItems = document.querySelectorAll('[data-view="pending-users"]');
+  const hasAccess = ['admin', 'manager'].includes(G.currentUser?.role);
+  
+  validationMenuItems.forEach(item => {
+    item.style.display = hasAccess ? 'flex' : 'none';
+  });
+  
+  // Mettre à jour le badge de compteur
+  updatePendingUsersBadge();
+}
+
+// NOUVEAU: Mettre à jour le compteur de validations en attente
+function updatePendingUsersCount() {
+  if (!G.currentUser?.companyId) return;
+  
+  const pendingUsers = JSON.parse(localStorage.getItem(`admins_${G.currentUser.companyId}`) || '[]');
+  // Compter aussi les utilisateurs dans G.users avec status pending_validation
+  const pendingInUsers = G.users.filter(u => u.status === 'pending_validation').length;
+  
+  G.pendingUsersCount = pendingUsers.length + pendingInUsers;
+  updatePendingUsersBadge();
+}
+
+// NOUVEAU: Mettre à jour l'affichage du badge
+function updatePendingUsersBadge() {
+  const badges = document.querySelectorAll('.pending-users-badge');
+  badges.forEach(badge => {
+    if (G.pendingUsersCount > 0 && ['admin', 'manager'].includes(G.currentUser?.role)) {
+      badge.textContent = G.pendingUsersCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  });
 }
 
 async function loadInitialData() {
@@ -496,7 +540,7 @@ async function loadBackups() {
   await simulateNetworkDelay(100);
   const stored = localStorage.getItem(`backups_${G.currentUser?.companyId}`);
   G.backups = stored ? JSON.parse(stored) : [];
-  return G.backups;
+  return G.backbacks;
 }
 
 function saveBackups() {
@@ -562,7 +606,7 @@ function openMobileSidebar() {
 
 function closeMobileSidebar() {
   document.getElementById('mobileSidebar').classList.remove('open');
-  document.getElementById('sidebarSidebar').classList.remove('active');
+  document.getElementById('sidebarOverlay').classList.remove('active');
 }
 
 // ─── Dashboard ───
@@ -602,9 +646,9 @@ function renderDashboard() {
   
   // NOUVEAU: Notification validations en attente pour admin
   if (['admin', 'manager'].includes(G.currentUser?.role)) {
-    const pendingUsers = JSON.parse(localStorage.getItem(`admins_${G.currentUser?.companyId}`) || '[]');
-    if (pendingUsers.length > 0) {
-      showToast(`${pendingUsers.length} utilisateur(s) en attente de validation`, 'warning');
+    updatePendingUsersCount();
+    if (G.pendingUsersCount > 0) {
+      showToast(`${G.pendingUsersCount} utilisateur(s) en attente de validation`, 'warning');
     }
   }
 }
@@ -632,7 +676,7 @@ function renderActivityList() {
 }
 
 function getActionIcon(action) {
-  const icons = { login: 'fa-sign-in-alt', logout: 'fa-sign-out-alt', upload: 'fa-upload', download: 'fa-download', share: 'fa-share', delete: 'fa-trash', restore: 'fa-undo', view_change: 'fa-eye' };
+  const icons = { login: 'fa-sign-in-alt', logout: 'fa-sign-out-alt', upload: 'fa-upload', download: 'fa-download', share: 'fa-share', delete: 'fa-trash', restore: 'fa-undo', view_change: 'fa-eye', validate: 'fa-check', reject: 'fa-times' };
   return icons[action] || 'fa-circle';
 }
 
@@ -859,7 +903,7 @@ function filterByTag(tagName) {
 }
 
 // ─── Upload ───
-// CORRECTION: Variable _uploadScope déclarée au début de la portée
+// Variable _uploadScope déclarée au début de la portée
 let _uploadScope = 'company';
 
 function openUploadModal() {
@@ -913,13 +957,13 @@ function handleDragLeave(e, zoneId) {
   document.getElementById(zoneId).classList.remove('drag-over');
 }
 
-// CORRECTION ÉTAPE 1: Upload Drag & Drop - Conserver le type MIME et créer des Blob avec le bon type
+// Upload Drag & Drop - Conserver le type MIME et créer des Blob avec le bon type
 function handleDrop(e, zoneId) {
   e.preventDefault();
   document.getElementById(zoneId).classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files);
   
-  // CORRECTION: Pour chaque fichier, créer un nouveau File avec le type MIME correct
+  // Pour chaque fichier, créer un nouveau File avec le type MIME correct
   const processedFiles = files.map(file => {
     // Détecter le type MIME réel basé sur l'extension si nécessaire
     let correctType = file.type;
@@ -960,7 +1004,7 @@ function handleFilePickerSelect(e) {
   uploadDocument();
 }
 
-// CORRECTION ÉTAPE 1: Drag & Drop zone document - même correction
+// Drag & Drop zone document - même correction
 function handleDocDrop(e) {
   e.preventDefault();
   document.getElementById('docDropZone').classList.remove('drag-over');
@@ -1049,7 +1093,7 @@ function removeUploadTag(idx) {
   renderUploadTags();
 }
 
-// CORRECTION ÉTAPE 2: Upload Standard - Préserver le nom de fichier original avec son extension
+// Upload Standard - Préserver le nom de fichier original avec son extension
 async function uploadDocument() {
   if (G.selectedFiles.length === 0) {
     showToast('Veuillez sélectionner au moins un fichier', 'warning');
@@ -1075,7 +1119,7 @@ async function uploadDocument() {
       await simulateNetworkDelay(50);
     }
     
-    // CORRECTION: Préserver le nom original avec extension
+    // Préserver le nom original avec extension
     const originalName = file.name;
     const customName = document.getElementById('docNameInput').value.trim();
     
@@ -1089,9 +1133,9 @@ async function uploadDocument() {
     
     const doc = {
       id: generateId(),
-      name: finalName, // CORRECTION: Utiliser le nom préservé
-      originalName: originalName, // NOUVEAU: Garder trace du nom original
-      mimeType: file.type, // CORRECTION: Stocker le type MIME
+      name: finalName, // Utiliser le nom préservé
+      originalName: originalName, // Garder trace du nom original
+      mimeType: file.type, // Stocker le type MIME
       type: getFileType(finalName),
       size: file.size,
       description: document.getElementById('docDescInput').value,
@@ -1110,7 +1154,7 @@ async function uploadDocument() {
       content: ''
     };
     
-    // NOUVEAU: Stocker le fichier original pour téléchargement ultérieur
+    // Stocker le fichier original pour téléchargement ultérieur
     G.originalFiles.set(doc.id, file);
     
     G.documents.unshift(doc);
@@ -1150,7 +1194,7 @@ function openPreviewModal(docId) {
   img.classList.add('hidden');
   content.classList.remove('hidden');
   
-  // CORRECTION: Meilleure gestion des types MIME pour l'aperçu
+  // Meilleure gestion des types MIME pour l'aperçu
   if (doc.type === 'img') {
     content.classList.add('hidden');
     img.classList.remove('hidden');
@@ -1164,7 +1208,7 @@ function openPreviewModal(docId) {
   } else if (doc.type === 'pdf') {
     content.classList.add('hidden');
     frame.classList.remove('hidden');
-    // CORRECTION: Pour PDF, essayer d'utiliser un blob URL si le fichier original existe
+    // Pour PDF, essayer d'utiliser un blob URL si le fichier original existe
     const originalFile = G.originalFiles.get(docId);
     if (originalFile && originalFile.type === 'application/pdf') {
       frame.src = URL.createObjectURL(originalFile);
@@ -1172,7 +1216,7 @@ function openPreviewModal(docId) {
       frame.src = `https://placehold.co/600x800/1e3a8a/60a5fa?text=PDF:+${encodeURIComponent(doc.name)}`;
     }
   } else if (doc.type === 'txt' || doc.mimeType === 'text/plain') {
-    // CORRECTION: Afficher le contenu texte directement
+    // Afficher le contenu texte directement
     content.innerHTML = `
       <div class="text-left p-4 bg-slate-900/50 rounded-lg border border-blue-500/20 max-h-96 overflow-auto">
         <pre class="text-sm text-blue-200 whitespace-pre-wrap">${doc.content || 'Aucun contenu texte disponible'}</pre>
@@ -1202,7 +1246,7 @@ function downloadCurrentDocument() {
   if (G.currentDocId) downloadDocument(G.currentDocId);
 }
 
-// CORRECTION: Utiliser le fichier original stocké pour le téléchargement
+// Utiliser le fichier original stocké pour le téléchargement
 function downloadDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
@@ -1210,7 +1254,7 @@ function downloadDocument(docId) {
   doc.downloads = (doc.downloads || 0) + 1;
   saveDocuments();
   
-  // CORRECTION: Utiliser le fichier original si disponible
+  // Utiliser le fichier original si disponible
   const originalFile = G.originalFiles.get(docId);
   if (originalFile) {
     const url = URL.createObjectURL(originalFile);
@@ -1547,7 +1591,7 @@ async function createWorkflow(e) {
   updateBadges();
 }
 
-// CORRECTION ÉTAPE 3: Workflows visibilité assigné - Amélioration de l'affichage du document lié
+// Workflows visibilité assigné - Amélioration de l'affichage du document lié
 function openWfDetail(wfId) {
   const wf = G.workflows.find(w => w.id === wfId);
   if (!wf) return;
@@ -1576,7 +1620,7 @@ function openWfDetail(wfId) {
     </div>
   `).join('');
   
-  // CORRECTION: Vérifier si l'utilisateur est assigné à n'importe quelle étape
+  // Vérifier si l'utilisateur est assigné à n'importe quelle étape
   const isAssignee = wf.assigneeId === G.currentUser?.id || 
                      (wf.steps && wf.steps.some(s => s.assigneeId === G.currentUser?.id)) ||
                      wf.steps[wf.currentStep]?.assigneeId === G.currentUser?.id;
@@ -1586,7 +1630,7 @@ function openWfDetail(wfId) {
   
   document.getElementById('wfDetailActions').classList.toggle('hidden', !canAct);
   
-  // CORRECTION: Afficher le document lié avec un bouton d'accès pour l'assigné
+  // Afficher le document lié avec un bouton d'accès pour l'assigné
   const docSection = document.getElementById('wfDetailDocument');
   if (wf.documentId) {
     const doc = G.documents.find(d => d.id === wf.documentId);
@@ -1783,7 +1827,7 @@ function renderSentShares() {
 }
 
 // ─── Users ───
-// CORRECTION ÉTAPE 4: Restriction création utilisateurs - Vérifier le rôle avant d'ouvrir le modal
+// Restriction création utilisateurs - Vérifier le rôle avant d'ouvrir le modal
 function openCreateUserModal() {
   // Vérifier si l'utilisateur a les droits (admin ou manager)
   if (!['admin', 'manager'].includes(G.currentUser?.role)) {
@@ -1802,7 +1846,7 @@ function closeAddUserModal() {
   document.getElementById('newUserEmail').value = '';
 }
 
-// CORRECTION ÉTAPE 5: Validation obligatoire par admin - Créer l'utilisateur avec statut pending
+// Validation obligatoire par admin - Créer l'utilisateur avec statut pending
 async function addUser(e) {
   e.preventDefault();
   
@@ -1817,7 +1861,7 @@ async function addUser(e) {
     name: `${document.getElementById('newUserFirst').value} ${document.getElementById('newUserLast').value}`,
     email: document.getElementById('newUserEmail').value,
     role: document.getElementById('newUserRole').value,
-    status: 'pending_validation', // CORRECTION: Statut en attente de validation
+    status: 'pending_validation', // Statut en attente de validation
     createdAt: new Date().toISOString(),
     lastLogin: null,
     createdBy: G.currentUser?.id
@@ -1836,6 +1880,9 @@ async function addUser(e) {
   G.users.push(newUser);
   saveUsers();
   
+  // Mettre à jour le compteur de validations en attente
+  updatePendingUsersCount();
+  
   // Envoyer notification à l'utilisateur
   if (newUser.status === 'pending_validation') {
     showToast('Utilisateur créé - en attente de validation par un administrateur', 'warning');
@@ -1853,7 +1900,7 @@ async function addUser(e) {
 function renderUsers() {
   const tbody = document.getElementById('usersList');
   
-  // CORRECTION: Afficher le statut de validation
+  // Afficher le statut de validation
   tbody.innerHTML = G.users.map(u => `
     <tr class="hover:bg-blue-500/5 ${u.status === 'pending_validation' ? 'bg-yellow-500/5' : ''}">
       <td class="p-4">
@@ -1884,7 +1931,7 @@ function renderUsers() {
   `).join('');
 }
 
-// NOUVEAU: Fonction de validation utilisateur
+// Fonction de validation utilisateur
 function validateUser(userId) {
   if (!['admin', 'manager'].includes(G.currentUser?.role)) {
     showToast('Permission refusée', 'error');
@@ -1899,6 +1946,10 @@ function validateUser(userId) {
   u.validatedBy = G.currentUser?.id;
   
   saveUsers();
+  
+  // Mettre à jour le compteur
+  updatePendingUsersCount();
+  
   showToast(`Utilisateur ${u.name} validé avec succès`, 'success');
   addAudit('validate', 'user', userId);
   renderUsers();
@@ -1911,48 +1962,118 @@ function validateUser(userId) {
     userData.status = 'active';
     localStorage.setItem(userKey, JSON.stringify(userData));
   }
+  
+  // Rafraîchir la vue si on est sur la page des validations en attente
+  if (G.currentView === 'pending-users') {
+    renderPendingUsers();
+  }
 }
 
-// NOUVEAU: Vue des utilisateurs en attente
+// Vue des utilisateurs en attente
 function renderPendingUsers() {
   const container = document.getElementById('pendingUsersList');
-  const pending = G.users.filter(u => u.status === 'pending_validation');
+  if (!container) return;
   
-  if (pending.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i><p>Aucun utilisateur en attente</p></div>';
+  // Récupérer les utilisateurs en attente depuis G.users ET localStorage
+  const pendingFromUsers = G.users.filter(u => u.status === 'pending_validation');
+  const pendingFromStorage = JSON.parse(localStorage.getItem(`admins_${G.currentUser?.companyId}`) || '[]');
+  
+  // Fusionner et dédoublonner
+  const allPending = [...pendingFromUsers];
+  pendingFromStorage.forEach(stored => {
+    if (!allPending.find(u => u.id === stored.userId)) {
+      allPending.push({
+        id: stored.userId,
+        name: stored.name,
+        email: stored.email,
+        status: 'pending_validation',
+        createdAt: stored.requestedAt,
+        source: 'registration'
+      });
+    }
+  });
+  
+  // Trier par date
+  allPending.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  if (allPending.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-blue-300/50">
+        <i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i>
+        <p class="mb-2">Aucun utilisateur en attente de validation</p>
+        <p class="text-sm text-blue-300/30">Tous les comptes sont actifs</p>
+      </div>
+    `;
     return;
   }
   
-  container.innerHTML = pending.map(u => `
-    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400">${u.name.charAt(0)}</div>
-        <div>
-          <p class="text-white font-medium">${u.name}</p>
-          <p class="text-xs text-blue-300/60">${u.email} • Demandé le ${formatDate(u.createdAt)}</p>
+  container.innerHTML = allPending.map(u => `
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 hover:border-yellow-400/40 transition-all">
+      <div class="flex items-center justify-between flex-wrap gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-lg font-bold">
+            ${u.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p class="text-white font-medium text-lg">${u.name}</p>
+            <p class="text-sm text-blue-300/60">${u.email}</p>
+            <p class="text-xs text-yellow-400/60 mt-1">
+              <i class="fas fa-clock mr-1"></i>
+              En attente depuis ${formatDate(u.createdAt)}
+            </p>
+          </div>
         </div>
-      </div>
-      <div class="flex gap-2">
-        <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm hover:bg-green-500/30">
-          <i class="fas fa-check mr-2"></i>Valider
-        </button>
-        <button onclick="rejectUser('${u.id}')" class="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30">
-          <i class="fas fa-times mr-2"></i>Rejeter
-        </button>
+        <div class="flex gap-2">
+          <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm hover:bg-green-500/30 flex items-center gap-2">
+            <i class="fas fa-check"></i>
+            <span>Valider</span>
+          </button>
+          <button onclick="rejectUser('${u.id}')" class="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30 flex items-center gap-2">
+            <i class="fas fa-times"></i>
+            <span>Rejeter</span>
+          </button>
+          <button onclick="viewUserDetails('${u.id}')" class="px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-sm hover:bg-blue-500/30 flex items-center gap-2">
+            <i class="fas fa-eye"></i>
+            <span>Détails</span>
+          </button>
+        </div>
       </div>
     </div>
   `).join('');
 }
 
-// NOUVEAU: Rejeter un utilisateur
+// NOUVEAU: Voir les détails d'un utilisateur en attente
+function viewUserDetails(userId) {
+  const u = G.users.find(user => user.id === userId);
+  if (!u) return;
+  
+  const details = `
+    Nom: ${u.name}
+    Email: ${u.email}
+    Rôle demandé: ${G.roles[u.role]?.name || u.role}
+    Date de demande: ${formatDate(u.createdAt)}
+    Demandé par: ${u.source === 'registration' ? 'Inscription' : 'Création manuelle'}
+  `;
+  
+  alert(details);
+}
+
+// Rejeter un utilisateur
 function rejectUser(userId) {
-  if (!confirm('Êtes-vous sûr de vouloir rejeter cet utilisateur ?')) return;
+  if (!confirm('Êtes-vous sûr de vouloir rejeter cet utilisateur ?\n\nCette action est irréversible.')) return;
   
   const u = G.users.find(user => user.id === userId);
   if (!u) return;
   
   u.status = 'rejected';
+  u.rejectedAt = new Date().toISOString();
+  u.rejectedBy = G.currentUser?.id;
+  
   saveUsers();
+  
+  // Mettre à jour le compteur
+  updatePendingUsersCount();
+  
   showToast('Utilisateur rejeté', 'info');
   addAudit('reject', 'user', userId);
   renderPendingUsers();
@@ -2019,7 +2140,6 @@ function deleteUser(userId) {
   showToast('Utilisateur supprimé', 'success');
   addAudit('delete', 'user', userId);
   renderUsers();
-  updateBadges();
 }
 
 // ─── Tags ───
@@ -3986,7 +4106,7 @@ function showStorageStats() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-  logInfo('SystemesGED v5.1 démarré - Version corrigée');
+  logInfo('SystemesGED v5.2 démarré - Version avec validation des comptes');
   
   // Check for saved session
   const savedUser = localStorage.getItem('currentUser');
@@ -4106,7 +4226,7 @@ Object.assign(window, {
   openCreateWorkflowModal, closeWorkflowModal, addWfStep, createWorkflow, openWfDetail, closeWfDetail,
   actOnWorkflow, addWfComment, filterWorkflows, searchWorkflows, setWfView,
   openCreateUserModal, closeAddUserModal, addUser, openEditUserModal, closeEditUserModal, saveEditUser, deleteUser,
-  validateUser, rejectUser, renderPendingUsers, // NOUVEAUX
+  validateUser, rejectUser, renderPendingUsers, viewUserDetails, // NOUVEAUX
   createTag, deleteTag, selectPlan, simulateUpgrade, saveProfile, toggleSetting, exportAllData, copySqlSchema,
   generateApiKey, scanAllDocuments, filterLogs, clearSysLogs, exportSysLogs,
   openRoleModal, closeRoleModal, saveRole,
@@ -4137,4 +4257,6 @@ Object.assign(window, {
   openDangerModal, closeDangerModal, checkDangerConfirm, executeDangerAction,
   deleteAllDocuments, resetAllStorage, purgeAllData, deleteCurrentAccount,
   exportDocumentsCsv, exportAuditLog, showStorageStats,
+  // NOUVEAU: Fonctions de validation
+  updatePendingUsersCount, updatePendingUsersBadge, updateValidationMenuVisibility,
 });
