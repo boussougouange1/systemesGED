@@ -141,6 +141,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
 
 </style>
 <base target="_blank">
+<base target="_blank">
 </head>
 <body class="text-gray-100 font-sans antialiased">
 
@@ -252,6 +253,12 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     <div class="pt-3 mt-3 border-t border-blue-500/20">
       <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Administration</p>
       <button onclick="switchView('users');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="users"><i class="fas fa-users w-5 text-center text-blue-400"></i><span>Utilisateurs</span></button>
+      <button onclick="switchView('pending-users');closeMobileSidebar()" 
+        class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300">
+        <i class="fas fa-user-clock w-5 text-center text-yellow-400"></i>
+        <span>Validations</span>
+        <span id="m-pendingBadge" class="ml-auto bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full hidden">0</span>
+      </button>
       <button onclick="switchView('tags');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="tags"><i class="fas fa-tags w-5 text-center text-blue-400"></i><span>Tags</span></button>
       <button onclick="switchView('billing');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement</span></button>
       <button onclick="switchView('settings');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="settings"><i class="fas fa-cog w-5 text-center text-blue-400"></i><span>Configuration</span></button>
@@ -358,6 +365,13 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       <div class="pt-3 mt-3 border-t border-blue-500/20">
         <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Administration</p>
         <button onclick="switchView('users')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="users"><i class="fas fa-users w-5 text-center text-blue-400"></i><span>Utilisateurs</span></button>
+        <button onclick="switchView('pending-users')" 
+          class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" 
+          data-view="pending-users">
+          <i class="fas fa-user-clock w-5 text-center text-yellow-400"></i>
+          <span>Validations en attente</span>
+          <span id="d-pendingBadge" class="ml-auto bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full hidden">0</span>
+        </button>
         <button onclick="switchView('tags')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="tags"><i class="fas fa-tags w-5 text-center text-blue-400"></i><span>Tags</span></button>
         <button onclick="switchView('billing')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement</span></button>
         <button onclick="switchView('settings')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="settings"><i class="fas fa-cog w-5 text-center text-blue-400"></i><span>Configuration</span></button>
