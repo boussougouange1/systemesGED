@@ -3526,6 +3526,47 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Expose functions globally for HTML onclick handlers
+
+// ─── Danger Modal ───
+function openDangerModal(action) {
+  G.dangerAction = action;
+  const messages = {
+    'delete_all': 'Vous allez supprimer TOUS vos documents. Cette action est irréversible.'
+  };
+  document.getElementById('dangerModalMessage').textContent = messages[action] || 'Action irréversible';
+  document.getElementById('dangerModal').classList.remove('hidden');
+  document.getElementById('dangerConfirmInput').value = '';
+  document.getElementById('dangerConfirmBtn').disabled = true;
+}
+
+function checkDangerConfirm() {
+  const input = document.getElementById('dangerConfirmInput').value;
+  document.getElementById('dangerConfirmBtn').disabled = input !== 'CONFIRMER';
+}
+
+function executeDangerAction() {
+  if (G.dangerAction === 'delete_all') {
+    G.documents.forEach(d => {
+      if (d.ownerId === G.currentUser?.id) {
+        d.isDeleted = true;
+        d.deletedAt = new Date().toISOString();
+      }
+    });
+    saveDocuments();
+    showToast('Tous vos documents ont été supprimés', 'success');
+    addAudit('delete_all', 'documents', 'all');
+  }
+  closeDangerModal();
+  renderDocuments();
+  updateBadges();
+  updateStorageDisplay();
+}
+
+function refreshPendingUsers() {
+  renderPendingUsers();
+  showToast('Liste actualisée', 'success');
+}
+
 Object.assign(window, {
   switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout,
   switchView, openMobileSidebar, closeMobileSidebar,
