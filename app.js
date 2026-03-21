@@ -1,4 +1,4 @@
-// SystemesGED v5.0 - Application principale (CORRIGÉ)
+// SystemesGED v5.1 - Application principale (CORRIGÉ ET AMÉLIORÉ)
 // ============================================
 
 // ─── Configuration & État global ───
@@ -59,7 +59,9 @@ window.G = {
   unreadCount: 0,
   searchResults: [],
   analytics: { data: null, lastUpdate: null },
-  aiAnalysis: { queue: [], results: {} }
+  aiAnalysis: { queue: [], results: {} },
+  // NOUVEAU: Stockage des fichiers originaux pour upload
+  originalFiles: new Map() // Map<docId, File>
 };
 
 // ─── Initialisation Supabase ───
@@ -147,6 +149,14 @@ async function handleLogin(e) {
     await simulateNetworkDelay(800);
     const user = await mockAuthLogin(email, password);
     if (user) {
+      // NOUVEAU: Vérifier si le compte est validé
+      if (user.status === 'pending_validation') {
+        showToast('Votre compte est en attente de validation par un administrateur', 'warning');
+        btn.disabled = false;
+        btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
+        return;
+      }
+      
       G.currentUser = user;
       G.currentCompany = await loadCompany(user.companyId);
       await initializeApp();
@@ -177,11 +187,10 @@ async function handleRegister(e) {
   try {
     await simulateNetworkDelay(1000);
     const user = await mockAuthRegister(data);
-    G.currentUser = user;
-    G.currentCompany = await loadCompany(user.companyId);
-    await initializeApp();
-    showToast('Compte créé avec succès', 'success');
-    addAudit('register', 'user', user.id);
+    // NOUVEAU: Ne pas connecter automatiquement, attendre validation
+    showToast('Compte créé avec succès. En attente de validation par un administrateur.', 'success');
+    addAudit('register_pending', 'user', user.id);
+    switchAuthTab('login'); // Retour à la page de login
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -196,7 +205,7 @@ function demoLogin() {
 function oauthLogin(provider) {
   showToast(`Connexion ${provider}...`, 'info');
   setTimeout(() => {
-    const mockUser = { id: generateId(), email: `oauth_${provider}@demo.fr`, name: `User ${provider}`, role: 'admin', companyId: 'demo_company', plan: 'professional' };
+    const mockUser = { id: generateId(), email: `oauth_${provider}@demo.fr`, name: `User ${provider}`, role: 'admin', companyId: 'demo_company', plan: 'professional', status: 'active' };
     G.currentUser = mockUser;
     G.currentCompany = { id: 'demo_company', name: 'Entreprise Démo', plan: 'professional' };
     initializeApp();
@@ -206,7 +215,7 @@ function oauthLogin(provider) {
 
 async function mockAuthLogin(email, password) {
   if (email === 'demo@systemesged.fr' && password === 'Admin123!') {
-    return { id: 'user_demo', email, name: 'Administrateur Démo', role: 'admin', companyId: 'demo_company', plan: 'professional', createdAt: new Date().toISOString() };
+    return { id: 'user_demo', email, name: 'Administrateur Démo', role: 'admin', companyId: 'demo_company', plan: 'professional', createdAt: new Date().toISOString(), status: 'active' };
   }
   const stored = localStorage.getItem(`user_${email}`);
   if (stored) {
@@ -224,7 +233,8 @@ async function mockAuthRegister(data) {
     id: generateId(),
     email: data.email,
     name: `${data.firstName} ${data.lastName}`,
-    role: 'admin',
+    role: 'viewer', // NOUVEAU: Rôle minimal par défaut
+    status: 'pending_validation', // NOUVEAU: Statut en attente
     companyId: generateId(),
     plan: 'free',
     createdAt: new Date().toISOString(),
@@ -238,6 +248,11 @@ async function mockAuthRegister(data) {
     plan: 'free',
     createdAt: new Date().toISOString()
   }));
+  
+  // NOUVEAU: Créer une notification pour les admins
+  const admins = JSON.parse(localStorage.getItem(`admins_${user.companyId}`) || '[]');
+  admins.push({ userId: user.id, email: user.email, name: user.name, requestedAt: new Date().toISOString() });
+  localStorage.setItem(`admins_${user.companyId}`, JSON.stringify(admins));
   
   return user;
 }
@@ -283,6 +298,11 @@ function updateUserDisplay() {
   const planBadge = document.getElementById('planBadge');
   planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan || 'free'}`;
   planBadge.textContent = (G.currentUser.plan || 'free').toUpperCase();
+  
+  // NOUVEAU: Afficher badge si compte en attente
+  if (G.currentUser.status === 'pending_validation') {
+    showToast('Votre compte est limité - en attente de validation', 'warning');
+  }
 }
 
 async function loadInitialData() {
@@ -333,7 +353,8 @@ function generateMockDocuments() {
       views: Math.floor(Math.random() * 100),
       downloads: Math.floor(Math.random() * 20),
       isDeleted: false,
-      deletedAt: null
+      deletedAt: null,
+      content: ''
     });
   }
   return docs;
@@ -527,6 +548,8 @@ function switchView(viewName) {
     case 'versioning': renderVersioning(); break;
     case 'search': renderSearchV7(); break;
     case 'rbacv7': renderRBACV7(); break;
+    // NOUVEAU: Vue validation utilisateurs
+    case 'pending-users': renderPendingUsers(); break;
   }
   
   addAudit('view_change', 'view', viewName);
@@ -539,7 +562,7 @@ function openMobileSidebar() {
 
 function closeMobileSidebar() {
   document.getElementById('mobileSidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('active');
+  document.getElementById('sidebarSidebar').classList.remove('active');
 }
 
 // ─── Dashboard ───
@@ -576,6 +599,14 @@ function renderDashboard() {
   
   document.getElementById('dashTotalViews').textContent = G.documents.reduce((sum, d) => sum + (d.views || 0), 0);
   document.getElementById('dashActiveUsers').textContent = G.users.filter(u => u.status === 'active').length;
+  
+  // NOUVEAU: Notification validations en attente pour admin
+  if (['admin', 'manager'].includes(G.currentUser?.role)) {
+    const pendingUsers = JSON.parse(localStorage.getItem(`admins_${G.currentUser?.companyId}`) || '[]');
+    if (pendingUsers.length > 0) {
+      showToast(`${pendingUsers.length} utilisateur(s) en attente de validation`, 'warning');
+    }
+  }
 }
 
 function renderActivityList() {
@@ -882,11 +913,40 @@ function handleDragLeave(e, zoneId) {
   document.getElementById(zoneId).classList.remove('drag-over');
 }
 
+// CORRECTION ÉTAPE 1: Upload Drag & Drop - Conserver le type MIME et créer des Blob avec le bon type
 function handleDrop(e, zoneId) {
   e.preventDefault();
   document.getElementById(zoneId).classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files);
-  addFilesToSelection(files);
+  
+  // CORRECTION: Pour chaque fichier, créer un nouveau File avec le type MIME correct
+  const processedFiles = files.map(file => {
+    // Détecter le type MIME réel basé sur l'extension si nécessaire
+    let correctType = file.type;
+    const ext = file.name.split('.').pop().toLowerCase();
+    
+    // Mapping des extensions vers types MIME corrects
+    const mimeTypes = {
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'txt': 'text/plain',
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg'
+    };
+    
+    if (!correctType || correctType === 'application/octet-stream') {
+      correctType = mimeTypes[ext] || 'application/octet-stream';
+    }
+    
+    // Créer un nouveau File avec le bon type MIME
+    return new File([file], file.name, { type: correctType, lastModified: file.lastModified });
+  });
+  
+  addFilesToSelection(processedFiles);
 }
 
 function handleFileSelect(e) {
@@ -900,11 +960,36 @@ function handleFilePickerSelect(e) {
   uploadDocument();
 }
 
+// CORRECTION ÉTAPE 1: Drag & Drop zone document - même correction
 function handleDocDrop(e) {
   e.preventDefault();
   document.getElementById('docDropZone').classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files);
-  addFilesToSelection(files);
+  
+  // Même traitement que handleDrop
+  const processedFiles = files.map(file => {
+    let correctType = file.type;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'txt': 'text/plain',
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg'
+    };
+    
+    if (!correctType || correctType === 'application/octet-stream') {
+      correctType = mimeTypes[ext] || 'application/octet-stream';
+    }
+    
+    return new File([file], file.name, { type: correctType, lastModified: file.lastModified });
+  });
+  
+  addFilesToSelection(processedFiles);
   uploadDocument();
 }
 
@@ -927,6 +1012,7 @@ function renderSelectedFiles() {
         <i class="fas fa-file text-blue-400"></i>
         <span class="text-sm text-white truncate">${file.name}</span>
         <span class="text-xs text-blue-300/60">${formatBytes(file.size)}</span>
+        <span class="text-xs text-green-400">(${file.type || 'type inconnu'})</span>
       </div>
       <button onclick="removeFileFromSelection(${idx})" class="p-1 text-red-400 hover:text-red-300"><i class="fas fa-times"></i></button>
     </div>
@@ -963,6 +1049,7 @@ function removeUploadTag(idx) {
   renderUploadTags();
 }
 
+// CORRECTION ÉTAPE 2: Upload Standard - Préserver le nom de fichier original avec son extension
 async function uploadDocument() {
   if (G.selectedFiles.length === 0) {
     showToast('Veuillez sélectionner au moins un fichier', 'warning');
@@ -988,10 +1075,24 @@ async function uploadDocument() {
       await simulateNetworkDelay(50);
     }
     
+    // CORRECTION: Préserver le nom original avec extension
+    const originalName = file.name;
+    const customName = document.getElementById('docNameInput').value.trim();
+    
+    // Si un nom personnalisé est fourni, ajouter l'extension originale si elle manque
+    let finalName = originalName;
+    if (customName) {
+      const originalExt = originalName.split('.').pop();
+      const customHasExt = customName.includes('.');
+      finalName = customHasExt ? customName : `${customName}.${originalExt}`;
+    }
+    
     const doc = {
       id: generateId(),
-      name: document.getElementById('docNameInput').value || file.name,
-      type: getFileType(file.name),
+      name: finalName, // CORRECTION: Utiliser le nom préservé
+      originalName: originalName, // NOUVEAU: Garder trace du nom original
+      mimeType: file.type, // CORRECTION: Stocker le type MIME
+      type: getFileType(finalName),
       size: file.size,
       description: document.getElementById('docDescInput').value,
       scope: _uploadScope, // Utilisation de la variable corrigée
@@ -1009,9 +1110,12 @@ async function uploadDocument() {
       content: ''
     };
     
+    // NOUVEAU: Stocker le fichier original pour téléchargement ultérieur
+    G.originalFiles.set(doc.id, file);
+    
     G.documents.unshift(doc);
-    addAudit('upload', 'document', doc.id, { name: doc.name, size: doc.size });
-    logInfo(`Document uploadé: ${doc.name}`);
+    addAudit('upload', 'document', doc.id, { name: doc.name, size: doc.size, mimeType: file.type });
+    logInfo(`Document uploadé: ${doc.name} (type: ${file.type})`);
   }
   
   saveDocuments();
@@ -1035,7 +1139,7 @@ function openPreviewModal(docId) {
   saveDocuments();
   
   document.getElementById('previewTitle').textContent = doc.name;
-  document.getElementById('previewMeta').textContent = `${formatBytes(doc.size)} • ${formatDate(doc.createdAt)} • v${doc.version}`;
+  document.getElementById('previewMeta').textContent = `${formatBytes(doc.size)} • ${formatDate(doc.createdAt)} • v${doc.version} • ${doc.mimeType || 'type inconnu'}`;
   document.getElementById('previewIcon').innerHTML = `<div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]} text-2xl"><i class="fas ${getFileIcon(doc.type).split(' ')[0]}"></i></div>`;
   
   const content = document.getElementById('previewContent');
@@ -1046,19 +1150,39 @@ function openPreviewModal(docId) {
   img.classList.add('hidden');
   content.classList.remove('hidden');
   
+  // CORRECTION: Meilleure gestion des types MIME pour l'aperçu
   if (doc.type === 'img') {
     content.classList.add('hidden');
     img.classList.remove('hidden');
-    img.src = `https://placehold.co/600x400/1e3a8a/60a5fa?text=${encodeURIComponent(doc.name)}`;
+    // Utiliser le fichier original si disponible, sinon placeholder
+    const originalFile = G.originalFiles.get(docId);
+    if (originalFile && originalFile.type.startsWith('image/')) {
+      img.src = URL.createObjectURL(originalFile);
+    } else {
+      img.src = `https://placehold.co/600x400/1e3a8a/60a5fa?text=${encodeURIComponent(doc.name)}`;
+    }
   } else if (doc.type === 'pdf') {
     content.classList.add('hidden');
     frame.classList.remove('hidden');
-    frame.src = `https://placehold.co/600x800/1e3a8a/60a5fa?text=PDF:+${encodeURIComponent(doc.name)}`;
+    // CORRECTION: Pour PDF, essayer d'utiliser un blob URL si le fichier original existe
+    const originalFile = G.originalFiles.get(docId);
+    if (originalFile && originalFile.type === 'application/pdf') {
+      frame.src = URL.createObjectURL(originalFile);
+    } else {
+      frame.src = `https://placehold.co/600x800/1e3a8a/60a5fa?text=PDF:+${encodeURIComponent(doc.name)}`;
+    }
+  } else if (doc.type === 'txt' || doc.mimeType === 'text/plain') {
+    // CORRECTION: Afficher le contenu texte directement
+    content.innerHTML = `
+      <div class="text-left p-4 bg-slate-900/50 rounded-lg border border-blue-500/20 max-h-96 overflow-auto">
+        <pre class="text-sm text-blue-200 whitespace-pre-wrap">${doc.content || 'Aucun contenu texte disponible'}</pre>
+      </div>
+    `;
   } else {
     content.innerHTML = `
       <div class="text-center">
         <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-3 ${getFileIcon(doc.type).split(' ')[1]} opacity-50"></i>
-        <p class="mb-3">Aperçu non disponible pour ce format</p>
+        <p class="mb-3">Aperçu non disponible pour ce format (${doc.mimeType || 'type inconnu'})</p>
         <button onclick="downloadCurrentDocument()" class="btn-primary px-5 py-2 rounded-lg text-white text-sm"><i class="fas fa-download mr-2"></i>Télécharger</button>
       </div>
     `;
@@ -1078,6 +1202,7 @@ function downloadCurrentDocument() {
   if (G.currentDocId) downloadDocument(G.currentDocId);
 }
 
+// CORRECTION: Utiliser le fichier original stocké pour le téléchargement
 function downloadDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
@@ -1085,14 +1210,34 @@ function downloadDocument(docId) {
   doc.downloads = (doc.downloads || 0) + 1;
   saveDocuments();
   
-  showToast(`Téléchargement: ${doc.name}`, 'success');
-  addAudit('download', 'document', docId);
+  // CORRECTION: Utiliser le fichier original si disponible
+  const originalFile = G.originalFiles.get(docId);
+  if (originalFile) {
+    const url = URL.createObjectURL(originalFile);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.name; // Utiliser le nom final du document
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Téléchargement: ${doc.name}`, 'success');
+  } else {
+    // Fallback: créer un blob avec le bon type MIME
+    const mimeType = doc.mimeType || 'application/octet-stream';
+    const blob = new Blob([`Contenu simulé du fichier: ${doc.name}`], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Téléchargement: ${doc.name}`, 'success');
+  }
   
-  // Simulation téléchargement
-  const a = document.createElement('a');
-  a.href = `data:text/plain;charset=utf-8,Contenu simulé du fichier: ${encodeURIComponent(doc.name)}`;
-  a.download = doc.name;
-  a.click();
+  addAudit('download', 'document', docId);
 }
 
 function shareCurrentDocument() {
@@ -1402,6 +1547,7 @@ async function createWorkflow(e) {
   updateBadges();
 }
 
+// CORRECTION ÉTAPE 3: Workflows visibilité assigné - Amélioration de l'affichage du document lié
 function openWfDetail(wfId) {
   const wf = G.workflows.find(w => w.id === wfId);
   if (!wf) return;
@@ -1430,9 +1576,44 @@ function openWfDetail(wfId) {
     </div>
   `).join('');
   
-  const isAssignee = wf.assigneeId === G.currentUser?.id || (wf.steps[wf.currentStep]?.assigneeId === G.currentUser?.id);
-  const canAct = ['pending', 'in_review'].includes(wf.status) && isAssignee;
+  // CORRECTION: Vérifier si l'utilisateur est assigné à n'importe quelle étape
+  const isAssignee = wf.assigneeId === G.currentUser?.id || 
+                     (wf.steps && wf.steps.some(s => s.assigneeId === G.currentUser?.id)) ||
+                     wf.steps[wf.currentStep]?.assigneeId === G.currentUser?.id;
+  
+  const isCreator = wf.createdBy === G.currentUser?.id;
+  const canAct = ['pending', 'in_review'].includes(wf.status) && (isAssignee || isCreator);
+  
   document.getElementById('wfDetailActions').classList.toggle('hidden', !canAct);
+  
+  // CORRECTION: Afficher le document lié avec un bouton d'accès pour l'assigné
+  const docSection = document.getElementById('wfDetailDocument');
+  if (wf.documentId) {
+    const doc = G.documents.find(d => d.id === wf.documentId);
+    const hasAccess = isAssignee || isCreator || doc?.scope === 'company' || doc?.ownerId === G.currentUser?.id;
+    
+    docSection.innerHTML = `
+      <div class="p-3 rounded-lg bg-blue-900/20 border border-blue-500/20">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fas ${doc ? getFileIcon(doc.type).split(' ')[0] : 'fa-file'} text-blue-400"></i>
+            <div>
+              <p class="text-sm text-white font-medium">${doc ? doc.name : 'Document inconnu ou supprimé'}</p>
+              <p class="text-xs text-blue-300/60">${doc ? formatBytes(doc.size) : ''}</p>
+            </div>
+          </div>
+          ${doc && hasAccess ? `
+            <button onclick="openPreviewModal('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30">
+              <i class="fas fa-eye mr-1"></i>Voir
+            </button>
+          ` : '<span class="text-xs text-gray-500">Accès restreint</span>'}
+        </div>
+      </div>
+    `;
+    docSection.classList.remove('hidden');
+  } else {
+    docSection.classList.add('hidden');
+  }
   
   document.getElementById('wfDetailHistory').innerHTML = (wf.comments || []).map(c => `
     <div class="p-2 rounded-lg bg-slate-900/30 border border-blue-500/10">
@@ -1602,38 +1783,15 @@ function renderSentShares() {
 }
 
 // ─── Users ───
-function renderUsers() {
-  const tbody = document.getElementById('usersList');
-  tbody.innerHTML = G.users.map(u => `
-    <tr class="hover:bg-blue-500/5">
-      <td class="p-4">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-bold">${u.name.charAt(0)}</div>
-          <div>
-            <p class="text-white text-sm font-medium">${u.name}</p>
-            <p class="text-xs text-blue-300/60">${u.email}</p>
-          </div>
-        </div>
-      </td>
-      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
-      <td class="p-4 hidden md:table-cell text-sm text-blue-300/70">${G.documents.filter(d => d.ownerId === u.id && !d.isDeleted).length}</td>
-      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${u.status}</span></td>
-      <td class="p-4">
-        <div class="flex gap-2">
-          <button onclick="openEditUserModal('${u.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400"><i class="fas fa-edit"></i></button>
-          ${u.id !== G.currentUser?.id ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
-        </div>
-      </td>
-    </tr>
-  `).join('');
-}
-
-function getRoleBadgeClass(role) {
-  const classes = { admin: 'bg-red-500/20 text-red-400', manager: 'bg-orange-500/20 text-orange-400', editor: 'bg-blue-500/20 text-blue-400', viewer: 'bg-gray-500/20 text-gray-400' };
-  return classes[role] || 'bg-gray-500/20 text-gray-400';
-}
-
+// CORRECTION ÉTAPE 4: Restriction création utilisateurs - Vérifier le rôle avant d'ouvrir le modal
 function openCreateUserModal() {
+  // Vérifier si l'utilisateur a les droits (admin ou manager)
+  if (!['admin', 'manager'].includes(G.currentUser?.role)) {
+    showToast('Vous n\'avez pas les droits pour créer des utilisateurs', 'error');
+    logSecurity('Tentative de création utilisateur non autorisée', { user: G.currentUser?.id });
+    return;
+  }
+  
   document.getElementById('addUserModal').classList.remove('hidden');
 }
 
@@ -1644,30 +1802,175 @@ function closeAddUserModal() {
   document.getElementById('newUserEmail').value = '';
 }
 
+// CORRECTION ÉTAPE 5: Validation obligatoire par admin - Créer l'utilisateur avec statut pending
 async function addUser(e) {
   e.preventDefault();
   
-  const user = {
+  // Vérification supplémentaire des droits
+  if (!['admin', 'manager'].includes(G.currentUser?.role)) {
+    showToast('Permission refusée', 'error');
+    return;
+  }
+  
+  const newUser = {
     id: generateId(),
     name: `${document.getElementById('newUserFirst').value} ${document.getElementById('newUserLast').value}`,
     email: document.getElementById('newUserEmail').value,
     role: document.getElementById('newUserRole').value,
-    status: 'active',
+    status: 'pending_validation', // CORRECTION: Statut en attente de validation
     createdAt: new Date().toISOString(),
-    lastLogin: null
+    lastLogin: null,
+    createdBy: G.currentUser?.id
   };
   
-  G.users.push(user);
+  // Si c'est un admin qui crée, il peut choisir de valider immédiatement
+  if (G.currentUser?.role === 'admin') {
+    const validateImmediately = confirm('Valider immédiatement cet utilisateur ?\n\nOK = Oui (actif immédiatement)\nAnnuler = Non (en attente de validation)');
+    if (validateImmediately) {
+      newUser.status = 'active';
+      newUser.validatedAt = new Date().toISOString();
+      newUser.validatedBy = G.currentUser?.id;
+    }
+  }
+  
+  G.users.push(newUser);
   saveUsers();
   
-  showToast('Utilisateur ajouté', 'success');
-  addAudit('create', 'user', user.id);
+  // Envoyer notification à l'utilisateur
+  if (newUser.status === 'pending_validation') {
+    showToast('Utilisateur créé - en attente de validation par un administrateur', 'warning');
+    logInfo(`Nouvel utilisateur en attente: ${newUser.email}`);
+  } else {
+    showToast('Utilisateur créé et validé avec succès', 'success');
+  }
+  
+  addAudit('create', 'user', newUser.id, { status: newUser.status });
   closeAddUserModal();
   renderUsers();
   updateBadges();
 }
 
+function renderUsers() {
+  const tbody = document.getElementById('usersList');
+  
+  // CORRECTION: Afficher le statut de validation
+  tbody.innerHTML = G.users.map(u => `
+    <tr class="hover:bg-blue-500/5 ${u.status === 'pending_validation' ? 'bg-yellow-500/5' : ''}">
+      <td class="p-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full ${u.status === 'pending_validation' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'} flex items-center justify-center text-sm font-bold">${u.name.charAt(0)}</div>
+          <div>
+            <p class="text-white text-sm font-medium">${u.name}</p>
+            <p class="text-xs text-blue-300/60">${u.email}</p>
+          </div>
+        </div>
+      </td>
+      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
+      <td class="p-4 hidden md:table-cell text-sm text-blue-300/70">${G.documents.filter(d => d.ownerId === u.id && !d.isDeleted).length}</td>
+      <td class="p-4 hidden sm:table-cell">
+        <span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : u.status === 'pending_validation' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'}">
+          ${u.status === 'pending_validation' ? 'En attente' : u.status}
+        </span>
+      </td>
+      <td class="p-4">
+        <div class="flex gap-2">
+          ${u.status === 'pending_validation' && ['admin', 'manager'].includes(G.currentUser?.role) ? 
+            `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30" title="Valider"><i class="fas fa-check"></i></button>` : ''}
+          <button onclick="openEditUserModal('${u.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400"><i class="fas fa-edit"></i></button>
+          ${u.id !== G.currentUser?.id ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// NOUVEAU: Fonction de validation utilisateur
+function validateUser(userId) {
+  if (!['admin', 'manager'].includes(G.currentUser?.role)) {
+    showToast('Permission refusée', 'error');
+    return;
+  }
+  
+  const u = G.users.find(user => user.id === userId);
+  if (!u || u.status !== 'pending_validation') return;
+  
+  u.status = 'active';
+  u.validatedAt = new Date().toISOString();
+  u.validatedBy = G.currentUser?.id;
+  
+  saveUsers();
+  showToast(`Utilisateur ${u.name} validé avec succès`, 'success');
+  addAudit('validate', 'user', userId);
+  renderUsers();
+  
+  // Mettre à jour le stockage local si l'utilisateur existe
+  const userKey = `user_${u.email}`;
+  const stored = localStorage.getItem(userKey);
+  if (stored) {
+    const userData = JSON.parse(stored);
+    userData.status = 'active';
+    localStorage.setItem(userKey, JSON.stringify(userData));
+  }
+}
+
+// NOUVEAU: Vue des utilisateurs en attente
+function renderPendingUsers() {
+  const container = document.getElementById('pendingUsersList');
+  const pending = G.users.filter(u => u.status === 'pending_validation');
+  
+  if (pending.length === 0) {
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i><p>Aucun utilisateur en attente</p></div>';
+    return;
+  }
+  
+  container.innerHTML = pending.map(u => `
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400">${u.name.charAt(0)}</div>
+        <div>
+          <p class="text-white font-medium">${u.name}</p>
+          <p class="text-xs text-blue-300/60">${u.email} • Demandé le ${formatDate(u.createdAt)}</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm hover:bg-green-500/30">
+          <i class="fas fa-check mr-2"></i>Valider
+        </button>
+        <button onclick="rejectUser('${u.id}')" class="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30">
+          <i class="fas fa-times mr-2"></i>Rejeter
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// NOUVEAU: Rejeter un utilisateur
+function rejectUser(userId) {
+  if (!confirm('Êtes-vous sûr de vouloir rejeter cet utilisateur ?')) return;
+  
+  const u = G.users.find(user => user.id === userId);
+  if (!u) return;
+  
+  u.status = 'rejected';
+  saveUsers();
+  showToast('Utilisateur rejeté', 'info');
+  addAudit('reject', 'user', userId);
+  renderPendingUsers();
+  renderUsers();
+}
+
+function getRoleBadgeClass(role) {
+  const classes = { admin: 'bg-red-500/20 text-red-400', manager: 'bg-orange-500/20 text-orange-400', editor: 'bg-blue-500/20 text-blue-400', viewer: 'bg-gray-500/20 text-gray-400' };
+  return classes[role] || 'bg-gray-500/20 text-gray-400';
+}
+
 function openEditUserModal(userId) {
+  // Vérifier les droits
+  if (!['admin', 'manager'].includes(G.currentUser?.role) && userId !== G.currentUser?.id) {
+    showToast('Vous ne pouvez modifier que votre propre profil', 'error');
+    return;
+  }
+  
   const u = G.users.find(user => user.id === userId);
   if (!u) return;
   
@@ -1688,6 +1991,12 @@ function saveEditUser(e) {
   const u = G.users.find(user => user.id === id);
   if (!u) return;
   
+  // Vérifier les droits pour changer le rôle
+  if (u.role !== document.getElementById('editUserRole').value && !['admin', 'manager'].includes(G.currentUser?.role)) {
+    showToast('Vous ne pouvez pas changer votre rôle', 'error');
+    return;
+  }
+  
   u.name = `${document.getElementById('editUserFirst').value} ${document.getElementById('editUserLast').value}`;
   u.role = document.getElementById('editUserRole').value;
   
@@ -1699,6 +2008,11 @@ function saveEditUser(e) {
 }
 
 function deleteUser(userId) {
+  if (!['admin', 'manager'].includes(G.currentUser?.role)) {
+    showToast('Permission refusée', 'error');
+    return;
+  }
+  
   if (!confirm('Supprimer cet utilisateur ?')) return;
   G.users = G.users.filter(u => u.id !== userId);
   saveUsers();
@@ -1911,6 +2225,7 @@ function restoreDocument(docId) {
   loadDeletedDocs();
   renderDocuments();
   updateBadges();
+  updateStorageDisplay();
 }
 
 function generateApiKey() {
@@ -3191,12 +3506,20 @@ document.addEventListener('keydown', (e) => {
 
 // ─── Initialization ───
 document.addEventListener('DOMContentLoaded', () => {
-  logInfo('SystemesGED v5.0 démarré');
+  logInfo('SystemesGED v5.1 démarré - Version corrigée');
   
   // Check for saved session
   const savedUser = localStorage.getItem('currentUser');
   if (savedUser) {
-    G.currentUser = JSON.parse(savedUser);
+    const user = JSON.parse(savedUser);
+    // Vérifier si le compte est toujours valide
+    if (user.status === 'pending_validation') {
+      showToast('Votre compte est en attente de validation', 'warning');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('currentCompany');
+      return;
+    }
+    G.currentUser = user;
     G.currentCompany = JSON.parse(localStorage.getItem('currentCompany') || '{}');
     initializeApp();
   }
@@ -3213,6 +3536,7 @@ Object.assign(window, {
   openCreateWorkflowModal, closeWorkflowModal, addWfStep, createWorkflow, openWfDetail, closeWfDetail,
   actOnWorkflow, addWfComment, filterWorkflows, searchWorkflows, setWfView,
   openCreateUserModal, closeAddUserModal, addUser, openEditUserModal, closeEditUserModal, saveEditUser, deleteUser,
+  validateUser, rejectUser, renderPendingUsers, // NOUVEAUX
   createTag, deleteTag, selectPlan, simulateUpgrade, saveProfile, toggleSetting, exportAllData, copySqlSchema,
   generateApiKey, scanAllDocuments, filterLogs, clearSysLogs, exportSysLogs,
   openRoleModal, closeRoleModal, saveRole,
