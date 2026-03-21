@@ -3505,6 +3505,486 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ─── Initialization ───
+
+
+// ═══════════════════════════════════════════════════════════════
+// NOUVELLES FONCTIONS : DangerModal, Export CSV, Reset Complet
+// et Gestion d'Erreurs LocalStorage Améliorée
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Gestion d'erreurs LocalStorage robuste ───
+const StorageManager = {
+  // Vérifier si localStorage est disponible
+  isAvailable() {
+    try {
+      const test = '__storage_test__';
+      localStorage.setItem(test, test);
+      localStorage.removeItem(test);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  // Sauvegarder avec gestion d'erreur
+  set(key, value) {
+    try {
+      if (!this.isAvailable()) {
+        throw new Error('localStorage non disponible');
+      }
+      const serialized = JSON.stringify(value);
+      // Vérifier quota (5MB environ)
+      if (serialized.length > 4900000) {
+        throw new Error('Données trop volumineuses pour localStorage');
+      }
+      localStorage.setItem(key, serialized);
+      return { success: true };
+    } catch (e) {
+      console.error(`StorageManager.set('${key}') failed:`, e);
+      showToast(`Erreur sauvegarde: ${e.message}`, 'error');
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Charger avec gestion d'erreur
+  get(key, defaultValue = null) {
+    try {
+      if (!this.isAvailable()) {
+        return { success: false, data: defaultValue, error: 'localStorage non disponible' };
+      }
+      const item = localStorage.getItem(key);
+      if (!item) return { success: true, data: defaultValue };
+      return { success: true, data: JSON.parse(item) };
+    } catch (e) {
+      console.error(`StorageManager.get('${key}') failed:`, e);
+      return { success: false, data: defaultValue, error: e.message };
+    }
+  },
+
+  // Supprimer avec gestion d'erreur
+  remove(key) {
+    try {
+      if (!this.isAvailable()) return { success: false };
+      localStorage.removeItem(key);
+      return { success: true };
+    } catch (e) {
+      console.error(`StorageManager.remove('${key}') failed:`, e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Vider tout le stockage lié à l'application
+  clearAppData() {
+    try {
+      if (!this.isAvailable()) {
+        throw new Error('localStorage non disponible');
+      }
+
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        // Supprimer uniquement les clés SystemesGED
+        if (key && (
+          key.startsWith('docs_') ||
+          key.startsWith('workflows_') ||
+          key.startsWith('users_') ||
+          key.startsWith('tags_') ||
+          key.startsWith('shares_') ||
+          key.startsWith('folders_') ||
+          key.startsWith('signatures_') ||
+          key.startsWith('automation_') ||
+          key.startsWith('apikeys_') ||
+          key.startsWith('backups_') ||
+          key.startsWith('company_') ||
+          key.startsWith('user_') ||
+          key.startsWith('admins_') ||
+          key === 'currentUser' ||
+          key === 'currentCompany'
+        )) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      return { 
+        success: true, 
+        count: keysToRemove.length,
+        keys: keysToRemove
+      };
+    } catch (e) {
+      console.error('StorageManager.clearAppData() failed:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  // Obtenir statistiques du stockage
+  getStats() {
+    try {
+      if (!this.isAvailable()) return { success: false };
+
+      let totalSize = 0;
+      let appKeys = 0;
+      const details = [];
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        const value = localStorage.getItem(key) || '';
+        const size = new Blob([value]).size;
+        totalSize += size;
+
+        if (key && (
+          key.startsWith('docs_') || key.startsWith('workflows_') ||
+          key.startsWith('users_') || key.startsWith('current')
+        )) {
+          appKeys++;
+          details.push({ key, size: formatBytes(size) });
+        }
+      }
+
+      return {
+        success: true,
+        totalSize: formatBytes(totalSize),
+        totalKeys: localStorage.length,
+        appKeys,
+        details
+      };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+};
+
+// Rendre disponible globalement
+window.StorageManager = StorageManager;
+
+// ─── Fonctions de sauvegarde améliorées avec StorageManager ───
+function saveDocumentsSafe() {
+  if (G.currentUser?.companyId) {
+    const result = StorageManager.set(`docs_${G.currentUser.companyId}`, G.documents);
+    if (!result.success) logError('Échec sauvegarde documents', { error: result.error });
+    return result.success;
+  }
+  return false;
+}
+
+function saveUsersSafe() {
+  if (G.currentUser?.companyId) {
+    const result = StorageManager.set(`users_${G.currentUser.companyId}`, G.users);
+    if (!result.success) logError('Échec sauvegarde utilisateurs', { error: result.error });
+    return result.success;
+  }
+  return false;
+}
+
+// ─── DANGER MODAL & RESET COMPLET ───
+
+// Variable pour stocker l'action de danger en cours
+let _dangerAction = null;
+let _dangerCallback = null;
+
+function openDangerModal(action, message, callback = null) {
+  _dangerAction = action;
+  _dangerCallback = callback;
+
+  const modal = document.getElementById('dangerModal');
+  const msgEl = document.getElementById('dangerModalMessage');
+  const input = document.getElementById('dangerConfirmInput');
+  const btn = document.getElementById('dangerConfirmBtn');
+
+  if (msgEl) msgEl.textContent = message || 'Cette action est irréversible.';
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  if (btn) btn.disabled = true;
+
+  if (modal) modal.classList.remove('hidden');
+
+  addAudit('danger_modal_opened', 'system', action);
+}
+
+function closeDangerModal() {
+  const modal = document.getElementById('dangerModal');
+  if (modal) modal.classList.add('hidden');
+  _dangerAction = null;
+  _dangerCallback = null;
+}
+
+function checkDangerConfirm() {
+  const input = document.getElementById('dangerConfirmInput');
+  const btn = document.getElementById('dangerConfirmBtn');
+
+  if (input && btn) {
+    btn.disabled = input.value !== 'CONFIRMER';
+  }
+}
+
+async function executeDangerAction() {
+  if (!_dangerAction) return;
+
+  const input = document.getElementById('dangerConfirmInput');
+  if (!input || input.value !== 'CONFIRMER') {
+    showToast('Vous devez taper CONFIRMER', 'warning');
+    return;
+  }
+
+  showToast('Exécution en cours...', 'info');
+
+  try {
+    switch (_dangerAction) {
+      case 'delete_all':
+        await deleteAllDocuments();
+        break;
+      case 'reset_storage':
+        await resetAllStorage();
+        break;
+      case 'clear_logs':
+        clearSysLogs();
+        break;
+      case 'delete_account':
+        await deleteCurrentAccount();
+        break;
+      case 'purge_data':
+        await purgeAllData();
+        break;
+      default:
+        if (typeof _dangerCallback === 'function') {
+          await _dangerCallback();
+        }
+    }
+
+    closeDangerModal();
+    addAudit('danger_action_executed', 'system', _dangerAction);
+
+  } catch (error) {
+    console.error('Danger action failed:', error);
+    showToast(`Erreur: ${error.message}`, 'error');
+    logError('Danger action failed', { action: _dangerAction, error: error.message });
+  }
+}
+
+// Supprimer tous les documents (soft delete)
+async function deleteAllDocuments() {
+  if (!G.currentUser) throw new Error('Non authentifié');
+
+  const docsToDelete = G.documents.filter(d => !d.isDeleted && d.ownerId === G.currentUser.id);
+  const count = docsToDelete.length;
+
+  docsToDelete.forEach(doc => {
+    doc.isDeleted = true;
+    doc.deletedAt = new Date().toISOString();
+  });
+
+  const success = saveDocumentsSafe();
+  if (!success) throw new Error('Échec sauvegarde');
+
+  renderDocuments();
+  updateBadges();
+  updateStorageDisplay();
+  showToast(`${count} document(s) déplacé(s) vers la corbeille`, 'success');
+  addAudit('delete_all_documents', 'system', { count });
+}
+
+// Reset complet du stockage
+async function resetAllStorage() {
+  const stats = StorageManager.getStats();
+  const result = StorageManager.clearAppData();
+
+  if (!result.success) {
+    throw new Error(result.error || 'Échec du reset');
+  }
+
+  // Réinitialiser les variables globales
+  G.documents = [];
+  G.workflows = [];
+  G.users = [];
+  G.tags = [];
+  G.shares = [];
+  G.folders = [];
+  G.signatures = [];
+  G.automationRules = [];
+  G.apiKeys = [];
+  G.backups = [];
+  G.auditLog = [];
+  G.notifications = [];
+  G.unreadCount = 0;
+
+  // Recharger les données initiales
+  await loadInitialData();
+
+  showToast(`Stockage réinitialisé (${result.count} clés supprimées)`, 'success');
+  addAudit('reset_storage', 'system', { keysRemoved: result.count, previousStats: stats });
+
+  // Rafraîchir l'affichage
+  renderDocuments();
+  renderDashboard();
+}
+
+// Purge complète (tout supprimer définitivement)
+async function purgeAllData() {
+  const result = StorageManager.clearAppData();
+
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  // Déconnexion forcée
+  handleLogout();
+
+  showToast('Toutes les données ont été purgées', 'success');
+  addAudit('purge_all_data', 'system', { keysRemoved: result.count });
+}
+
+// Supprimer le compte courant
+async function deleteCurrentAccount() {
+  if (!G.currentUser) throw new Error('Non authentifié');
+
+  // Supprimer l'utilisateur du stockage
+  StorageManager.remove(`user_${G.currentUser.email}`);
+
+  // Déconnexion
+  handleLogout();
+
+  showToast('Compte supprimé définitivement', 'success');
+  addAudit('delete_account', 'user', G.currentUser.id);
+}
+
+// ─── EXPORT CSV AMÉLIORÉ ───
+
+function exportDocumentsCsv() {
+  try {
+    if (!G.documents || G.documents.length === 0) {
+      showToast('Aucun document à exporter', 'warning');
+      return;
+    }
+
+    // En-têtes CSV
+    const headers = [
+      'ID',
+      'Nom',
+      'Type',
+      'Taille (bytes)',
+      'Taille formatée',
+      'Description',
+      'Portée',
+      'Propriétaire',
+      'Dossier',
+      'Tags',
+      'Créé le',
+      'Modifié le',
+      'Version',
+      'Vues',
+      'Téléchargements',
+      'Statut'
+    ];
+
+    // Données
+    const rows = G.documents.map(doc => [
+      doc.id || '',
+      `"${(doc.name || '').replace(/"/g, '""')}"`,
+      doc.type || '',
+      doc.size || 0,
+      formatBytes(doc.size || 0),
+      `"${(doc.description || '').replace(/"/g, '""')}"`,
+      doc.scope || '',
+      doc.ownerId || '',
+      doc.folderId || '',
+      `"${(doc.tags || []).join(', ')}"`,
+      doc.createdAt || '',
+      doc.updatedAt || '',
+      doc.version || 1,
+      doc.views || 0,
+      doc.downloads || 0,
+      doc.isDeleted ? 'Supprimé' : 'Actif'
+    ]);
+
+    // Assembler CSV
+    const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+
+    // Créer blob et télécharger
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `documents_systemesged_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(`${rows.length} documents exportés en CSV`, 'success');
+    addAudit('export_csv', 'documents', { count: rows.length });
+
+  } catch (error) {
+    console.error('Export CSV failed:', error);
+    showToast(`Erreur export CSV: ${error.message}`, 'error');
+    logError('Export CSV failed', { error: error.message });
+  }
+}
+
+function exportAuditLog() {
+  try {
+    if (!G.auditLog || G.auditLog.length === 0) {
+      showToast('Aucun log à exporter', 'warning');
+      return;
+    }
+
+    const headers = ['Date', 'Utilisateur', 'Email', 'Action', 'Type', 'ID Cible', 'Détails'];
+
+    const rows = G.auditLog.map(log => [
+      log.timestamp || '',
+      log.userId || '',
+      log.userEmail || '',
+      log.action || '',
+      log.targetType || '',
+      log.targetId || '',
+      `"${JSON.stringify(log.details || {}).replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_systemesged_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(`${rows.length} entrées d'audit exportées`, 'success');
+
+  } catch (error) {
+    console.error('Export audit failed:', error);
+    showToast(`Erreur export audit: ${error.message}`, 'error');
+  }
+}
+
+// ─── FONCTION UTILITAIRE : Afficher statistiques stockage ───
+function showStorageStats() {
+  const stats = StorageManager.getStats();
+
+  if (!stats.success) {
+    showToast('Impossible d\'obtenir les statistiques', 'error');
+    return;
+  }
+
+  console.table(stats.details);
+
+  showToast(
+    `Stockage: ${stats.totalSize} (${stats.appKeys} clés app)`,
+    'info',
+    5000
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FIN DES NOUVELLES FONCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+
 document.addEventListener('DOMContentLoaded', () => {
   logInfo('SystemesGED v5.1 démarré - Version corrigée');
   
@@ -3650,5 +4130,11 @@ Object.assign(window, {
   applyFilters, clearFilters, filterByType, filterByTag, toggleViewMode, switchDocsTab, switchSharedTab,
   deleteDocument, restoreDocument, addCollaborator, removeCollaborator, openPermModal, closePermModal,
   switchSecurityTab, loadDeletedDocs, renderAuditLog,
-  renderDocContextMenu: showDocContextMenu
+  renderDocContextMenu: showDocContextMenu,
+  // Nouvelles fonctions v7.1
+  StorageManager,
+  saveDocumentsSafe, saveUsersSafe,
+  openDangerModal, closeDangerModal, checkDangerConfirm, executeDangerAction,
+  deleteAllDocuments, resetAllStorage, purgeAllData, deleteCurrentAccount,
+  exportDocumentsCsv, exportAuditLog, showStorageStats,
 });
