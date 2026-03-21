@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://supabase.io wss://*.supabase.co; img-src 'self' data: blob: https:; object-src 'none'; frame-ancestors 'none';">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SystemesGED v7.0 — Plateforme SaaS Collaborative</title>
+<meta name="description" content="SystemesGED — Plateforme GED cloud sécurisée, RGPD conforme, multi-tenant SaaS">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','sans-serif']},colors:{brand:{50:'#e6f0ff',100:'#cce0ff',500:'#3b82f6',600:'#2563eb',900:'#1e3a8a'}},screens:{xs:'375px',sm:'640px',md:'768px',lg:'1024px',xl:'1280px','2xl':'1536px'}}}}
+</script>
+<style>
+*{-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-height:100vh;overflow-x:hidden;}
+.glass-panel{background:rgba(30,58,138,0.15);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(96,165,250,0.2);}
+.glass-card{background:rgba(255,255,255,0.05);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(96,165,250,0.15);transition:all 0.3s ease;}
+.glass-card:hover{background:rgba(255,255,255,0.1);border-color:rgba(96,165,250,0.4);}
+.sidebar-item{transition:all 0.3s ease;border-left:3px solid transparent;}
+.sidebar-item:hover,.sidebar-item.active{background:linear-gradient(90deg,rgba(59,130,246,0.2) 0%,transparent 100%);border-left-color:#3b82f6;color:#60a5fa;}
+.gradient-text{background:linear-gradient(135deg,#60a5fa 0%,#3b82f6 50%,#2563eb 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.btn-primary{background:linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%);box-shadow:0 4px 15px rgba(37,99,235,0.4);transition:all 0.3s ease;}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(37,99,235,0.6);}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+.document-card{transition:all 0.3s cubic-bezier(0.4,0,0.2,1);}
+.document-card:hover{transform:translateY(-4px);box-shadow:0 25px 50px -12px rgba(0,0,0,0.5),0 0 30px rgba(59,130,246,0.3);}
+.mobile-sidebar{position:fixed;top:0;left:-100%;width:80%;max-width:300px;height:100vh;z-index:100;transition:left 0.3s ease;}
+.mobile-sidebar.open{left:0;}
+.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99;opacity:0;visibility:hidden;transition:all 0.3s ease;}
+.sidebar-overlay.active{opacity:1;visibility:visible;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:rgba(15,23,42,0.5);}
+::-webkit-scrollbar-thumb{background:#3b82f6;border-radius:3px;}
+.doc-grid{display:grid;grid-template-columns:1fr;gap:1rem;}
+@media(min-width:640px){.doc-grid{grid-template-columns:repeat(2,1fr);}}
+@media(min-width:1024px){.doc-grid{grid-template-columns:repeat(3,1fr);}}
+@media(min-width:1280px){.doc-grid{grid-template-columns:repeat(4,1fr);}}
+.stats-grid{display:grid;grid-template-columns:1fr;gap:1rem;}
+@media(min-width:640px){.stats-grid{grid-template-columns:repeat(2,1fr);}}
+@media(min-width:1024px){.stats-grid{grid-template-columns:repeat(4,1fr);}}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(15,23,42,0.95);backdrop-filter:blur(10px);border-top:1px solid rgba(96,165,250,0.2);}
+@media(min-width:1024px){.bottom-nav{display:none;}}
+@media(max-width:1023px){.desktop-sidebar{display:none!important;}}
+@media(min-width:1024px){.mobile-menu-btn{display:none;}}
+/* Login */
+.login-page{min-height:100vh;display:flex;overflow:hidden;}
+.login-branding{display:none;flex-direction:column;justify-content:center;align-items:center;width:45%;padding:3rem;position:relative;overflow:hidden;background:linear-gradient(160deg,#0c1a4e 0%,#1a3a8f 50%,#0c1a4e 100%);}
+@media(min-width:1024px){.login-branding{display:flex;}}
+.login-branding::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 50%,rgba(59,130,246,0.15) 0%,transparent 60%),radial-gradient(circle at 70% 20%,rgba(37,99,235,0.12) 0%,transparent 50%);}
+.login-branding-circuits{position:absolute;inset:0;overflow:hidden;opacity:0.06;background-image:linear-gradient(rgba(96,165,250,1) 1px,transparent 1px),linear-gradient(90deg,rgba(96,165,250,1) 1px,transparent 1px);background-size:40px 40px;animation:gridMove 25s linear infinite;}
+.login-feature{display:flex;align-items:center;gap:14px;padding:14px 20px;border-radius:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(96,165,250,0.15);margin-bottom:12px;transition:all 0.3s;}
+.login-feature:hover{background:rgba(255,255,255,0.1);border-color:rgba(96,165,250,0.35);transform:translateX(5px);}
+.login-feature-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;}
+.login-form-panel{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:2rem;position:relative;overflow:hidden;}
+.login-form-panel::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 80% 20%,rgba(59,130,246,0.08) 0%,transparent 50%);}
+.login-card{background:rgba(12,20,56,0.75);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(96,165,250,0.25);border-radius:28px;padding:2.5rem;width:100%;max-width:440px;position:relative;z-index:10;box-shadow:0 32px 64px -16px rgba(0,0,0,0.6),0 0 0 1px rgba(96,165,250,0.08),inset 0 1px 0 rgba(255,255,255,0.07);}
+.login-tab{flex:1;padding:10px;text-align:center;font-size:14px;font-weight:500;border-radius:10px;cursor:pointer;transition:all 0.25s;color:rgba(148,163,184,0.7);border:1px solid transparent;}
+.login-tab.active{background:rgba(37,99,235,0.3);color:#93c5fd;border-color:rgba(96,165,250,0.3);}
+.input-field{width:100%;padding:0.95rem 1rem 0.95rem 3rem;background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);border-radius:14px;color:white;font-size:0.95rem;transition:all 0.3s ease;}
+.input-field:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.15);background:rgba(8,15,40,0.9);}
+.input-icon{position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:#60a5fa;font-size:1rem;}
+.btn-login{width:100%;padding:1rem;border-radius:14px;font-weight:600;font-size:1rem;background:linear-gradient(135deg,#1d4ed8 0%,#2563eb 50%,#3b82f6 100%);box-shadow:0 4px 20px rgba(37,99,235,0.5);transition:all 0.3s ease;color:white;}
+.btn-login:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(37,99,235,0.65);}
+.btn-login:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+@keyframes gridMove{0%{transform:translate(0,0);}100%{transform:translate(40px,40px);}}
+.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.toast-container{position:fixed;top:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:10px;}
+.toast{background:rgba(30,58,138,0.95);backdrop-filter:blur(10px);border:1px solid rgba(96,165,250,0.3);border-radius:12px;padding:1rem;color:white;min-width:300px;max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.5);animation:slideIn 0.3s ease;display:flex;align-items:center;gap:10px;}
+.toast.hiding{animation:slideOut 0.3s ease forwards;}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+@keyframes slideOut{to{transform:translateX(100%);opacity:0;}}
+.tag{background:rgba(59,130,246,0.2);border:1px solid rgba(96,165,250,0.3);border-radius:12px;padding:4px 10px;font-size:0.75rem;color:#60a5fa;display:inline-flex;align-items:center;gap:4px;cursor:pointer;transition:all 0.2s;}
+.tag:hover{background:rgba(59,130,246,0.3);}
+.tag-close{cursor:pointer;opacity:0.7;margin-left:4px;}
+.tag-close:hover{opacity:1;color:#ef4444;}
+.doc-list-item{display:flex;align-items:center;padding:1rem;gap:1rem;}
+.doc-list-item .doc-icon{width:40px;height:40px;flex-shrink:0;}
+.doc-list-item .doc-content{flex:1;min-width:0;}
+.doc-list-item .doc-actions{display:flex;gap:0.5rem;opacity:0;transition:opacity 0.2s;}
+.doc-list-item:hover .doc-actions{opacity:1;}
+@media(max-width:768px){.doc-list-item .doc-actions{opacity:1;}.toast{min-width:auto;max-width:90vw;}}
+.view-section{display:none;}
+.view-section.active-view{display:block;animation:fadeIn 0.25s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.version-badge{background:rgba(59,130,246,0.2);border:1px solid rgba(96,165,250,0.3);border-radius:20px;padding:2px 8px;font-size:0.75rem;color:#60a5fa;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:center;justify-content:center;padding:1rem;overflow-y:auto;}
+.modal-box{background:rgba(12,20,56,0.97);backdrop-filter:blur(24px);border:1px solid rgba(96,165,250,0.25);border-radius:24px;padding:2rem;width:100%;max-width:520px;box-shadow:0 32px 64px rgba(0,0,0,0.7);}
+.badge-plan{padding:2px 10px;border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:.5px;}
+.badge-free{background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);}
+.badge-starter{background:rgba(16,185,129,0.2);color:#6ee7b7;border:1px solid rgba(16,185,129,0.3);}
+.badge-pro,.badge-professional{background:rgba(245,158,11,0.2);color:#fcd34d;border:1px solid rgba(245,158,11,0.3);}
+.badge-enterprise{background:rgba(239,68,68,0.2);color:#fca5a5;border:1px solid rgba(239,68,68,0.3);}
+.progress-bar{height:6px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#2563eb,#60a5fa);transition:width 0.6s ease;}
+.syslog-row{border-bottom:1px solid rgba(96,165,250,0.05);font-family:monospace;font-size:0.75rem;}
+.onboarding-step{transition:all 0.4s ease;}
+.danger-confirm-input{width:100%;padding:0.75rem 1rem;background:rgba(15,23,42,0.8);border:1px solid rgba(239,68,68,0.5);border-radius:8px;color:white;outline:none;margin-top:8px;}
+.danger-confirm-input:focus{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,0.2);}
+.plan-card{border:2px solid rgba(96,165,250,0.15);border-radius:20px;padding:1.5rem;cursor:pointer;transition:all 0.3s;}
+.plan-card:hover{border-color:rgba(96,165,250,0.4);background:rgba(59,130,246,0.08);}
+.plan-card.selected{border-color:#3b82f6;background:rgba(59,130,246,0.12);box-shadow:0 0 0 1px #3b82f6,0 0 20px rgba(59,130,246,0.2);}
+.drag-over{border-color:#3b82f6!important;background:rgba(59,130,246,0.1)!important;}
+.docs-tab-bar{display:flex;gap:4px;padding:4px;background:rgba(0,0,0,0.2);border-radius:12px;border:1px solid rgba(96,165,250,0.1);margin-bottom:1rem;}
+.docs-tab{flex:1;padding:8px 12px;text-align:center;font-size:13px;font-weight:500;border-radius:9px;cursor:pointer;transition:all 0.2s;color:rgba(148,163,184,0.7);border:1px solid transparent;}
+.docs-tab.active{background:rgba(37,99,235,0.3);color:#93c5fd;border-color:rgba(96,165,250,0.25);}
+.collab-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(6,182,212,0.15);color:#22d3ee;border:1px solid rgba(6,182,212,0.2);}
+.wf-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(249,115,22,0.15);color:#fb923c;border:1px solid rgba(249,115,22,0.2);}
+@keyframes pulse2{0%,100%{opacity:0.6;}50%{opacity:1;}}
+/* ── v5.1 Collaboration & Analytics ── */
+.collab-editor{font-family:'JetBrains Mono','Fira Code',monospace;font-size:14px;line-height:1.7;resize:none;outline:none;caret-color:#60a5fa;}
+.collab-cursor-label{position:absolute;font-size:10px;font-weight:700;color:white;padding:1px 6px;border-radius:4px;pointer-events:none;white-space:nowrap;}
+.presence-dot{width:8px;height:8px;border-radius:50%;animation:pulse2 2s infinite;}
+.analytics-bar-wrap{display:flex;align-items:flex-end;gap:3px;height:100px;padding:0 4px;}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+@media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr);}}
+
+.pulse-dot{animation:pulse2 2s infinite;}
+/* ── v6.0 Rich Editor + Folders + Audit ── */
+.rich-editor-content{outline:none;min-height:400px;color:#e2e8f0;font-size:15px;line-height:1.75;padding:1.5rem;}
+.rich-editor-content h1{font-size:1.75rem;font-weight:800;color:white;margin:1rem 0 0.5rem;}
+.rich-editor-content h2{font-size:1.35rem;font-weight:700;color:white;margin:1rem 0 0.5rem;}
+.rich-editor-content h3{font-size:1.1rem;font-weight:600;color:#93c5fd;margin:0.75rem 0 0.4rem;}
+.rich-editor-content p{margin:0.4rem 0;}
+.rich-editor-content ul,.rich-editor-content ol{margin:0.5rem 0 0.5rem 1.5rem;}
+.rich-editor-content li{margin:0.25rem 0;}
+.rich-editor-content blockquote{border-left:3px solid #3b82f6;padding-left:1rem;color:#93c5fd;margin:0.5rem 0;}
+.rich-editor-content a{color:#60a5fa;text-decoration:underline;}
+.rich-editor-content table{border-collapse:collapse;width:100%;margin:0.75rem 0;}
+.rich-editor-content td,.rich-editor-content th{border:1px solid rgba(96,165,250,0.2);padding:8px 12px;}
+.rich-editor-content pre{background:rgba(15,23,42,0.8);border:1px solid rgba(96,165,250,0.2);border-radius:8px;padding:12px 16px;font-family:monospace;font-size:13px;color:#86efac;overflow-x:auto;margin:0.5rem 0;}
+.rich-editor-content:focus{outline:none;}
+.rich-toolbar-btn{padding:5px 8px;border-radius:6px;color:rgba(147,197,253,0.6);font-size:13px;cursor:pointer;transition:all 0.15s;border:none;background:none;}
+.rich-toolbar-btn:hover{background:rgba(59,130,246,0.2);color:white;}
+.rich-toolbar-btn.active{background:rgba(59,130,246,0.3);color:#93c5fd;}
+.folder-drop-target{border:2px dashed rgba(96,165,250,0.4)!important;background:rgba(59,130,246,0.08)!important;}
+.audit-row:hover{background:rgba(59,130,246,0.04);}
+
+</style>
+</head>
+<body class="text-gray-100 font-sans antialiased">
+
+<!-- TOASTS -->
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ════════════════════════════════════ LOGIN -->
+<div id="loginScreen">
+<div class="login-page">
+  <div class="login-branding">
+    <div class="login-branding-circuits"></div>
+    <div style="position:relative;z-index:10;width:100%;max-width:380px">
+      <div class="text-center mb-10">
+        <div class="w-24 h-24 mx-auto mb-5 flex items-center justify-center rounded-2xl" style="box-shadow:0 0 40px rgba(59,130,246,0.4);">
+          <img src="logo-systemesGED.png" alt="SystemesGED" class="w-24 h-24 rounded-2xl object-cover">
+        </div>
+        <h1 style="font-size:2rem;font-weight:800;color:white;margin-bottom:6px;letter-spacing:-0.5px">SYSTEMES<span class="gradient-text">GED</span></h1>
+        <p style="color:rgba(147,197,253,0.7);font-size:0.9rem">Gestion Électronique de Documents Cloud</p>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px">
+          <span class="version-badge">v7.0 SaaS</span>
+          <span style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#34d399;font-weight:600;">RGPD ✓</span>
+        </div>
+      </div>
+      <div class="login-feature"><div class="login-feature-icon" style="background:rgba(59,130,246,0.2);color:#60a5fa"><i class="fas fa-shield-alt"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Sécurité AES-256</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">JWT + Refresh Token, RBAC granulaire</p></div></div>
+      <div class="login-feature"><div class="login-feature-icon" style="background:rgba(16,185,129,0.2);color:#34d399"><i class="fas fa-cloud-upload-alt"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Stockage cloud 100MB/fichier</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Supabase Storage ou AWS S3</p></div></div>
+      <div class="login-feature"><div class="login-feature-icon" style="background:rgba(139,92,246,0.2);color:#a78bfa"><i class="fas fa-share-alt"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Partage sécurisé</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Liens avec expiration, contrôle d'accès</p></div></div>
+      <div class="login-feature"><div class="login-feature-icon" style="background:rgba(249,115,22,0.2);color:#fb923c"><i class="fas fa-project-diagram"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Workflows de validation</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Approbation multi-étapes + versioning</p></div></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px">
+        <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#60a5fa">100%</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">RGPD</p></div>
+        <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#34d399">100MB</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Par fichier</p></div>
+        <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v4.0</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="login-form-panel">
+    <div class="login-card">
+      <div class="lg:hidden text-center mb-6">
+        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl flex items-center justify-center"><img src="logo-systemesGED.png" alt="SystemesGED" class="w-14 h-14 rounded-2xl object-cover"></div>
+        <h1 style="font-size:1.5rem;font-weight:800;color:white">SYSTEMES<span class="gradient-text">GED</span></h1>
+      </div>
+      <div style="display:flex;gap:6px;padding:6px;background:rgba(0,0,0,0.3);border-radius:14px;margin-bottom:24px;border:1px solid rgba(96,165,250,0.1)">
+        <div class="login-tab active" id="tabLogin" onclick="switchAuthTab('login')"><i class="fas fa-sign-in-alt mr-2"></i>Connexion</div>
+        <div class="login-tab" id="tabRegister" onclick="switchAuthTab('register')"><i class="fas fa-user-plus mr-2"></i>Inscription</div>
+      </div>
+      <div id="loginFormWrapper">
+        <p style="color:rgba(147,197,253,0.6);font-size:0.85rem;margin-bottom:20px">Bienvenue ! Connectez-vous à votre espace GED.</p>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+          <div class="relative mb-4"><i class="fas fa-envelope input-icon"></i><input id="loginEmail" type="email" class="input-field" placeholder="votre@email.com" required autocomplete="email"></div>
+          <div class="relative mb-4"><i class="fas fa-lock input-icon"></i><input id="loginPassword" type="password" class="input-field" placeholder="Mot de passe" required><button type="button" onclick="togglePwdInput('loginPassword',this)" style="position:absolute;right:1rem;top:50%;transform:translateY(-50%);color:#60a5fa;background:none;border:none;cursor:pointer;"><i class="fas fa-eye"></i></button></div>
+          <div class="flex justify-between items-center mb-5">
+            <label class="flex items-center gap-2 text-sm text-blue-300/70 cursor-pointer"><input type="checkbox" class="rounded border-blue-500/30"> Se souvenir de moi</label>
+            <a href="#" class="text-blue-400 text-sm hover:text-blue-300">Mot de passe oublié ?</a>
+          </div>
+          <button type="submit" id="loginBtn" class="btn-login"><span id="loginBtnText"><i class="fas fa-sign-in-alt mr-2"></i>Se connecter</span></button>
+        </form>
+        <div style="display:flex;align-items:center;gap:12px;margin:18px 0;"><div style="flex:1;height:1px;background:rgba(96,165,250,0.15)"></div><span style="color:rgba(96,165,250,0.4);font-size:0.8rem">ou continuer avec</span><div style="flex:1;height:1px;background:rgba(96,165,250,0.15)"></div></div>
+        <button onclick="demoLogin()" style="width:100%;padding:0.75rem;border-radius:12px;border:1px solid rgba(96,165,250,0.3);background:rgba(59,130,246,0.1);color:#93c5fd;font-size:0.9rem;cursor:pointer;transition:all 0.2s;font-weight:500;">
+          <i class="fas fa-rocket mr-2"></i>Accès démo — <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7d1c191014133d19181012531e1210">[email&#160;protected]</a> / Admin123!
+        </button>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button onclick="oauthLogin('google')" style="flex:1;padding:0.6rem;border-radius:10px;border:1px solid rgba(96,165,250,0.2);background:rgba(255,255,255,0.04);color:#e2e8f0;font-size:0.8rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fab fa-google text-red-400"></i>Google</button>
+          <button onclick="oauthLogin('github')" style="flex:1;padding:0.6rem;border-radius:10px;border:1px solid rgba(96,165,250,0.2);background:rgba(255,255,255,0.04);color:#e2e8f0;font-size:0.8rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fab fa-github"></i>GitHub</button>
+          <button onclick="oauthLogin('azure')" style="flex:1;padding:0.6rem;border-radius:10px;border:1px solid rgba(96,165,250,0.2);background:rgba(255,255,255,0.04);color:#e2e8f0;font-size:0.8rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fab fa-microsoft text-blue-400"></i>Azure</button>
+        </div>
+      </div>
+      <div id="registerFormWrapper" style="display:none">
+        <p style="color:rgba(147,197,253,0.6);font-size:0.85rem;margin-bottom:20px">Créez votre compte et commencez gratuitement.</p>
+        <form id="registerForm" onsubmit="handleRegister(event)">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+            <div class="relative"><i class="fas fa-user input-icon"></i><input id="regFirst" type="text" class="input-field" placeholder="Prénom" required></div>
+            <div class="relative"><i class="fas fa-user input-icon"></i><input id="regLast" type="text" class="input-field" placeholder="Nom" required></div>
+          </div>
+          <div class="relative mb-4"><i class="fas fa-building input-icon"></i><input id="regCompany" type="text" class="input-field" placeholder="Nom de l'entreprise" required></div>
+          <div class="relative mb-4"><i class="fas fa-envelope input-icon"></i><input id="regEmail" type="email" class="input-field" placeholder="Email professionnel" required></div>
+          <div class="relative mb-5"><i class="fas fa-lock input-icon"></i><input id="regPassword" type="password" class="input-field" placeholder="Mot de passe (8+ car.)" required minlength="8"></div>
+          <button type="submit" class="btn-login"><i class="fas fa-user-plus mr-2"></i>Créer mon compte</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════════ MAIN APP -->
+<div id="mainApp" style="display:none">
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+<!-- Mobile Sidebar -->
+<aside class="mobile-sidebar glass-panel border-r border-blue-500/20 flex flex-col" id="mobileSidebar">
+  <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"><img src="logo-systemesGED.png" alt="Logo" class="w-10 h-10 object-cover rounded-xl"></div>
+      <span class="font-bold text-lg">SYSTEMES<span class="gradient-text">GED</span></span>
+    </div>
+    <button onclick="closeMobileSidebar()" class="p-2 text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+  </div>
+  <nav class="p-4 space-y-1 flex-1 overflow-y-auto">
+    <button onclick="switchView('dashboard');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="dashboard"><i class="fas fa-chart-pie w-5 text-center text-blue-400"></i><span>Tableau de bord</span></button>
+    <button onclick="switchView('documents');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="documents"><i class="fas fa-file-alt w-5 text-center text-blue-400"></i><span>Documents</span><span id="m-docsBadge" class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full hidden">0</span></button>
+    <button onclick="switchView('workflows');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="workflows"><i class="fas fa-project-diagram w-5 text-center text-blue-400"></i><span>Workflows</span><span id="m-wfBadge" class="ml-auto bg-orange-500/20 text-orange-300 text-xs px-2 py-1 rounded-full hidden">0</span></button>
+    <button onclick="switchView('shared');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="shared"><i class="fas fa-share-alt w-5 text-center text-blue-400"></i><span>Partagés</span></button>
+    <div class="pt-3 mt-3 border-t border-blue-500/20">
+      <p class="px-4 text-xs font-bold text-cyan-400/70 uppercase tracking-wider mb-2">Fonctionnalités</p>
+      <button onclick="switchView('search-adv');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="search-adv"><i class="fas fa-search w-5 text-center text-cyan-400"></i><span>Recherche avancée</span></button>
+      <button onclick="switchView('versioning');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="versioning"><i class="fas fa-code-branch w-5 text-center text-cyan-400"></i><span>Versioning</span></button>
+      <button onclick="switchView('logs');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="logs"><i class="fas fa-terminal w-5 text-center text-cyan-400"></i><span>Logs système</span></button>
+      <button onclick="switchView('rbac');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="rbac"><i class="fas fa-user-shield w-5 text-center text-cyan-400"></i><span>RBAC / Rôles</span></button>
+    </div>
+    <div class="pt-3 mt-3 border-t border-blue-500/20">
+      <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Administration</p>
+      <button onclick="switchView('users');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="users"><i class="fas fa-users w-5 text-center text-blue-400"></i><span>Utilisateurs</span></button>
+      <button onclick="switchView('tags');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="tags"><i class="fas fa-tags w-5 text-center text-blue-400"></i><span>Tags</span></button>
+      <button onclick="switchView('billing');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement</span></button>
+      <button onclick="switchView('settings');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="settings"><i class="fas fa-cog w-5 text-center text-blue-400"></i><span>Configuration</span></button>
+      <button onclick="switchView('security');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="security"><i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>Sécurité & Audit</span></button>
+      <button onclick="switchView('analytics');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="analytics"><i class="fas fa-chart-bar w-5 text-center text-yellow-400"></i><span>Analytics</span></button>
+      <button onclick="switchView('folders');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="folders"><i class="fas fa-folder-tree w-5 text-center text-yellow-400"></i><span>Dossiers</span></button>
+      <button onclick="switchView('signatures');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="signatures"><i class="fas fa-signature w-5 text-center text-purple-400"></i><span>Signatures</span></button>
+      <button onclick="switchView('ai');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="ai"><i class="fas fa-brain w-5 text-center text-pink-400"></i><span>Intelligence IA</span></button>
+      <button onclick="switchView('automation');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="automation"><i class="fas fa-magic w-5 text-center text-orange-400"></i><span>Automatisation</span></button>
+      <button onclick="switchView('backups');closeMobileSidebar()" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="backups"><i class="fas fa-database w-5 text-center text-teal-400"></i><span>Sauvegardes</span></button>
+    </div>
+  </nav>
+  <div class="p-4 border-t border-blue-500/20">
+    <div class="glass-card rounded-xl p-3 border border-blue-400/20">
+      <div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-blue-300">Stockage</span><span id="mobileStoragePercent" class="text-xs text-blue-400 font-bold">0%</span></div>
+      <div class="progress-bar"><div id="mobileStorageBar" class="progress-fill" style="width:0%"></div></div>
+      <p id="mobileStorageText" class="text-xs text-blue-300/70 mt-1">0 MB / 100 MB</p>
+    </div>
+  </div>
+</aside>
+
+<!-- Header -->
+<header class="glass-panel border-b border-blue-500/20 sticky top-0 z-40">
+  <div class="flex items-center justify-between px-4 lg:px-6 py-3">
+    <div class="flex items-center gap-3">
+      <button class="mobile-menu-btn p-2 -ml-2 text-blue-400 hover:text-white" onclick="openMobileSidebar()"><i class="fas fa-bars text-xl"></i></button>
+      <div class="hidden sm:flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"><img src="logo-systemesGED.png" alt="Logo" class="w-10 h-10 object-cover rounded-xl"></div>
+        <div><h1 class="text-xl font-bold tracking-tight"><span class="text-white">SYSTEMES</span><span class="gradient-text font-extrabold">GED</span></h1><p class="text-[10px] text-blue-300/80 font-medium tracking-wider">CLOUD EDITION v7.0</p></div>
+      </div>
+    </div>
+    <div class="flex-1 max-w-xl mx-2 lg:mx-8">
+      <div class="relative">
+        <input type="text" id="globalSearch" oninput="handleGlobalSearch(this.value)" onkeyup="handleGlobalSearch(this.value)" placeholder="Rechercher... (Ctrl+K)"
+          class="w-full pl-10 pr-4 py-2 rounded-xl text-sm text-gray-200 placeholder-gray-500 outline-none transition-all"
+          style="background:rgba(15,23,42,0.6);border:1px solid rgba(96,165,250,0.25);">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-blue-400"></i>
+        <div id="searchDropdown" class="hidden absolute top-full left-0 right-0 mt-1 z-50 rounded-xl overflow-hidden" style="background:rgba(10,18,50,0.98);border:1px solid rgba(96,165,250,0.25);max-height:300px;overflow-y:auto"></div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <!-- Notifications -->
+      <div class="relative" id="notifWrap">
+        <button onclick="toggleNotifications()" class="relative p-2 text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 rounded-lg transition-all">
+          <i class="fas fa-bell text-lg"></i>
+          <span id="notifBadge" class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse hidden"></span>
+        </button>
+        <div id="notifPanel" class="hidden absolute right-0 mt-2 w-80 z-50" style="top:100%">
+          <div class="rounded-2xl overflow-hidden" style="background:rgba(10,18,50,0.97);border:1px solid rgba(96,165,250,0.25);box-shadow:0 20px 40px rgba(0,0,0,0.5)">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-blue-500/20">
+              <span class="text-white font-bold text-sm flex items-center gap-2"><i class="fas fa-bell text-blue-400"></i>Notifications<span id="notifCountBadge" class="ml-1 px-1.5 py-0.5 bg-red-500/80 text-white text-[10px] rounded-full hidden">0</span></span>
+              <button onclick="markAllNotifRead()" class="text-xs text-blue-400 hover:text-blue-300">Tout lire</button>
+            </div>
+            <div id="notifContent" class="divide-y divide-blue-500/10 max-h-72 overflow-y-auto"><div class="px-4 py-6 text-center text-blue-300/50 text-sm">Aucune notification</div></div>
+            <div class="px-4 py-3 border-t border-blue-500/20 text-center"><button onclick="switchView('security');closeNotifPanel()" class="text-xs text-blue-400 hover:text-blue-300">Voir l'audit complet →</button></div>
+          </div>
+        </div>
+      </div>
+      <!-- Plan badge -->
+      <span id="planBadge" class="hidden sm:inline badge-plan badge-free">FREE</span>
+      <!-- User info + dropdown -->
+      <div class="flex items-center gap-3 pl-3 border-l border-blue-500/30">
+        <div class="text-right hidden lg:block">
+          <p class="text-sm font-semibold text-white" id="userNameDisplay">Admin</p>
+          <p class="text-xs text-blue-300" id="userRoleDisplay">Administrateur</p>
+        </div>
+        <div class="relative group">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold cursor-pointer shadow-lg border-2 border-blue-400/30" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)">
+            <span id="userAvatarInitial">A</span>
+          </div>
+          <div class="absolute right-0 mt-2 w-48 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50" style="background:rgba(10,18,50,0.97);border:1px solid rgba(96,165,250,0.25)">
+            <div class="p-2">
+              <div class="px-4 py-2 border-b border-blue-500/20 mb-2">
+                <p class="text-sm font-semibold text-white" id="dropdownUserName">Admin</p>
+                <p class="text-xs text-blue-400" id="dropdownUserEmail"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c2a3a6afabac82a6a7afadeca1adaf">[email&#160;protected]</a></p>
+              </div>
+              <button onclick="switchView('settings')" class="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-500/10 text-sm text-gray-300 transition-colors"><i class="fas fa-cog mr-2"></i>Paramètres</button>
+              <button onclick="switchView('billing')" class="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-500/10 text-sm text-gray-300 transition-colors"><i class="fas fa-credit-card mr-2"></i>Abonnement</button>
+              <button onclick="handleLogout()" class="w-full text-left px-4 py-2 rounded-lg hover:bg-red-500/10 text-sm text-red-400 transition-colors"><i class="fas fa-sign-out-alt mr-2"></i>Déconnexion</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Layout -->
+<div class="flex" style="min-height:calc(100vh - 61px)">
+  <!-- Desktop Sidebar -->
+  <aside class="desktop-sidebar w-64 glass-panel border-r border-blue-500/20 flex-col" style="position:sticky;top:61px;height:calc(100vh - 61px);overflow-y:auto;">
+    <nav class="p-4 space-y-1 flex-1">
+      <button onclick="switchView('dashboard')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="dashboard"><i class="fas fa-chart-pie w-5 text-center text-blue-400"></i><span>Tableau de bord</span></button>
+      <button onclick="switchView('documents')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="documents"><i class="fas fa-file-alt w-5 text-center text-blue-400"></i><span>Documents</span><span id="d-docsBadge" class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full hidden">0</span></button>
+      <button onclick="switchView('shared')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="shared"><i class="fas fa-share-alt w-5 text-center text-blue-400"></i><span>Partagés</span><span id="d-sharedBadge" class="ml-auto bg-purple-500/20 text-purple-300 text-xs px-2 py-1 rounded-full hidden">0</span></button>
+      <button onclick="switchView('workflows')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="workflows"><i class="fas fa-project-diagram w-5 text-center text-blue-400"></i><span>Workflows</span><span id="d-wfBadge" class="ml-auto bg-orange-500/20 text-orange-300 text-xs px-2 py-1 rounded-full hidden">0</span></button>
+      <div class="pt-3 mt-3 border-t border-blue-500/20">
+        <p class="px-4 text-xs font-bold text-cyan-400/70 uppercase tracking-wider mb-2">Fonctionnalités</p>
+        <button onclick="switchView('search-adv')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="search-adv"><i class="fas fa-search w-5 text-center text-cyan-400"></i><span>Recherche avancée</span></button>
+        <button onclick="switchView('versioning')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="versioning"><i class="fas fa-code-branch w-5 text-center text-cyan-400"></i><span>Versioning</span></button>
+        <button onclick="switchView('logs')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="logs"><i class="fas fa-terminal w-5 text-center text-cyan-400"></i><span>Logs système</span></button>
+        <button onclick="switchView('rbac')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="rbac"><i class="fas fa-user-shield w-5 text-center text-cyan-400"></i><span>RBAC / Rôles</span></button>
+      </div>
+      <div class="pt-3 mt-3 border-t border-blue-500/20">
+        <p class="px-4 text-xs font-bold text-blue-400/60 uppercase tracking-wider mb-2">Administration</p>
+        <button onclick="switchView('users')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="users"><i class="fas fa-users w-5 text-center text-blue-400"></i><span>Utilisateurs</span></button>
+        <button onclick="switchView('tags')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="tags"><i class="fas fa-tags w-5 text-center text-blue-400"></i><span>Tags</span></button>
+        <button onclick="switchView('billing')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement</span></button>
+        <button onclick="switchView('settings')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="settings"><i class="fas fa-cog w-5 text-center text-blue-400"></i><span>Configuration</span></button>
+        <button onclick="switchView('security')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="security"><i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>Sécurité &amp; Audit</span></button>
+      <button onclick="switchView('analytics')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="analytics"><i class="fas fa-chart-bar w-5 text-center text-yellow-400"></i><span>Analytics</span></button>
+      <button onclick="switchView('folders')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="folders"><i class="fas fa-folder-tree w-5 text-center text-yellow-400"></i><span>Dossiers</span></button>
+      <button onclick="switchView('apikeys')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="apikeys"><i class="fas fa-plug w-5 text-center text-green-400"></i><span>API & Intégrations</span></button>
+      <button onclick="switchView('billing2')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing2"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement v6</span></button>
+      <button onclick="switchView('auditv6')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="auditv6"><i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>Audit Sécurité</span></button>
+      </div>
+      <div class="pt-3 mt-3 border-t border-blue-500/20">
+        <p class="px-4 text-xs font-bold text-pink-400/70 uppercase tracking-wider mb-2">Avancé v7</p>
+        <button onclick="switchView('signatures')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="signatures"><i class="fas fa-signature w-5 text-center text-purple-400"></i><span>Signatures</span></button>
+        <button onclick="switchView('search')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="search"><i class="fas fa-search-plus w-5 text-center text-cyan-400"></i><span>Recherche FTS</span></button>
+        <button onclick="switchView('ai')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="ai"><i class="fas fa-brain w-5 text-center text-pink-400"></i><span>Intelligence IA</span></button>
+        <button onclick="switchView('automation')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="automation"><i class="fas fa-magic w-5 text-center text-orange-400"></i><span>Automatisation</span></button>
+        <button onclick="switchView('integrations')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="integrations"><i class="fas fa-plug w-5 text-center text-green-400"></i><span>Intégrations</span></button>
+        <button onclick="switchView('backups')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="backups"><i class="fas fa-database w-5 text-center text-teal-400"></i><span>Sauvegardes</span></button>
+        <button onclick="switchView('rbacv7')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="rbacv7" data-admin-only><i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>RBAC Avancé</span></button>
+      </div>
+    </nav>
+    <div class="p-4 border-t border-blue-500/20">
+      <div class="glass-card rounded-xl p-4 border border-blue-400/20">
+        <div class="flex items-center justify-between mb-2"><span class="text-sm font-bold text-blue-300 flex items-center gap-2"><i class="fas fa-cloud text-blue-400"></i>Stockage</span><span id="storagePercent" class="text-xs text-blue-400 font-bold">0%</span></div>
+        <div class="w-full bg-slate-900/50 rounded-full h-2 mb-2 overflow-hidden"><div id="storageBar" class="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all duration-500" style="width:0%"></div></div>
+        <p id="storageText" class="text-xs text-blue-300/70">0 MB / 100 MB</p>
+      </div>
+      <!-- Company info -->
+      <div class="flex items-center gap-2 px-1 mt-3">
+        <div id="companyAvatar" class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)">E</div>
+        <div class="min-w-0"><p id="companyNameLabel" class="text-white text-xs font-semibold truncate">Entreprise Démo</p><p id="companyPlanLabel" class="text-blue-400/60 text-xs">Plan Free</p></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="flex-1 min-w-0 p-4 lg:p-6 pb-24 lg:pb-6 overflow-y-auto" style="max-height:calc(100vh - 61px)">
+
+    <!-- ══ DASHBOARD -->
+    <div id="view-dashboard" class="view-section active-view space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1">Tableau de bord</h2><p id="dashSubtitle" class="text-sm text-blue-300/80">Vue d'ensemble de votre GED</p></div>
+        <button onclick="openUploadModal()" class="btn-primary px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold"><i class="fas fa-plus"></i>Nouveau document</button>
+      </div>
+      <div class="stats-grid">
+        <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-blue-400/40 cursor-pointer" onclick="switchView('documents')">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 border border-blue-400/30"><i class="fas fa-file-alt text-2xl"></i></div>
+            <span class="text-green-400 text-sm font-bold bg-green-500/10 px-3 py-1 rounded-full" id="docGrowth">+0%</span>
+          </div>
+          <h3 id="totalDocs" class="text-3xl font-bold text-white mb-1">0</h3>
+          <p class="text-blue-300/70 text-sm">Documents totaux</p>
+        </div>
+        <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-orange-400/40 cursor-pointer" onclick="switchView('workflows')">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-14 h-14 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 border border-orange-400/30"><i class="fas fa-clock text-2xl"></i></div>
+            <span class="text-orange-400 text-xs font-bold bg-orange-500/10 px-2 py-1 rounded-full">En attente</span>
+          </div>
+          <h3 id="dashWorkflowCount" class="text-3xl font-bold text-white mb-1">0</h3>
+          <p class="text-blue-300/70 text-sm">Workflows actifs</p>
+        </div>
+        <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-purple-400/40 cursor-pointer" onclick="switchView('shared')">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-14 h-14 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 border border-purple-400/30"><i class="fas fa-share-alt text-2xl"></i></div>
+            <span class="text-purple-400 text-sm font-bold bg-purple-500/10 px-3 py-1 rounded-full">Partagés</span>
+          </div>
+          <h3 id="sharedCount" class="text-3xl font-bold text-white mb-1">0</h3>
+          <p class="text-blue-300/70 text-sm">Documents partagés</p>
+        </div>
+        <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-green-400/40 cursor-pointer" onclick="switchView('users')">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 border border-green-400/30"><i class="fas fa-users text-2xl"></i></div>
+            <span class="text-green-400 text-sm font-bold bg-green-500/10 px-3 py-1 rounded-full">Actifs</span>
+          </div>
+          <h3 id="dashUserCount" class="text-3xl font-bold text-white mb-1">—</h3>
+          <p class="text-blue-300/70 text-sm">Utilisateurs</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 glass-card rounded-2xl border border-blue-500/20 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2"><i class="fas fa-stream text-blue-400"></i>Activité récente</h3>
+            <button onclick="renderActivityList()" class="text-xs text-blue-400 hover:text-blue-300"><i class="fas fa-sync-alt mr-1"></i>Rafraîchir</button>
+          </div>
+          <div class="space-y-3 max-h-96 overflow-y-auto pr-2" id="activityList"><div class="text-center py-8 text-blue-300/50"><i class="fas fa-folder-open text-2xl mb-2 block"></i>Aucune activité récente</div></div>
+        </div>
+        <div class="space-y-6">
+          <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i class="fas fa-star text-yellow-400"></i>Accès rapide</h3>
+            <div class="space-y-3">
+              <div class="glass-card p-3 rounded-xl cursor-pointer hover:bg-blue-500/10 transition-all group" onclick="filterByType('pdf')">
+                <div class="flex items-center gap-3"><div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform"><i class="fas fa-file-pdf"></i></div><div class="flex-1"><p class="font-semibold text-white text-sm">Contrats PDF</p><p class="text-xs text-blue-300/70" id="quickPdfCount">0 fichier(s)</p></div><i class="fas fa-chevron-right text-blue-400/50 group-hover:text-blue-400"></i></div>
+              </div>
+              <div class="glass-card p-3 rounded-xl cursor-pointer hover:bg-blue-500/10 transition-all group" onclick="filterByType('doc')">
+                <div class="flex items-center gap-3"><div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform"><i class="fas fa-file-word"></i></div><div class="flex-1"><p class="font-semibold text-white text-sm">Documents Word</p><p class="text-xs text-blue-300/70" id="quickDocCount">0 fichier(s)</p></div><i class="fas fa-chevron-right text-blue-400/50 group-hover:text-blue-400"></i></div>
+              </div>
+            </div>
+          </div>
+          <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i class="fas fa-tags text-blue-400"></i>Tags populaires</h3>
+            <div class="flex flex-wrap gap-2" id="popularTags"><span class="text-blue-300/50 text-sm">Aucun tag</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Docs équipe + Workflows assignés -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass-card rounded-2xl border border-cyan-500/20 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-building text-cyan-400"></i>Documents de l'équipe</h3>
+            <button onclick="switchView('documents');switchDocsTab('company')" class="text-xs text-blue-400 hover:text-blue-300">Voir tout →</button>
+          </div>
+          <div id="teamDocsList" class="space-y-2">
+            <p class="text-blue-300/50 text-sm text-center py-3">Chargement...</p>
+          </div>
+        </div>
+        <div class="glass-card rounded-2xl border border-orange-500/20 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-white font-bold flex items-center gap-2">
+              <i class="fas fa-project-diagram text-orange-400"></i>Mes workflows
+              <span id="myWorkflowsBadge" class="px-2 py-0.5 bg-orange-500/20 text-orange-300 text-xs rounded-full hidden">0</span>
+            </h3>
+            <button onclick="switchView('workflows')" class="text-xs text-blue-400 hover:text-blue-300">Voir tout →</button>
+          </div>
+          <div id="myWorkflowsList" class="space-y-2">
+            <p class="text-blue-300/50 text-sm text-center py-3">Aucun workflow assigné</p>
+          </div>
+        </div>
+
+        <!-- Raccourci Analytics -->
+        <div class="glass-card rounded-2xl border border-yellow-500/20 p-5 cursor-pointer hover:border-yellow-400/40 transition-all" onclick="switchView('analytics')">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-400"><i class="fas fa-chart-bar"></i></div>
+            <div><p class="text-white font-bold text-sm">Analytics</p><p class="text-blue-300/60 text-xs">Vue d'ensemble entreprise</p></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-center">
+            <div class="glass-card p-2 rounded-lg"><p class="text-lg font-bold text-white" id="dashTotalViews">—</p><p class="text-[10px] text-blue-300/60">Vues docs</p></div>
+            <div class="glass-card p-2 rounded-lg"><p class="text-lg font-bold text-white" id="dashActiveUsers">—</p><p class="text-[10px] text-blue-300/60">Actifs</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DOCUMENTS v5.0 -->
+    <div id="view-documents" class="view-section space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+            <i class="fas fa-file-alt text-blue-400"></i>Documents
+          </h2>
+          <p class="text-sm text-blue-300/80">Gérez les documents de votre entreprise</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="toggleViewMode()" class="px-4 py-2 glass-card rounded-xl text-blue-300 hover:text-white border border-blue-500/30" title="Changer vue"><i class="fas fa-th-large" id="viewModeIcon"></i></button>
+          <button onclick="openUploadModal()" class="btn-primary px-4 py-2 text-white rounded-xl flex items-center gap-2 font-semibold"><i class="fas fa-cloud-upload-alt"></i>Importer</button>
+        </div>
+      </div>
+
+      <!-- Onglets Entreprise / Mes docs / Partagés avec moi -->
+      <div class="docs-tab-bar">
+        <div id="docsTab-company" class="docs-tab active" onclick="switchDocsTab('company')">
+          <i class="fas fa-building mr-1.5"></i>Entreprise
+        </div>
+        <div id="docsTab-personal" class="docs-tab" onclick="switchDocsTab('personal')">
+          <i class="fas fa-user mr-1.5"></i>Personnel
+        </div>
+        <div id="docsTab-mine" class="docs-tab" onclick="switchDocsTab('mine')">
+          <i class="fas fa-folder mr-1.5"></i>Mes documents
+        </div>
+        <div id="docsTab-shared" class="docs-tab" onclick="switchDocsTab('shared')">
+          <i class="fas fa-share-alt mr-1.5"></i>Partagés avec moi
+        </div>
+      </div>
+
+      <!-- Filtres -->
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20 flex flex-wrap gap-3 items-center">
+        <div class="flex items-center gap-2 text-blue-300 text-sm"><i class="fas fa-filter"></i><span>Filtres:</span></div>
+        <select id="filterType" onchange="applyFilters()" class="bg-slate-900/50 border border-blue-500/30 rounded-lg px-3 py-1.5 text-sm text-gray-300 outline-none cursor-pointer"><option value="">Tous types</option><option value="pdf">PDF</option><option value="doc">Word</option><option value="xls">Excel</option><option value="img">Images</option></select>
+        <select id="filterDate" onchange="applyFilters()" class="bg-slate-900/50 border border-blue-500/30 rounded-lg px-3 py-1.5 text-sm text-gray-300 outline-none cursor-pointer"><option value="">Toutes dates</option><option value="today">Aujourd'hui</option><option value="week">Cette semaine</option><option value="month">Ce mois</option></select>
+        <button onclick="clearFilters()" class="text-xs text-blue-400 hover:text-blue-300 underline">Réinitialiser</button>
+        <div class="flex-1"></div>
+        <span id="resultsCount" class="text-sm text-blue-300/70">0 documents</span>
+      </div>
+
+      <!-- Drop zone -->
+      <div id="docDropZone" class="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" onclick="document.getElementById('filePickerInput').click()" ondragover="handleDragOver(event,'docDropZone')" ondragleave="handleDragLeave(event,'docDropZone')" ondrop="handleDocDrop(event)">
+        <i class="fas fa-cloud-upload-alt text-blue-400 text-2xl mb-2"></i>
+        <p class="text-white text-sm font-medium">Glissez vos fichiers ici ou cliquez</p>
+        <p class="text-blue-400/50 text-xs">PDF, Word, Excel, Images… Max 100 MB</p>
+      </div>
+      <input type="file" id="filePickerInput" class="hidden" multiple onchange="handleFilePickerSelect(event)">
+      <div class="doc-grid" id="documentGrid"></div>
+    </div>
+
+    <!-- ══ SHARED -->
+    <div id="view-shared" class="view-section space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-share-alt text-purple-400"></i>Documents partagés</h2><p class="text-sm text-blue-300/80">Gestion des accès et partages sécurisés</p></div>
+      </div>
+      <div class="flex gap-2 border-b border-blue-500/20 pb-0">
+        <button onclick="switchSharedTab('received')" id="tab-received" class="px-5 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2"><i class="fas fa-inbox"></i>Reçus<span id="receivedCountBadge" class="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full hidden">0</span></button>
+        <button onclick="switchSharedTab('sent')" id="tab-sent" class="px-5 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px hover:text-blue-400 flex items-center gap-2"><i class="fas fa-paper-plane"></i>Envoyés<span id="sentCountBadge" class="ml-1 px-1.5 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded-full hidden">0</span></button>
+      </div>
+      <div id="shared-received">
+        <div id="sharedEmptyState" class="glass-card rounded-2xl p-8 text-center">
+          <div class="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400"><i class="fas fa-inbox text-3xl"></i></div>
+          <p class="text-blue-300 mb-2">Aucun document reçu</p>
+          <p class="text-sm text-blue-400/60">Les documents partagés avec vous apparaîtront ici</p>
+        </div>
+        <div id="sharedList" class="doc-grid hidden"></div>
+      </div>
+      <div id="shared-sent" class="hidden space-y-3">
+        <div id="sentEmptyState" class="glass-card rounded-2xl p-8 text-center">
+          <div class="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-400"><i class="fas fa-paper-plane text-3xl"></i></div>
+          <p class="text-blue-300 mb-2">Aucun partage envoyé</p>
+          <p class="text-sm text-blue-400/60">Partagez un document depuis la section Documents</p>
+        </div>
+        <div id="sentSharesList" class="space-y-3 hidden"></div>
+      </div>
+    </div>
+
+    <!-- ══ WORKFLOWS -->
+    <div id="view-workflows" class="view-section space-y-5">
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <i class="fas fa-project-diagram text-orange-400"></i>Workflows
+          </h2>
+          <p class="text-sm text-blue-300/80 mt-1">Validation multi-étapes · Suivi en temps réel</p>
+        </div>
+        <button onclick="openCreateWorkflowModal()" class="btn-primary px-5 py-2.5 rounded-xl text-sm text-white flex items-center gap-2 font-semibold">
+          <i class="fas fa-plus"></i>Nouveau workflow
+        </button>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="wfKpiStrip"></div>
+
+      <!-- Filters + Search -->
+      <div class="glass-card rounded-xl border border-blue-500/20 p-3 flex flex-wrap items-center gap-2">
+        <div class="flex gap-1.5 flex-wrap flex-1">
+          <button onclick="filterWorkflows('')"        class="wf-filter-btn px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30" data-wf="">Tous</button>
+          <button onclick="filterWorkflows('pending')" class="wf-filter-btn px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 border border-blue-500/10" data-wf="pending"><span class="w-2 h-2 rounded-full bg-orange-400 inline-block mr-1"></span>En attente</button>
+          <button onclick="filterWorkflows('in_review')" class="wf-filter-btn px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 border border-blue-500/10" data-wf="in_review"><span class="w-2 h-2 rounded-full bg-blue-400 inline-block mr-1"></span>En révision</button>
+          <button onclick="filterWorkflows('approved')" class="wf-filter-btn px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 border border-blue-500/10" data-wf="approved"><span class="w-2 h-2 rounded-full bg-green-400 inline-block mr-1"></span>Approuvés</button>
+          <button onclick="filterWorkflows('rejected')" class="wf-filter-btn px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 border border-blue-500/10" data-wf="rejected"><span class="w-2 h-2 rounded-full bg-red-400 inline-block mr-1"></span>Rejetés</button>
+          <button onclick="filterWorkflows('cancelled')" class="wf-filter-btn px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 border border-blue-500/10" data-wf="cancelled"><span class="w-2 h-2 rounded-full bg-gray-400 inline-block mr-1"></span>Annulés</button>
+        </div>
+        <input oninput="searchWorkflows(this.value)" placeholder="Rechercher…" id="wfSearch"
+          class="px-3 py-1.5 rounded-lg text-white text-xs outline-none w-40"
+          style="background:rgba(8,15,40,0.6);border:1px solid rgba(96,165,250,0.2);">
+      </div>
+
+      <!-- Kanban / List toggle -->
+      <div class="flex items-center gap-2">
+        <button onclick="setWfView('kanban')" id="wfViewKanban" class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/20 font-medium flex items-center gap-1"><i class="fas fa-columns"></i>Kanban</button>
+        <button onclick="setWfView('list')"   id="wfViewList"   class="px-3 py-1.5 text-xs rounded-lg text-gray-400 border border-blue-500/10 font-medium hover:border-blue-500/30 flex items-center gap-1"><i class="fas fa-list"></i>Liste</button>
+        <span id="wfResultCount" class="ml-auto text-xs text-blue-300/50"></span>
+      </div>
+
+      <!-- Kanban board -->
+      <div id="wfKanban" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4"></div>
+
+      <!-- List view -->
+      <div id="wfListView" class="hidden space-y-3" id="workflowsList"></div>
+    </div>
+
+    <!-- ══ SEARCH AVANCÉE -->
+    <div id="view-search-adv" class="view-section space-y-6">
+      <div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3"><i class="fas fa-search text-cyan-400"></i>Recherche avancée</h2><p class="text-sm text-blue-300/80">Recherche plein texte sur noms, tags, descriptions et métadonnées</p></div>
+      <div class="glass-card rounded-2xl border border-cyan-500/25 p-5 space-y-4">
+        <div class="relative">
+          <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400 text-lg"></i>
+          <input type="text" id="advSearchInput" oninput="runAdvSearch()" placeholder="Nom de fichier, tag, description, auteur…"
+            class="w-full pl-12 pr-4 py-4 rounded-xl text-white text-base outline-none transition-all placeholder-gray-500"
+            style="background:rgba(15,23,42,0.6);border:1px solid rgba(34,211,238,0.3);">
+        </div>
+        <div class="flex flex-wrap gap-3 items-center">
+          <select id="advSearchType" onchange="runAdvSearch()" class="bg-slate-900/50 border border-cyan-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none"><option value="">Tous types</option><option value="pdf">PDF</option><option value="doc">Word</option><option value="xls">Excel</option><option value="img">Images</option></select>
+          <select id="advSearchDate" onchange="runAdvSearch()" class="bg-slate-900/50 border border-cyan-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none"><option value="">Toutes dates</option><option value="today">Aujourd'hui</option><option value="week">Cette semaine</option><option value="month">Ce mois</option></select>
+          <select id="advSearchSize" onchange="runAdvSearch()" class="bg-slate-900/50 border border-cyan-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none"><option value="">Toutes tailles</option><option value="small">Petit (&lt;1 MB)</option><option value="medium">Moyen (1–10 MB)</option><option value="large">Grand (&gt;10 MB)</option></select>
+          <button onclick="clearAdvSearch()" class="px-4 py-2 text-xs text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/10 flex items-center gap-1"><i class="fas fa-times"></i>Réinitialiser</button>
+          <span id="advSearchCount" class="ml-auto text-sm text-blue-300/50"></span>
+        </div>
+      </div>
+      <div id="advSearchResults"><div class="text-center py-20 text-blue-300/30"><i class="fas fa-search text-6xl mb-5 block opacity-10"></i><p class="text-lg font-medium text-blue-300/50">Tapez pour rechercher</p><p class="text-sm mt-2 text-blue-300/30">Résultats en temps réel</p></div></div>
+    </div>
+
+    <!-- ══ VERSIONING -->
+    <div id="view-versioning" class="view-section space-y-6">
+      <div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3"><i class="fas fa-code-branch text-cyan-400"></i>Versioning des documents</h2><p class="text-sm text-blue-300/80">Historique complet — restaurez n'importe quelle version</p></div>
+      <div class="glass-card rounded-xl border border-cyan-500/20 p-3 flex items-center gap-3">
+        <i class="fas fa-search text-cyan-400 text-sm"></i>
+        <input type="text" id="versionSearch" oninput="filterVersionDocs(this.value)" placeholder="Rechercher un document..." class="flex-1 bg-transparent text-white outline-none placeholder-gray-500 text-sm">
+      </div>
+      <div id="versionDocList" class="space-y-3"></div>
+    </div>
+
+    <!-- ══ LOGS SYSTÈME -->
+    <div id="view-logs" class="view-section space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-terminal text-cyan-400"></i>Logs système</h2><p class="text-sm text-blue-300/80">Flux en temps réel — activité backend &amp; sécurité</p></div>
+        <div class="flex gap-2">
+          <button onclick="clearSysLogs()" class="px-4 py-2 text-xs text-red-400 border border-red-500/20 rounded-xl hover:bg-red-500/10 flex items-center gap-2"><i class="fas fa-trash"></i>Effacer</button>
+          <button onclick="exportSysLogs()" class="px-4 py-2 text-xs text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/10 flex items-center gap-2"><i class="fas fa-download"></i>Exporter</button>
+        </div>
+      </div>
+      <div class="glass-card rounded-xl p-3 flex flex-wrap gap-2">
+        <span class="text-xs text-blue-300/50 self-center">Filtrer :</span>
+        <button onclick="filterLogs('all')" class="log-filter px-3 py-1 rounded-full text-xs border bg-blue-500/20 text-blue-300 border-blue-500/30" data-lf="all">Tous</button>
+        <button onclick="filterLogs('info')" class="log-filter px-3 py-1 rounded-full text-xs border text-gray-400 border-blue-500/10 hover:border-blue-500/30" data-lf="info">INFO</button>
+        <button onclick="filterLogs('warn')" class="log-filter px-3 py-1 rounded-full text-xs border text-gray-400 border-blue-500/10 hover:border-yellow-500/30" data-lf="warn">WARN</button>
+        <button onclick="filterLogs('error')" class="log-filter px-3 py-1 rounded-full text-xs border text-gray-400 border-blue-500/10 hover:border-red-500/30" data-lf="error">ERROR</button>
+        <button onclick="filterLogs('debug')" class="log-filter px-3 py-1 rounded-full text-xs border text-gray-400 border-blue-500/10 hover:border-purple-500/30" data-lf="debug">DEBUG</button>
+        <button onclick="filterLogs('security')" class="log-filter px-3 py-1 rounded-full text-xs border text-gray-400 border-blue-500/10 hover:border-orange-500/30" data-lf="security">SECURITY</button>
+        <span class="ml-auto text-xs text-blue-400/50 self-center"><span class="pulse-dot w-2 h-2 rounded-full bg-green-400 inline-block mr-1"></span>Live</span>
+      </div>
+      <div class="glass-card rounded-xl border border-cyan-500/20 overflow-hidden">
+        <div id="sysLogConsole" class="p-4 max-h-96 overflow-y-auto space-y-1 font-mono text-xs"></div>
+      </div>
+    </div>
+
+    <!-- ══ RBAC -->
+    <div id="view-rbac" class="view-section space-y-6">
+      <div class="flex items-center justify-between">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-user-shield text-cyan-400"></i>RBAC / Rôles &amp; Permissions</h2><p class="text-sm text-blue-300/80">Contrôle d'accès basé sur les rôles</p></div>
+        <button onclick="openRoleModal('')" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2"><i class="fas fa-plus"></i>Nouveau rôle</button>
+      </div>
+      <div id="rbacCards" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
+
+    <!-- ══ USERS -->
+    <div id="view-users" class="view-section space-y-6">
+      <div class="flex justify-between items-center">
+        <div><h2 class="text-2xl font-bold text-white">Gestion des utilisateurs</h2><p class="text-sm text-blue-300/80">Gérez les membres et leurs accès</p></div>
+        <button onclick="openCreateUserModal()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2"><i class="fas fa-plus"></i>Ajouter</button>
+      </div>
+      <div class="glass-card rounded-2xl border border-blue-500/20 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead class="bg-blue-900/30 border-b border-blue-500/20">
+              <tr>
+                <th class="p-4 text-blue-300 font-semibold text-sm">Utilisateur</th>
+                <th class="p-4 text-blue-300 font-semibold text-sm">Rôle</th>
+                <th class="p-4 text-blue-300 font-semibold text-sm hidden md:table-cell">Documents</th>
+                <th class="p-4 text-blue-300 font-semibold text-sm hidden sm:table-cell">Statut</th>
+                <th class="p-4 text-blue-300 font-semibold text-sm">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-blue-500/10" id="usersList"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAGS -->
+    <div id="view-tags" class="view-section space-y-6">
+      <h2 class="text-2xl font-bold text-white">Gestion des tags</h2>
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+        <div class="flex gap-2 mb-6">
+          <input type="text" id="newTagInput" placeholder="Nouveau tag..." maxlength="30"
+            class="flex-1 bg-slate-900/50 border border-blue-500/30 rounded-lg px-4 py-2 text-white focus:border-blue-400 outline-none"
+            onkeypress="if(event.key==='Enter') createTag()">
+          <input type="color" id="newTagColor" value="#3b82f6" class="w-10 h-10 rounded-lg border border-blue-500/30 bg-transparent cursor-pointer">
+          <button onclick="createTag()" class="btn-primary px-6 py-2 rounded-lg font-medium text-white"><i class="fas fa-plus mr-2"></i>Ajouter</button>
+        </div>
+        <div class="flex flex-wrap gap-3" id="tagsList"></div>
+      </div>
+    </div>
+
+    <!-- ══ BILLING -->
+    <div id="view-billing" class="view-section space-y-6">
+      <div><h2 class="text-2xl font-bold text-white">Abonnement &amp; Facturation</h2><p class="text-sm text-blue-300/80">Gérez votre plan</p></div>
+      <div id="currentPlanBanner" class="glass-card rounded-xl p-5 border-l-4 border-blue-500">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p class="text-blue-300/70 text-xs font-semibold uppercase tracking-wider mb-1">Plan actuel</p>
+            <div class="flex items-center gap-3"><span id="currentPlanName" class="text-white text-xl font-bold">Free</span><span id="currentPlanBadgeEl" class="badge-plan badge-free">FREE</span></div>
+            <p id="currentPlanDesc" class="text-blue-300/70 text-sm mt-1">5 utilisateurs · 1 GB · fonctionnalités de base</p>
+          </div>
+          <div class="text-right"><p id="currentPlanPrice" class="text-white text-2xl font-bold">0€<span class="text-blue-400/60 text-sm font-normal">/mois</span></p><p class="text-green-400 text-xs mt-1">✓ Actif</p></div>
+        </div>
+      </div>
+      <h3 class="text-white font-semibold">Choisir un plan</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="plan-card selected" onclick="selectPlan('free',this)"><div class="badge-plan badge-free mb-3">FREE</div><p class="text-white text-2xl font-bold">0€</p><p class="text-blue-400/60 text-xs mb-3">/mois</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>5 utilisateurs</li><li><i class="fas fa-check text-green-400 mr-2"></i>1 GB stockage</li><li><i class="fas fa-check text-green-400 mr-2"></i>Fonctions de base</li></ul></div>
+        <div class="plan-card" onclick="selectPlan('starter',this)"><div class="badge-plan badge-starter mb-3">STARTER</div><p class="text-white text-2xl font-bold">29€</p><p class="text-blue-400/60 text-xs mb-3">/mois</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>20 utilisateurs</li><li><i class="fas fa-check text-green-400 mr-2"></i>10 GB stockage</li><li><i class="fas fa-check text-green-400 mr-2"></i>Versioning</li></ul></div>
+        <div class="plan-card" onclick="selectPlan('professional',this)" style="position:relative"><div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#f59e0b,#d97706);color:white;font-size:0.65rem;font-weight:700;padding:2px 10px;border-radius:10px;white-space:nowrap;">⭐ POPULAIRE</div><div class="badge-plan badge-pro mb-3 mt-2">PROFESSIONAL</div><p class="text-white text-2xl font-bold">79€</p><p class="text-blue-400/60 text-xs mb-3">/mois</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>100 utilisateurs</li><li><i class="fas fa-check text-green-400 mr-2"></i>100 GB stockage</li><li><i class="fas fa-check text-green-400 mr-2"></i>RBAC avancé</li><li><i class="fas fa-check text-green-400 mr-2"></i>Audit complet</li></ul></div>
+        <div class="plan-card" onclick="selectPlan('enterprise',this)"><div class="badge-plan badge-enterprise mb-3">ENTERPRISE</div><p class="text-white text-2xl font-bold">Devis</p><p class="text-blue-400/60 text-xs mb-3">&nbsp;</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>Illimité</li><li><i class="fas fa-check text-green-400 mr-2"></i>Stockage illimité</li><li><i class="fas fa-check text-green-400 mr-2"></i>SSO + SLA</li></ul></div>
+      </div>
+      <button id="upgradeBtn" onclick="simulateUpgrade()" class="btn-primary px-6 py-3 rounded-xl text-white font-semibold text-sm disabled:opacity-50" disabled><i class="fas fa-credit-card mr-2"></i>Passer au plan sélectionné (Stripe)</button>
+    </div>
+
+    <!-- ══ SETTINGS -->
+    <div id="view-settings" class="view-section space-y-6">
+      <h2 class="text-2xl font-bold text-white">Configuration</h2>
+      <!-- Profil -->
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i class="fas fa-user-circle text-blue-400"></i>Profil</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-sm text-blue-300 mb-1">Nom d'affichage</label><input type="text" id="profileName" placeholder="Votre nom" class="w-full bg-slate-900/50 border border-blue-500/30 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-400"></div>
+          <div><label class="block text-sm text-blue-300 mb-1">Email (lecture seule)</label><input type="email" id="profileEmail" disabled class="w-full bg-slate-900/30 border border-blue-500/10 rounded-lg px-4 py-2 text-blue-300/60 cursor-not-allowed"></div>
+          <div><label class="block text-sm text-blue-300 mb-1">Nouveau mot de passe</label><input type="password" id="profileNewPwd" placeholder="Laisser vide pour ne pas changer" class="w-full bg-slate-900/50 border border-blue-500/30 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-400"></div>
+          <div><label class="block text-sm text-blue-300 mb-1">Confirmer le mot de passe</label><input type="password" id="profileConfirmPwd" placeholder="Répéter" class="w-full bg-slate-900/50 border border-blue-500/30 rounded-lg px-4 py-2 text-white outline-none focus:border-blue-400"></div>
+        </div>
+        <button onclick="saveProfile()" class="btn-primary px-6 py-2 rounded-lg text-white font-semibold flex items-center gap-2"><i class="fas fa-save"></i>Enregistrer le profil</button>
+      </div>
+      <!-- Backup & Export -->
+      <div class="glass-card rounded-2xl border border-green-500/20 p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i class="fas fa-database text-green-400"></i>Backup &amp; Export</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button onclick="exportAllData()" class="flex flex-col items-center gap-2 p-4 bg-green-500/10 border border-green-500/20 rounded-xl hover:bg-green-500/20 transition-all group"><i class="fas fa-file-archive text-2xl text-green-400 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold text-white">Export ZIP</span><span class="text-xs text-green-300/60">Métadonnées + liens</span></button>
+          <button onclick="exportDocumentsCsv()" class="flex flex-col items-center gap-2 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group"><i class="fas fa-file-csv text-2xl text-blue-400 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold text-white">Export CSV</span><span class="text-xs text-blue-300/60">Liste documents</span></button>
+          <button onclick="exportAuditLog()" class="flex flex-col items-center gap-2 p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/20 transition-all group"><i class="fas fa-history text-2xl text-purple-400 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold text-white">Export Audit</span><span class="text-xs text-purple-300/60">Journal activité</span></button>
+        </div>
+      </div>
+      <!-- Paramètres généraux -->
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-white">Paramètres généraux</h3>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-900/30 border border-blue-500/10"><div><p class="text-white font-medium">Notifications</p><p class="text-sm text-blue-300/70">Activer les notifications email</p></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="notificationsetting" checked class="sr-only peer" onchange="toggleSetting('notifications')"><div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-900/30 border border-blue-500/10"><div><p class="text-white font-medium">OCR Automatique</p><p class="text-sm text-blue-300/70">Extraire le texte des PDF</p></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="ocrsetting" class="sr-only peer" onchange="toggleSetting('ocr')"><div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-900/30 border border-blue-500/10"><div><p class="text-white font-medium">Mode sombre</p><p class="text-sm text-blue-300/70">Toujours utiliser le thème sombre</p></div><label class="relative inline-flex items-center cursor-pointer opacity-50"><input type="checkbox" checked disabled class="sr-only peer"><div class="w-11 h-6 bg-blue-600 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:translate-x-full cursor-not-allowed"></div></label></div>
+        </div>
+        <div class="border-t border-blue-500/20 pt-6">
+          <h3 class="text-lg font-semibold text-red-400 mb-4">Zone de danger</h3>
+          <div class="flex gap-3 flex-wrap">
+            <button onclick="exportAllData()" class="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 flex items-center gap-2"><i class="fas fa-file-export"></i>Exporter toutes mes données (ZIP)</button>
+            <button onclick="openDangerModal('delete_all')" class="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 flex items-center gap-2"><i class="fas fa-trash"></i>Supprimer tous les documents</button>
+          </div>
+        </div>
+      </div>
+      <!-- Schema SQL -->
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+        <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-database text-blue-400"></i>Schéma SQL Supabase</h3>
+        <div class="relative">
+          <pre class="text-xs text-green-400 bg-slate-900/80 rounded-xl p-4 overflow-x-auto max-h-64 overflow-y-auto border border-green-500/20" id="sqlSchemaBlock">-- Exécuter dans : Supabase Dashboard → SQL Editor
+create table if not exists users_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text, name text, role text default 'user',
+  created_at timestamptz default now()
+);
+create table if not exists documents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  name text not null, description text, file_url text,
+  file_size bigint default 0, file_type text, storage_path text,
+  version_number int default 1, created_at timestamptz default now()
+);
+create table if not exists tags (
+  id uuid primary key default gen_random_uuid(),
+  name text unique not null, color text default '#3b82f6',
+  created_at timestamptz default now()
+);
+create table if not exists workflows (
+  id uuid primary key default gen_random_uuid(),
+  title text not null, description text, status text default 'pending',
+  priority text default 'medium', created_by uuid references auth.users(id),
+  document_id uuid references documents(id), due_date date,
+  approvers text[], created_at timestamptz default now()
+);
+-- RLS policies omitted for brevity — see docs</pre>
+          <button onclick="copySqlSchema()" class="absolute top-2 right-2 px-3 py-1.5 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs hover:bg-yellow-500/30 font-medium"><i class="fas fa-copy mr-1"></i>Copier</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SECURITY & AUDIT -->
+    <div id="view-security" class="view-section space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-shield-alt text-red-400"></i>Sécurité &amp; Audit</h2><p class="text-sm text-blue-300/80 mt-1">Contrôle d'accès, logs d'audit et protection des données</p></div>
+        <button onclick="exportAuditLog()" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2 text-white"><i class="fas fa-download"></i>Exporter les logs</button>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-card rounded-2xl p-5 border border-green-500/20"><div class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 mb-2"><i class="fas fa-check-circle"></i></div><p id="secScanOk" class="text-2xl font-bold text-white">0</p><p class="text-xs text-green-400 mt-1">Fichiers sains</p></div>
+        <div class="glass-card rounded-2xl p-5 border border-red-500/20"><div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400 mb-2"><i class="fas fa-virus"></i></div><p id="secScanBlocked" class="text-2xl font-bold text-white">0</p><p class="text-xs text-red-400 mt-1">Menaces bloquées</p></div>
+        <div class="glass-card rounded-2xl p-5 border border-blue-500/20"><div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 mb-2"><i class="fas fa-key"></i></div><p id="secApiKeys" class="text-2xl font-bold text-white">0</p><p class="text-xs text-blue-400 mt-1">Clés API actives</p></div>
+        <div class="glass-card rounded-2xl p-5 border border-purple-500/20"><div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 mb-2"><i class="fas fa-history"></i></div><p id="secAuditCount" class="text-2xl font-bold text-white">0</p><p class="text-xs text-purple-400 mt-1">Événements audités</p></div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- OAuth -->
+        <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+          <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i class="fas fa-plug text-blue-400"></i>Connexion OAuth</h3>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10 hover:border-blue-500/30"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center"><i class="fab fa-google text-red-400 text-lg"></i></div><div><p class="text-white font-medium text-sm">Google</p><p class="text-xs text-blue-300/50">Se connecter avec Google</p></div></div><button onclick="oauthLogin('google')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 font-medium">Connecter</button></div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10 hover:border-blue-500/30"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center"><i class="fab fa-github text-white text-lg"></i></div><div><p class="text-white font-medium text-sm">GitHub</p><p class="text-xs text-blue-300/50">Se connecter avec GitHub</p></div></div><button onclick="oauthLogin('github')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 font-medium">Connecter</button></div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-blue-500/10 hover:border-blue-500/30"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center"><i class="fab fa-microsoft text-blue-400 text-lg"></i></div><div><p class="text-white font-medium text-sm">Microsoft Azure AD</p><p class="text-xs text-blue-300/50">Se connecter avec Azure AD</p></div></div><button onclick="oauthLogin('azure')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs hover:bg-blue-500/30 font-medium">Connecter</button></div>
+          </div>
+        </div>
+        <!-- API Keys -->
+        <div class="glass-card rounded-2xl border border-blue-500/20 p-6">
+          <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i class="fas fa-key text-yellow-400"></i>Clés API</h3>
+          <div id="apiKeysList" class="space-y-3 mb-4 max-h-48 overflow-y-auto"><p class="text-blue-300/50 text-sm text-center py-4">Aucune clé API générée</p></div>
+          <button onclick="generateApiKey()" class="w-full px-4 py-2.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-xl text-sm hover:bg-yellow-500/20 flex items-center justify-center gap-2 font-medium"><i class="fas fa-plus"></i>Générer une clé API</button>
+        </div>
+        <!-- Antivirus -->
+        <div class="glass-card rounded-2xl border border-green-500/20 p-6">
+          <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i class="fas fa-shield-virus text-green-400"></i>Antivirus &amp; Scanner</h3>
+          <div class="space-y-3 mb-4">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-green-500/10"><div><p class="text-white text-sm font-medium">Scan automatique à l'upload</p><p class="text-xs text-blue-300/50">Vérifie chaque fichier importé</p></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="antivirusSetting" checked class="sr-only peer" onchange="toggleSetting('antivirus')"><div class="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div></label></div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-green-500/10"><div><p class="text-white text-sm font-medium">Chiffrement AES-256</p><p class="text-xs text-blue-300/50">Fichiers chiffrés au repos</p></div><span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-lg">Actif</span></div>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900/30 border border-green-500/10"><div><p class="text-white text-sm font-medium">TLS 1.3 en transit</p><p class="text-xs text-blue-300/50">Chiffrement des transferts</p></div><span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-lg">Actif</span></div>
+          </div>
+          <button onclick="scanAllDocuments()" id="scanBtn" class="w-full px-4 py-2.5 bg-green-500/10 text-green-400 border border-green-500/20 rounded-xl text-sm hover:bg-green-500/20 flex items-center justify-center gap-2 font-medium"><i class="fas fa-search"></i>Scanner tous les documents</button>
+        </div>
+        <!-- Audit Log -->
+        <div class="glass-card rounded-2xl border border-purple-500/20 p-6">
+          <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><i class="fas fa-clipboard-list text-purple-400"></i>Journal d'audit</h3>
+          <div class="flex gap-2 mb-3">
+            <select id="auditFilter" onchange="renderAuditLog()" class="flex-1 bg-slate-900/50 border border-blue-500/30 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none">
+              <option value="">Toutes les actions</option>
+              <option value="login">Connexions</option>
+              <option value="upload">Uploads</option>
+              <option value="share">Partages</option>
+              <option value="delete">Suppressions</option>
+              <option value="restore">Restaurations</option>
+            </select>
+            <button onclick="switchSecurityTab('audit')" id="secTab-audit" class="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/20 font-medium">Journal</button>
+            <button onclick="switchSecurityTab('trash')" id="secTab-trash" class="px-3 py-1.5 text-xs rounded-lg text-gray-400 border border-blue-500/10 font-medium hover:border-blue-500/30 flex items-center gap-1"><i class="fas fa-trash text-red-400"></i>Corbeille<span id="trashCount" class="ml-1 px-1.5 bg-red-500/20 text-red-300 rounded-full hidden">0</span></button>
+          </div>
+          <!-- Journal tab -->
+          <div id="secPanel-audit">
+            <div id="auditLogList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+          </div>
+          <!-- Trash tab -->
+          <div id="secPanel-trash" class="hidden">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-blue-300/60 text-xs">Documents supprimés — restauration possible par Admin/Manager</p>
+              <button onclick="loadDeletedDocs()" class="text-xs text-blue-400 hover:text-blue-300"><i class="fas fa-sync-alt mr-1"></i>Actualiser</button>
+            </div>
+            <div id="trashList" class="space-y-2 max-h-64 overflow-y-auto">
+              <div class="text-center py-6 text-blue-300/40 text-sm"><i class="fas fa-trash text-2xl mb-2 block opacity-20"></i>Chargement…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ══ ANALYTICS v5.1 -->
+    <div id="view-analytics" class="view-section space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3"><i class="fas fa-chart-bar text-yellow-400"></i>Analytics Entreprise</h2>
+          <p class="text-sm text-blue-300/80">Activité de l’entreprise sur 30 jours</p>
+        </div>
+        <button onclick="refreshAnalytics()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2"><i class="fas fa-sync-alt"></i>Actualiser</button>
+      </div>
+      <p id="analyticsLoading" class="text-blue-300/60 text-sm text-center"></p>
+      <div id="analyticsContent">
+        <div id="analyticsKpiCards" class="kpi-grid mb-6"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div class="lg:col-span-2 glass-card rounded-2xl border border-blue-500/20 p-5">
+            <h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-chart-area text-blue-400"></i>Activité 14 derniers jours</h3>
+            <div id="analyticsActivityChart" style="min-height:120px;" class="flex items-end"><p class="text-blue-300/40 text-sm w-full text-center py-10">Chargement...</p></div>
+          </div>
+          <div class="glass-card rounded-2xl border border-orange-500/20 p-5">
+            <h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-project-diagram text-orange-400"></i>Workflows</h3>
+            <div id="analyticsWorkflowChart" class="space-y-3"><p class="text-blue-300/40 text-sm text-center py-4">Chargement...</p></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass-card rounded-2xl border border-cyan-500/20 p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-fire text-cyan-400"></i>Documents les plus consultés</h3>
+              <span class="text-xs text-blue-400/60">30 jours</span>
+            </div>
+            <div id="analyticsTopDocs" class="space-y-1 max-h-72 overflow-y-auto"><p class="text-blue-300/40 text-sm text-center py-6">Chargement...</p></div>
+          </div>
+          <div class="glass-card rounded-2xl border border-purple-500/20 p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-star text-purple-400"></i>Utilisateurs les plus actifs</h3>
+              <span class="text-xs text-blue-400/60">30 jours</span>
+            </div>
+            <div id="analyticsTopUsers" class="space-y-1 max-h-72 overflow-y-auto"><p class="text-blue-300/40 text-sm text-center py-6">Chargement...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DOSSIERS v6.0 -->
+    <div id="view-folders" class="view-section space-y-5">
+      <div class="flex items-center justify-between gap-4">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-folder-tree text-yellow-400"></i>Dossiers</h2><p class="text-sm text-blue-300/80">Organisez vos documents en arborescence</p></div>
+        <button onclick="openFolderModal()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2"><i class="fas fa-plus"></i>Nouveau dossier</button>
+      </div>
+      <div id="folderBreadcrumb" class="flex items-center gap-1 flex-wrap px-3 py-2 glass-card rounded-xl border border-blue-500/20 min-h-[36px]"></div>
+      <div id="folderContentsGrid"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div class="glass-card rounded-2xl border border-blue-500/20 p-4">
+          <p class="text-xs font-bold text-blue-300/60 uppercase tracking-wider mb-3">Arborescence</p>
+          <div class="cursor-pointer" onclick="openFolder('__root__','Racine')">
+            <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-blue-500/10 text-blue-300/70 text-xs"><i class="fas fa-home text-blue-400 text-xs"></i><span>Racine</span></div>
+          </div>
+          <div id="folderSidebarTree" class="space-y-0.5 mt-1"></div>
+        </div>
+        <div class="lg:col-span-3"><div class="doc-grid" id="folderDocGrid"></div></div>
+      </div>
+    </div>
+
+    <!-- ══ API KEYS v6.0 -->
+    <div id="view-apikeys" class="view-section space-y-6">
+      <div class="flex items-center justify-between gap-4">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-plug text-green-400"></i>API &amp; Intégrations</h2><p class="text-sm text-blue-300/80">Connectez SystemesGED à Zapier, Make, CRM, ERP</p></div>
+      </div>
+      <div class="glass-card rounded-xl p-4 border border-green-500/20">
+        <p class="text-xs font-bold text-green-400 mb-2">Base URL</p>
+        <code class="text-green-400 font-mono text-sm">https://spgtflhprppeoidjguhs.supabase.co/rest/v1</code>
+        <p class="text-blue-300/50 text-xs mt-1">Header: <code class="text-yellow-400">Authorization: Bearer &lt;votre-clé&gt;</code></p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+          <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2"><i class="fas fa-file-alt text-blue-400"></i>Documents</h4>
+          <div class="space-y-1 font-mono text-xs">
+            <div class="flex gap-2"><span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded text-[10px]">GET</span><span class="text-blue-300">/documents</span></div>
+            <div class="flex gap-2"><span class="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px]">POST</span><span class="text-blue-300">/documents</span></div>
+            <div class="flex gap-2"><span class="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-[10px]">PATCH</span><span class="text-blue-300">/documents?id=eq.{id}</span></div>
+          </div>
+        </div>
+        <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+          <h4 class="text-white font-semibold text-sm flex items-center gap-2 mb-2"><i class="fas fa-project-diagram text-orange-400"></i>Workflows &amp; Analytics</h4>
+          <div class="space-y-1 font-mono text-xs">
+            <div class="flex gap-2"><span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded text-[10px]">GET</span><span class="text-blue-300">/workflows</span></div>
+            <div class="flex gap-2"><span class="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px]">POST</span><span class="text-blue-300">/workflows</span></div>
+            <div class="flex gap-2"><span class="px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded text-[10px]">RPC</span><span class="text-blue-300">/get_dashboard_stats</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="glass-card rounded-2xl border border-yellow-500/20 p-6">
+        <h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-plus-circle text-yellow-400"></i>Créer une clé API</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="text-blue-200 text-xs font-medium block mb-1">Nom de la clé</label>
+            <input id="apiKeyName" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="ex: Zapier integration">
+          </div>
+          <div>
+            <label class="text-blue-200 text-xs font-medium block mb-2">Permissions</label>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="flex items-center gap-2 text-xs text-white cursor-pointer"><input type="checkbox" id="perm_api_documents" checked class="rounded"> Documents</label>
+              <label class="flex items-center gap-2 text-xs text-white cursor-pointer"><input type="checkbox" id="perm_api_workflows" class="rounded"> Workflows</label>
+              <label class="flex items-center gap-2 text-xs text-white cursor-pointer"><input type="checkbox" id="perm_api_analytics" class="rounded"> Analytics</label>
+              <label class="flex items-center gap-2 text-xs text-white cursor-pointer"><input type="checkbox" id="perm_api_shares" class="rounded"> Partages</label>
+            </div>
+          </div>
+        </div>
+        <button onclick="generateApiKeyV6()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2"><i class="fas fa-key"></i>Générer la clé</button>
+        <div id="newApiKeyWrapper" class="hidden mt-4 p-3 rounded-xl border border-green-500/30 bg-green-500/5">
+          <p class="text-green-400 text-xs font-bold mb-1">⚠️ Copiez cette clé maintenant — elle ne sera plus affichée</p>
+          <div class="flex gap-2"><code id="newApiKeyDisplay" class="text-green-400 font-mono text-xs flex-1 break-all"></code><button onclick="copyApiKey(document.getElementById('newApiKeyDisplay').textContent)" class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs"><i class="fas fa-copy"></i></button></div>
+        </div>
+      </div>
+      <div id="apiKeysList2" class="space-y-3"></div>
+    </div>
+
+    <!-- ══ BILLING v6.0 -->
+    <div id="view-billing2" class="view-section space-y-6">
+      <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-credit-card text-blue-400"></i>Abonnement &amp; Facturation</h2><p class="text-sm text-blue-300/80">Gérez votre plan SystemesGED</p></div>
+      <div id="billingV6Content"><p class="text-blue-300/50 text-sm text-center py-8">Chargement...</p></div>
+    </div>
+
+    <!-- ══ AUDIT SÉCURITÉ v6.0 -->
+    <div id="view-auditv6" class="view-section space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-shield-alt text-red-400"></i>Audit Sécurité Avancé</h2><p class="text-sm text-blue-300/80">Traçabilité complète, alertes et historique</p></div>
+        <div class="flex gap-2 flex-wrap">
+          <select onchange="setAuditFilter('days',parseInt(this.value))" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none">
+            <option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option>
+          </select>
+          <select onchange="setAuditFilter('severity',this.value)" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none">
+            <option value="">Tous niveaux</option><option value="critical">Critique</option><option value="warning">Warning</option><option value="info">Info</option>
+          </select>
+          <button onclick="renderAuditV6()" class="btn-primary px-4 py-2 rounded-lg text-sm text-white flex items-center gap-2"><i class="fas fa-sync-alt"></i>Actualiser</button>
+        </div>
+      </div>
+      <div id="auditStatsGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3"></div>
+      <div class="glass-card rounded-2xl border border-red-500/20 p-5">
+        <h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-bell text-red-400"></i>Alertes sécurité</h3>
+        <div id="securityAlertsList"></div>
+      </div>
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-history text-blue-400"></i>Historique des actions</h3>
+          <input oninput="setAuditFilter('action',this.value)" placeholder="Filtrer par action..." class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none w-40">
+        </div>
+        <div id="auditTimelineList" class="max-h-96 overflow-y-auto"></div>
+      </div>
+    </div>
+
+    <!-- ══ SIGNATURES v7 ══ -->
+    <div id="view-signatures" class="view-section space-y-6">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-signature"></i></span>Signatures électroniques</h2>
+          <p class="text-blue-300/60 text-sm mt-1">Demandez et gérez les signatures de vos documents</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="glass-card rounded-xl p-4 border border-yellow-500/20 text-center"><p class="text-yellow-400 text-2xl font-bold" id="sigStatPending">0</p><p class="text-blue-300/60 text-xs mt-1">En attente</p></div>
+        <div class="glass-card rounded-xl p-4 border border-green-500/20 text-center"><p class="text-green-400 text-2xl font-bold" id="sigStatSigned">0</p><p class="text-blue-300/60 text-xs mt-1">Signés</p></div>
+        <div class="glass-card rounded-xl p-4 border border-red-500/20 text-center"><p class="text-red-400 text-2xl font-bold" id="sigStatRejected">0</p><p class="text-blue-300/60 text-xs mt-1">Rejetés</p></div>
+      </div>
+      <div class="space-y-3" id="signaturesList"><div class="text-center py-12 text-blue-300/50"><i class="fas fa-signature text-4xl mb-3 block opacity-20"></i><p>Chargement…</p></div></div>
+    </div>
+
+    <!-- ══ RECHERCHE FTS v7 ══ -->
+    <div id="view-search" class="view-section space-y-6">
+      <div class="mb-2">
+        <h2 class="text-2xl font-bold text-white flex items-center gap-3 mb-4"><span class="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400"><i class="fas fa-search-plus"></i></span>Recherche plein texte</h2>
+        <div class="glass-card rounded-2xl border border-cyan-500/20 p-5">
+          <div class="flex gap-3 mb-4">
+            <div class="flex-1 relative">
+              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-blue-400/60"></i>
+              <input id="ftsInput" type="text" placeholder="Recherche dans les documents et texte OCR…" class="w-full pl-10 pr-4 py-3 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" oninput="if(this.value.length>=3)runFTSearch()" onkeypress="if(event.key==='Enter')runFTSearch()">
+            </div>
+            <button onclick="runFTSearch()" class="btn-primary px-5 py-3 rounded-xl text-white text-sm font-semibold"><i class="fas fa-search mr-2"></i>Rechercher</button>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <select id="ftsType" class="px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">Tous types</option><option value="pdf">PDF</option><option value="doc">Word</option><option value="xls">Excel</option><option value="img">Images</option></select>
+            <select id="ftsDate" class="px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">Toutes dates</option><option value="today">Aujourd'hui</option><option value="week">7 derniers jours</option><option value="month">30 derniers jours</option></select>
+            <span id="ftsCount" class="text-blue-300/50 text-sm self-center"></span>
+          </div>
+        </div>
+      </div>
+      <div id="searchV7Results"><div class="text-center py-20 text-blue-300/30"><i class="fas fa-search text-6xl mb-5 block opacity-10"></i><p class="text-lg">Tapez pour rechercher dans vos documents</p></div></div>
+    </div>
+
+    <!-- ══ INTELLIGENCE IA v7 ══ -->
+    <div id="view-ai" class="view-section space-y-6">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center text-pink-400"><i class="fas fa-brain"></i></span>Intelligence IA</h2>
+          <p class="text-blue-300/60 text-sm mt-1">Résumé automatique, classification et extraction d'entités</p>
+        </div>
+        <button onclick="analyzeAllDocuments()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-robot"></i>Analyser tous</button>
+      </div>
+      <div class="space-y-3" id="aiDocsList"><div class="text-center py-12 text-blue-300/50"><i class="fas fa-brain text-4xl mb-3 block opacity-20"></i><p>Chargement…</p></div></div>
+    </div>
+
+    <!-- ══ AUTOMATION v7 ══ -->
+    <div id="view-automation" class="view-section space-y-6">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400"><i class="fas fa-magic"></i></span>Automatisation Workflows</h2>
+          <p class="text-blue-300/60 text-sm mt-1">Déclenchez des actions automatiques sur événements</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="automationStats" class="text-blue-300/50 text-sm"></span>
+          <button onclick="openWfRuleModal()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-plus"></i>Nouvelle règle</button>
+        </div>
+      </div>
+      <div class="glass-card rounded-2xl border border-orange-500/20 p-4 mb-2">
+        <p class="text-orange-300 text-sm font-semibold mb-3"><i class="fas fa-lightbulb mr-2"></i>Règles suggérées</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10" onclick="document.getElementById('wfRuleName').value='Auto-approbation upload';openWfRuleModal()"><p class="text-white text-xs font-semibold">Upload → Workflow approbation</p><p class="text-orange-300/60 text-xs mt-1">Démarrer un workflow à chaque upload</p></div>
+          <div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10" onclick="document.getElementById('wfRuleName').value='Notif signature';openWfRuleModal()"><p class="text-white text-xs font-semibold">Signature → Notification</p><p class="text-orange-300/60 text-xs mt-1">Notifier quand un document est signé</p></div>
+          <div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10" onclick="document.getElementById('wfRuleName').value='Webhook approbation';openWfRuleModal()"><p class="text-white text-xs font-semibold">Approbation → Webhook</p><p class="text-orange-300/60 text-xs mt-1">Appeler un webhook après validation</p></div>
+        </div>
+      </div>
+      <div class="space-y-3" id="automationRulesList"><div class="text-center py-12 text-blue-300/50"><i class="fas fa-magic text-4xl mb-3 block opacity-20"></i><p>Chargement…</p></div></div>
+    </div>
+
+    <!-- ══ INTÉGRATIONS v7 ══ -->
+    <div id="view-integrations" class="view-section space-y-6">
+      <div class="mb-2">
+        <h2 class="text-2xl font-bold text-white flex items-center gap-3 mb-1"><span class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400"><i class="fas fa-plug"></i></span>Marketplace Intégrations</h2>
+        <p class="text-blue-300/60 text-sm">Connectez SystemesGED à vos outils préférés</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="integrationsGrid"><div class="text-center py-12 col-span-4 text-blue-300/50">Chargement…</div></div>
+    </div>
+
+    <!-- ══ BACKUPS v7 ══ -->
+    <div id="view-backups" class="view-section space-y-6">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-teal-500/20 rounded-xl flex items-center justify-center text-teal-400"><i class="fas fa-database"></i></span>Sauvegardes &amp; Restauration</h2>
+          <p id="backupStats" class="text-blue-300/60 text-sm mt-1">Aucune sauvegarde</p>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="createBackup('documents_only')" class="px-5 py-2.5 rounded-xl text-teal-400 text-sm font-semibold border border-teal-500/30 hover:bg-teal-500/10 flex items-center gap-2"><i class="fas fa-file-archive"></i>Docs seulement</button>
+          <button onclick="createBackup('full')" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-database"></i>Sauvegarde complète</button>
+        </div>
+      </div>
+      <div class="glass-card rounded-2xl border border-teal-500/20 p-4"><p class="text-teal-300/70 text-sm"><i class="fas fa-info-circle mr-2"></i>Les sauvegardes incluent les métadonnées de tous vos documents, tags, utilisateurs et workflows.</p></div>
+      <div class="space-y-3" id="backupsList"><div class="text-center py-12 text-blue-300/50">Chargement…</div></div>
+    </div>
+
+    <!-- ══ RBAC v7 ══ -->
+    <div id="view-rbacv7" class="view-section space-y-6">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400"><i class="fas fa-shield-alt"></i></span>RBAC Avancé</h2>
+          <p class="text-blue-300/60 text-sm mt-1">Rôles personnalisés et permissions granulaires</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <input id="newRoleName" type="text" placeholder="Nouveau rôle…" class="px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" onkeypress="if(event.key==='Enter')createRoleV7()">
+          <button onclick="createRoleV7()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-plus"></i>Créer rôle</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4" id="rbacV7RolesGrid"><div class="text-center py-8 col-span-4 text-blue-300/50">Chargement…</div></div>
+      <h3 class="text-white font-semibold flex items-center gap-2"><i class="fas fa-key text-yellow-400"></i>Matrice des permissions</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="rbacV7PermMatrix"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Bottom mobile nav -->
+<nav class="bottom-nav px-2 py-1">
+  <div class="flex items-center justify-around">
+    <button onclick="switchView('dashboard')" data-bnav="dashboard" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-chart-pie text-lg"></i><span class="text-[10px]">Accueil</span></button>
+    <button onclick="switchView('documents')" data-bnav="documents" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-file-alt text-lg"></i><span class="text-[10px]">Docs</span></button>
+    <button onclick="openUploadModal()" class="flex flex-col items-center gap-0.5 p-2 -mt-3 rounded-xl text-white min-w-[52px]" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);box-shadow:0 4px 15px rgba(37,99,235,0.5)"><i class="fas fa-plus text-lg"></i><span class="text-[10px]">Upload</span></button>
+    <button onclick="switchView('workflows')" data-bnav="workflows" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-project-diagram text-lg"></i><span class="text-[10px]">Flux</span></button>
+    <button onclick="switchView('settings')" data-bnav="settings" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-cog text-lg"></i><span class="text-[10px]">Config</span></button>
+  </div>
+</nav>
+</div><!-- /#mainApp -->
+
+<!-- ════ UPLOAD MODAL -->
+<div id="uploadModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg"><i class="fas fa-upload text-blue-400 mr-2"></i>Importer des fichiers</h3><button onclick="closeUploadModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+    <div id="dropZone" class="border-2 border-dashed rounded-xl p-8 text-center mb-4 cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" onclick="document.getElementById('fileInput').click()" ondragover="handleDragOver(event,'dropZone')" ondragleave="handleDragLeave(event,'dropZone')" ondrop="handleDrop(event,'dropZone')">
+      <i class="fas fa-cloud-upload-alt text-blue-400 text-3xl mb-2"></i>
+      <p class="text-white font-medium mb-1">Glissez-déposez vos fichiers</p>
+      <p class="text-blue-400/60 text-sm">ou cliquez pour parcourir</p>
+      <p class="text-blue-400/40 text-xs mt-2">PDF, Word, Excel, Images… · Max 100 MB par fichier</p>
+    </div>
+    <input type="file" id="fileInput" class="hidden" multiple onchange="handleFileSelect(event)">
+    <div id="selectedFilesList" class="space-y-2 mb-4 max-h-40 overflow-y-auto"></div>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div><label class="text-blue-200 text-xs font-medium block mb-1">Nom (optionnel)</label><input id="docNameInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom du document"></div>
+      <div><label class="text-blue-200 text-xs font-medium block mb-1">Description</label><input id="docDescInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Description courte"></div>
+    </div>
+    <!-- Portée du document -->
+    <div class="mb-4">
+      <label class="text-blue-200 text-xs font-medium block mb-2">Type de document</label>
+      <div class="grid grid-cols-2 gap-2" id="docScopeSelector">
+        <button type="button" id="scopeCompany" onclick="setDocScope('company')"
+          class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-blue-500/40 bg-blue-500/15 text-blue-300 font-medium text-sm transition-all">
+          <i class="fas fa-building text-blue-400"></i>
+          <div class="text-left"><p class="font-semibold text-white text-xs">Entreprise</p><p class="text-[10px] text-blue-300/60">Visible à toute l'équipe</p></div>
+        </button>
+        <button type="button" id="scopePersonal" onclick="setDocScope('personal')"
+          class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-transparent bg-slate-800/40 text-gray-400 font-medium text-sm transition-all hover:border-purple-500/30">
+          <i class="fas fa-user text-purple-400"></i>
+          <div class="text-left"><p class="font-semibold text-white text-xs">Personnel</p><p class="text-[10px] text-blue-300/60">Visible seulement par moi</p></div>
+        </button>
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="text-blue-200 text-xs font-medium block mb-1">Tags (séparés par virgules)</label>
+      <div class="flex gap-2 flex-wrap mb-2" id="uploadTagsContainer"></div>
+      <div class="flex gap-2">
+        <input id="tagInput" placeholder="Ajouter un tag..." onkeypress="if(event.key==='Enter'){addUploadTag();}" class="flex-1 px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+        <button onclick="addUploadTag()" class="px-3 py-2 rounded-xl text-blue-400 hover:text-white text-sm" style="border:1px solid rgba(96,165,250,0.2);"><i class="fas fa-plus"></i></button>
+      </div>
+    </div>
+    <div id="uploadProgress" class="hidden mb-4">
+      <div class="flex justify-between text-xs text-blue-300/70 mb-1"><span id="uploadStatusText">Upload en cours...</span><span id="uploadPercent">0%</span></div>
+      <div class="progress-bar"><div id="uploadProgressBar" class="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="closeUploadModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+      <button id="uploadBtn" onclick="uploadDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-cloud-upload-alt mr-2"></i>Importer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ SHARE MODAL -->
+<div id="shareModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:600px">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-share-nodes"></i></div>
+        <div><h3 class="text-white font-bold">Partager</h3><p id="shareDocInfo" class="text-blue-300/60 text-xs truncate max-w-xs"></p></div>
+      </div>
+      <button onclick="closeShareModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-blue-500/20 mb-4">
+      <button onclick="switchShareTab('send')" id="shareTab-send" class="px-4 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2"><i class="fas fa-paper-plane"></i>Partager</button>
+      <button onclick="switchShareTab('history')" id="shareTab-history" class="px-4 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px flex items-center gap-2 hover:text-blue-400"><i class="fas fa-history"></i>Historique<span id="shareHistoryCount" class="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full hidden">0</span></button>
+    </div>
+
+    <!-- Tab: Envoyer -->
+    <div id="sharePanel-send">
+      <!-- Destinataire -->
+      <div class="mb-3">
+        <label class="text-blue-200 text-xs font-medium block mb-1">Destinataire</label>
+        <div class="relative">
+          <i class="fas fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-blue-400/60 text-sm"></i>
+          <input id="shareEmail" type="email" class="w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm outline-none transition-all" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="email@destinataire.com">
+        </div>
+      </div>
+      <!-- Message optionnel -->
+      <div class="mb-3">
+        <label class="text-blue-200 text-xs font-medium block mb-1">Message (optionnel)</label>
+        <textarea id="shareMessage" rows="2" placeholder="Ajoutez un message personnalisé…" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea>
+      </div>
+      <!-- Permission + Expiration -->
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Permission</label>
+          <select id="sharePermission" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="view">👁 Lecture seule</option>
+            <option value="download">⬇ Téléchargement</option>
+            <option value="edit">✏ Modification</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Expiration</label>
+          <select id="shareExpiration" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="1">1 jour</option>
+            <option value="7" selected>7 jours</option>
+            <option value="30">30 jours</option>
+            <option value="90">90 jours</option>
+            <option value="0">Illimité</option>
+          </select>
+        </div>
+      </div>
+      <!-- Lien généré -->
+      <div id="generatedLink" class="hidden mb-3 p-3 rounded-xl" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2)">
+        <p class="text-green-400 text-xs font-semibold mb-2"><i class="fas fa-check-circle mr-1"></i>Lien de partage généré</p>
+        <div class="flex gap-2">
+          <input id="shareLinkInput" readonly class="flex-1 px-3 py-2 rounded-lg text-green-400 text-xs font-mono outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(16,185,129,0.2);">
+          <button onclick="copyShareLink()" class="px-3 py-2 rounded-lg text-green-400 hover:text-white text-sm border border-green-500/20 hover:bg-green-500/10"><i class="fas fa-copy"></i></button>
+        </div>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="closeShareModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button onclick="shareDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Envoyer le partage</button>
+      </div>
+    </div>
+
+    <!-- Tab: Historique -->
+    <div id="sharePanel-history" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-blue-300/70 text-xs">Tous les partages actifs et expirés pour ce document</p>
+        <button onclick="loadShareHistory()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-sync-alt text-xs"></i>Actualiser</button>
+      </div>
+      <div id="shareHistoryList" class="space-y-2 max-h-72 overflow-y-auto">
+        <div class="text-center py-8 text-blue-300/40"><i class="fas fa-history text-3xl mb-2 block opacity-20"></i><p class="text-sm">Chargement de l'historique…</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ DOC PREVIEW MODAL -->
+<div id="previewModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:680px">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <div id="previewIcon" class="flex-shrink-0"></div>
+        <div class="min-w-0">
+          <h3 class="text-white font-bold truncate" id="previewTitle">Aperçu</h3>
+          <p class="text-xs text-blue-300/60" id="previewMeta"></p>
+        </div>
+      </div>
+      <button onclick="closePreviewModal()" class="text-blue-400 hover:text-white ml-3 flex-shrink-0"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <!-- Collaborateurs -->
+    <div id="previewCollaborators"></div>
+    <!-- Contenu -->
+    <div id="previewContent" class="text-center text-blue-300/50 py-8">
+      <i class="fas fa-file text-5xl mb-3 block opacity-30"></i>
+      <p class="mb-3">Aperçu non disponible</p>
+      <button onclick="downloadCurrentDocument()" class="btn-primary px-5 py-2 rounded-lg text-white text-sm"><i class="fas fa-download mr-2"></i>Télécharger</button>
+    </div>
+    <iframe id="previewFrame" class="w-full rounded-xl bg-white hidden" style="min-height:450px;border:none;" title="Aperçu document"></iframe>
+    <img id="previewImage" class="max-w-full mx-auto rounded-xl hidden" alt="Aperçu" />
+    <!-- Actions -->
+    <div class="flex gap-3 mt-4 pt-4 border-t border-blue-500/20">
+      <button onclick="downloadCurrentDocument()" class="flex-1 px-4 py-2.5 bg-blue-500/20 text-blue-400 rounded-xl text-sm hover:bg-blue-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-download"></i>Télécharger</button>
+      <button onclick="shareCurrentDocument()" class="flex-1 px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-xl text-sm hover:bg-purple-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-share-alt"></i>Partager</button><button onclick="openRichEditor(G.previewDocId);closePreviewModal()" class="flex-1 px-4 py-2.5 bg-green-500/20 text-green-400 rounded-xl text-sm hover:bg-green-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-pen-nib"></i>Éditer</button>
+      <button onclick="closePreviewModal()" class="px-4 py-2.5 bg-slate-700/50 text-gray-400 rounded-xl text-sm hover:bg-slate-600/50"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ WORKFLOW MODAL -->
+<div id="workflowModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:580px">
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400"><i class="fas fa-project-diagram"></i></div>
+        <div><h3 class="text-white font-bold">Nouveau workflow</h3><p class="text-blue-300/50 text-xs">Définissez les étapes de validation</p></div>
+      </div>
+      <button onclick="closeWorkflowModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <form onsubmit="createWorkflow(event)" class="space-y-4">
+      <!-- Titre + Priorité -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="col-span-2">
+          <label class="text-blue-200 text-xs font-medium block mb-1">Titre <span class="text-red-400">*</span></label>
+          <input id="wfTitle" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Ex: Validation contrat client">
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Priorité</label>
+          <select id="wfPriority" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="low">🔵 Basse</option>
+            <option value="medium" selected>🟡 Moyenne</option>
+            <option value="high">🟠 Haute</option>
+            <option value="urgent">🔴 Urgente</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Description</label>
+        <textarea id="wfDesc" rows="2" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Décrivez l'objectif de ce workflow…"></textarea>
+      </div>
+
+      <!-- Document + Échéance -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Document lié</label>
+          <select id="wfDocId" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="">-- Aucun --</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Échéance</label>
+          <input id="wfDueDate" type="date" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+        </div>
+      </div>
+
+      <!-- Étapes de validation -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-blue-200 text-xs font-medium">Étapes de validation</label>
+          <button type="button" onclick="addWfStep()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-plus"></i>Ajouter étape</button>
+        </div>
+        <div id="wfStepsContainer" class="space-y-2">
+          <!-- Steps added dynamically -->
+        </div>
+        <p class="text-blue-300/40 text-[10px] mt-1">Chaque étape doit être approuvée séquentiellement</p>
+      </div>
+
+      <!-- Responsable global -->
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Responsable global</label>
+        <select id="wfAssignee" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="">-- Non assigné --</option>
+        </select>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeWorkflowModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-rocket mr-2"></i>Lancer le workflow</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ════ WORKFLOW DETAIL MODAL ════ -->
+<div id="wfDetailModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:680px;max-height:85vh;overflow-y:auto">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 flex-shrink-0"><i class="fas fa-project-diagram"></i></div>
+        <div class="min-w-0">
+          <h3 class="text-white font-bold truncate" id="wfDetailTitle">Workflow</h3>
+          <div id="wfDetailMeta" class="flex items-center gap-2 mt-0.5"></div>
+        </div>
+      </div>
+      <button onclick="closeWfDetail()" class="text-blue-400 hover:text-white p-2 rounded-lg flex-shrink-0"><i class="fas fa-times text-xl"></i></button>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="mb-4">
+      <div class="flex items-center justify-between text-xs text-blue-300/60 mb-1">
+        <span>Progression</span><span id="wfDetailProgress">0%</span>
+      </div>
+      <div class="h-2 bg-slate-900/50 rounded-full overflow-hidden">
+        <div id="wfDetailProgressBar" class="h-2 rounded-full transition-all duration-500" style="width:0%;background:linear-gradient(90deg,#f97316,#22c55e)"></div>
+      </div>
+    </div>
+
+    <!-- Steps timeline -->
+    <div id="wfDetailSteps" class="space-y-3 mb-5"></div>
+
+    <!-- Document lié -->
+    <div id="wfDetailDoc" class="hidden mb-4 p-3 rounded-xl" style="background:rgba(59,130,246,0.06);border:1px solid rgba(96,165,250,0.15)"></div>
+
+    <!-- Action area (for assignee/admin) -->
+    <div id="wfDetailActions" class="hidden border-t border-blue-500/20 pt-4 space-y-3">
+      <p class="text-blue-200 text-sm font-semibold">Votre décision</p>
+      <textarea id="wfDetailComment" rows="2" placeholder="Commentaire (optionnel)…"
+        class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none"
+        style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea>
+      <div class="flex gap-3">
+        <button onclick="actOnWorkflow('approve')" class="flex-1 py-2.5 rounded-xl text-sm text-green-400 hover:bg-green-500/10 border border-green-500/30 font-semibold flex items-center justify-center gap-2">
+          <i class="fas fa-check-circle"></i>Approuver
+        </button>
+        <button onclick="actOnWorkflow('reject')" class="flex-1 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 border border-red-500/30 font-semibold flex items-center justify-center gap-2">
+          <i class="fas fa-times-circle"></i>Rejeter
+        </button>
+        <button onclick="actOnWorkflow('request_changes')" class="flex-1 py-2.5 rounded-xl text-sm text-yellow-400 hover:bg-yellow-500/10 border border-yellow-500/30 font-semibold flex items-center justify-center gap-2">
+          <i class="fas fa-redo"></i>Révision
+        </button>
+      </div>
+    </div>
+
+    <!-- Comment history -->
+    <div class="border-t border-blue-500/20 pt-4">
+      <h4 class="text-white text-sm font-semibold mb-3 flex items-center gap-2"><i class="fas fa-comments text-blue-400"></i>Historique</h4>
+      <div id="wfDetailHistory" class="space-y-2 max-h-40 overflow-y-auto"></div>
+      <!-- Add comment -->
+      <div class="flex gap-2 mt-3">
+        <input id="wfCommentInput" type="text" placeholder="Ajouter un commentaire…"
+          class="flex-1 px-3 py-2 rounded-xl text-white text-sm outline-none"
+          style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"
+          onkeypress="if(event.key==='Enter')addWfComment()">
+        <button onclick="addWfComment()" class="px-4 py-2 btn-primary rounded-xl text-white text-sm"><i class="fas fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ ADD USER MODAL -->
+<div id="addUserModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg"><i class="fas fa-user-plus text-blue-400 mr-2"></i>Ajouter un utilisateur</h3><button onclick="closeAddUserModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+    <form onsubmit="addUser(event)" class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-blue-200 text-xs font-medium block mb-1">Prénom</label><input id="newUserFirst" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Prénom"></div>
+        <div><label class="text-blue-200 text-xs font-medium block mb-1">Nom</label><input id="newUserLast" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom"></div>
+      </div>
+      <div><label class="text-blue-200 text-xs font-medium block mb-1">Email</label><input id="newUserEmail" type="email" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="email@exemple.com"></div>
+      <div><label class="text-blue-200 text-xs font-medium block mb-1">Rôle</label>
+        <select id="newUserRole" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="viewer">Lecteur</option><option value="editor">Éditeur</option><option value="manager">Manager</option><option value="admin">Administrateur</option>
+        </select>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeAddUserModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium">Ajouter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ════ EDIT USER MODAL -->
+<div id="editUserModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg"><i class="fas fa-user-edit text-blue-400 mr-2"></i>Modifier l'utilisateur</h3><button onclick="closeEditUserModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+    <input type="hidden" id="editUserId">
+    <form onsubmit="saveEditUser(event)" class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-blue-200 text-xs font-medium block mb-1">Prénom</label><input id="editUserFirst" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div>
+        <div><label class="text-blue-200 text-xs font-medium block mb-1">Nom</label><input id="editUserLast" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div>
+      </div>
+      <div><label class="text-blue-200 text-xs font-medium block mb-1">Rôle</label>
+        <select id="editUserRole" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="viewer">Lecteur</option><option value="editor">Éditeur</option><option value="manager">Manager</option><option value="admin">Administrateur</option>
+        </select>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeEditUserModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium">Sauvegarder</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ════ ROLE MODAL -->
+<div id="roleModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg" id="roleModalTitle">Modifier le rôle</h3><button onclick="closeRoleModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+    <input type="hidden" id="roleModalKey">
+    <div class="space-y-3">
+      <div><label class="text-blue-200 text-xs font-medium block mb-1">Nom du rôle</label><input id="roleModalName" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom du rôle"></div>
+      <div><p class="text-blue-200 text-xs font-medium mb-3">Permissions</p>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 cursor-pointer hover:bg-blue-500/10"><input type="checkbox" id="perm_read" class="rounded"><span class="text-sm text-white">Lecture documents</span></label>
+          <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 cursor-pointer hover:bg-blue-500/10"><input type="checkbox" id="perm_write" class="rounded"><span class="text-sm text-white">Écriture / Upload</span></label>
+          <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 cursor-pointer hover:bg-blue-500/10"><input type="checkbox" id="perm_delete" class="rounded"><span class="text-sm text-white">Suppression</span></label>
+          <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 cursor-pointer hover:bg-blue-500/10"><input type="checkbox" id="perm_users" class="rounded"><span class="text-sm text-white">Gestion utilisateurs</span></label>
+          <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 cursor-pointer hover:bg-blue-500/10"><input type="checkbox" id="perm_logs" class="rounded"><span class="text-sm text-white">Logs &amp; Audit</span></label>
+          <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 cursor-pointer hover:bg-blue-500/10"><input type="checkbox" id="perm_api" class="rounded"><span class="text-sm text-white">Clés API &amp; OAuth</span></label>
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeRoleModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button onclick="saveRole()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ DANGER MODAL -->
+<div id="dangerModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:420px;border:1px solid rgba(239,68,68,0.4)">
+    <div class="flex items-center gap-3 mb-4"><div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400"><i class="fas fa-exclamation-triangle text-xl"></i></div><div><h3 class="text-white font-bold">Action irréversible</h3><p class="text-red-400/80 text-sm">Impossible d'annuler</p></div></div>
+    <p id="dangerModalMessage" class="text-blue-300/80 text-sm mb-4">Cette action est irréversible.</p>
+    <p class="text-blue-300/60 text-xs mb-2">Tapez <strong class="text-white">CONFIRMER</strong> pour valider :</p>
+    <input id="dangerConfirmInput" class="danger-confirm-input" placeholder="CONFIRMER" oninput="checkDangerConfirm()">
+    <div class="flex gap-3 mt-4">
+      <button onclick="closeDangerModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+      <button id="dangerConfirmBtn" onclick="executeDangerAction()" disabled class="flex-1 py-2.5 rounded-xl text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed" style="background:linear-gradient(135deg,#dc2626,#ef4444)"><i class="fas fa-trash mr-2"></i>Confirmer</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- ════ PERMISSION / COLLABORATEURS MODAL -->
+<div id="permModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:520px">
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400 border border-cyan-400/20">
+          <i class="fas fa-users"></i>
+        </div>
+        <div>
+          <h3 class="text-white font-bold">Collaborateurs</h3>
+          <p id="permDocName" class="text-blue-300/60 text-sm truncate max-w-xs"></p>
+        </div>
+      </div>
+      <button onclick="closePermModal()" class="text-blue-400 hover:text-white p-2 rounded-lg transition-colors">
+        <i class="fas fa-times text-xl"></i>
+      </button>
+    </div>
+
+    <!-- Liste collaborateurs actifs -->
+    <div id="collaboratorsList" class="space-y-2 mb-5 max-h-52 overflow-y-auto">
+      <p class="text-blue-300/50 text-sm text-center py-4">Aucun collaborateur</p>
+    </div>
+
+    <!-- Ajouter un collaborateur -->
+    <div class="pt-4 border-t border-blue-500/20">
+      <p class="text-sm font-medium text-blue-300 mb-3 flex items-center gap-2">
+        <i class="fas fa-user-plus text-blue-400"></i> Ajouter un collaborateur
+      </p>
+      <div class="flex gap-2 flex-wrap sm:flex-nowrap">
+        <div class="flex-1 relative min-w-0">
+          <i class="fas fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 text-sm"></i>
+          <input type="email" id="collabEmail" placeholder="email@entreprise.com"
+            class="w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm outline-none transition-all"
+            style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"
+            onkeypress="if(event.key==='Enter')addCollaborator()">
+        </div>
+        <select id="collabPermission"
+          class="px-3 py-2.5 rounded-xl text-white text-sm outline-none flex-shrink-0"
+          style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="viewer">Lecture</option>
+          <option value="editor">Édition</option>
+          <option value="owner">Propriétaire</option>
+        </select>
+        <button onclick="addCollaborator()"
+          class="btn-primary px-4 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 flex-shrink-0">
+          <i class="fas fa-plus"></i> Ajouter
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SystemesGED v5.1 — Script principal (IIFE, module-scoped)
+     ─────────────────────────────────────────────────────────
+     En production, remplacer par le fichier obfusqué :
+       npx javascript-obfuscator app.js --output app.obf.js
+     puis pointer vers app.obf.js ci-dessous.
+     ═══════════════════════════════════════════════════════ -->
+<script>
+function _collabFormat(type) {
+  var ed=document.getElementById('collabEditorArea');if(!ed)return;
+  var s=ed.selectionStart,e2=ed.selectionEnd,sel=ed.value.substring(s,e2);
+  var before=ed.value.substring(0,s),after=ed.value.substring(e2);
+  var f={bold:{pre:'**',post:'**'},italic:{pre:'_',post:'_'},code:{pre:'`',post:'`'},h1:{pre:'# ',post:''},h2:{pre:'## ',post:''},ul:{pre:'- ',post:''},link:{pre:'[',post:'](url)'}};
+  var fmt=f[type];if(!fmt)return;
+  ed.value=before+fmt.pre+(sel||'texte')+fmt.post+after;
+  ed.focus();
+  if(window.onCollabEditorInput)window.onCollabEditorInput({target:ed});
+}
+function _collabUpdateWordCount(){
+  var ed=document.getElementById('collabEditorArea'),wc=document.getElementById('collabWordCount');
+  if(!ed||!wc)return;
+  var words=ed.value.trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
+  wc.textContent=words+' mot'+(words>1?'s':'');
+}
+function _saveContentNow(){
+  var ed=document.getElementById('collabEditorArea');
+  if(!ed||!window.G||!window.G.collab||!window.G.collab.docId)return;
+  window.SB.from('documents').update({content:ed.value,updated_at:new Date().toISOString()}).eq('id',window.G.collab.docId).then(function(){
+    var el=document.getElementById('collabSaveStatus');
+    if(el)el.innerHTML='<i class="fas fa-check-circle text-green-400 mr-1"></i><span class="text-green-400">Enregistré</span>';
+    var ls=document.getElementById('collabLastSaved');
+    if(ls)ls.textContent='Enregistré à '+new Date().toLocaleTimeString('fr-FR');
+  });
+}
+</script>
+
+<!-- Editeur collaboratif v5.1 -->
+<div id="collabEditorModal" class="modal-overlay hidden" style="align-items:stretch;padding:0;">
+  <div style="width:100%;max-width:900px;margin:auto;display:flex;flex-direction:column;height:100vh;max-height:100vh;background:rgba(8,12,40,0.99);border-left:1px solid rgba(96,165,250,0.2);border-right:1px solid rgba(96,165,250,0.2);">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-blue-500/20 flex-shrink-0" style="background:rgba(12,18,56,0.98);">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-9 h-9 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 flex-shrink-0"><i class="fas fa-pen-nib"></i></div>
+        <div class="min-w-0">
+          <h3 class="text-white font-bold text-sm truncate" id="collabEditorTitle">Document</h3>
+          <p class="text-[10px] text-blue-400/50" id="collabEditorType">text</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 mx-4">
+        <div id="collabPresenceAvatars" class="flex items-center"></div>
+        <span id="collabEditingBadge" class="text-xs px-2 py-1 rounded-full font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">1 éditeur</span>
+      </div>
+      <div id="collabSaveStatus" class="flex items-center text-xs mr-3 min-w-[100px] justify-end"></div>
+      <button onclick="closeCollabEditor()" class="p-2 text-blue-400 hover:text-white hover:bg-blue-500/10 rounded-lg transition-colors flex-shrink-0"><i class="fas fa-times text-lg"></i></button>
+    </div>
+    <div class="flex items-center gap-1 px-4 py-2 border-b border-blue-500/10 flex-wrap flex-shrink-0" style="background:rgba(10,16,50,0.8);">
+      <button onclick="_collabFormat('bold')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Gras"><i class="fas fa-bold"></i></button>
+      <button onclick="_collabFormat('italic')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Italique"><i class="fas fa-italic"></i></button>
+      <button onclick="_collabFormat('h1')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-xs font-bold" title="Titre 1">H1</button>
+      <button onclick="_collabFormat('h2')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-xs font-bold" title="Titre 2">H2</button>
+      <button onclick="_collabFormat('ul')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Liste"><i class="fas fa-list-ul"></i></button>
+      <button onclick="_collabFormat('code')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Code"><i class="fas fa-code"></i></button>
+      <button onclick="_collabFormat('link')" class="p-1.5 text-blue-300/60 hover:text-white hover:bg-blue-500/20 rounded text-sm" title="Lien"><i class="fas fa-link"></i></button>
+      <div class="flex-1"></div>
+      <span class="text-xs text-blue-400/40" id="collabWordCount">0 mot</span>
+      <button onclick="_saveContentNow()" class="px-3 py-1.5 btn-primary rounded-lg text-xs text-white font-medium flex items-center gap-1 ml-2"><i class="fas fa-save"></i>Sauvegarder</button>
+    </div>
+    <div class="flex-1 relative overflow-hidden">
+      <div id="collabCursorOverlay" class="absolute top-2 left-2 z-10 flex flex-wrap gap-1 pointer-events-none"></div>
+      <textarea id="collabEditorArea"
+        class="collab-editor w-full h-full bg-transparent text-gray-100 p-6"
+        style="border:none;color:#e2e8f0;resize:none;outline:none;"
+        placeholder="Commencez à écrire... Les modifications sont synchronisées en temps réel."
+        oninput="onCollabEditorInput(event)"
+        onkeyup="_collabUpdateWordCount()"
+        spellcheck="true"></textarea>
+    </div>
+    <div class="flex items-center justify-between px-5 py-2 border-t border-blue-500/10 flex-shrink-0 text-xs text-blue-400/40" style="background:rgba(8,12,40,0.99);">
+      <span>SystemesGED v5.1 — Édition collaborative sécurisée</span>
+      <span id="collabLastSaved">Non enregistré</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════ DOSSIER MODAL v6 -->
+<div id="folderModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:420px">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-folder-plus text-yellow-400"></i>Nouveau dossier</h3>
+      <button onclick="closeFolderModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Nom du dossier</label>
+        <input id="newFolderName" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Ex: Contrats 2024" onkeypress="if(event.key==='Enter')createFolder()">
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeFolderModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button onclick="createFolder()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-folder-plus mr-2"></i>Créer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ ÉDITEUR RICHE v6.0 -->
+<div id="richEditorModal" class="modal-overlay hidden" style="align-items:stretch;padding:0;">
+  <div style="width:100%;max-width:960px;margin:auto;display:flex;flex-direction:column;height:100vh;background:rgba(8,12,40,0.99);border-left:1px solid rgba(96,165,250,0.2);border-right:1px solid rgba(96,165,250,0.2);">
+
+    <!-- Header -->
+    <div class="flex items-center gap-3 px-5 py-3 border-b border-blue-500/20 flex-shrink-0" style="background:rgba(12,18,56,0.98);">
+      <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400"><i class="fas fa-file-alt"></i></div>
+      <h3 class="text-white font-bold text-sm flex-1 truncate" id="richEditorTitle">Document</h3>
+      <div id="collabPresenceAvatars2" class="flex items-center gap-1"></div>
+      <div id="richSaveStatus" class="flex items-center min-w-[90px] justify-end"></div>
+      <button onclick="closeRichEditor()" class="p-2 text-blue-400 hover:text-white hover:bg-blue-500/10 rounded-lg"><i class="fas fa-times"></i></button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="flex items-center gap-0.5 px-3 py-2 border-b border-blue-500/10 flex-shrink-0 flex-wrap" style="background:rgba(10,16,50,0.8);">
+      <!-- Text style -->
+      <select onchange="richCmd('fontSize',this.value);this.value=''" class="rich-toolbar-btn text-xs bg-transparent text-blue-300/70" style="border:1px solid rgba(96,165,250,0.15);border-radius:6px;padding:4px 6px;">
+        <option value="">Taille</option>
+        <option value="3">Normal</option>
+        <option value="4">Grand</option>
+        <option value="5">Très grand</option>
+      </select>
+      <div class="w-px h-5 bg-blue-500/20 mx-1"></div>
+      <button onclick="richInsertHeading(1)" class="rich-toolbar-btn font-bold text-xs">H1</button>
+      <button onclick="richInsertHeading(2)" class="rich-toolbar-btn font-bold text-xs">H2</button>
+      <button onclick="richInsertHeading(3)" class="rich-toolbar-btn font-bold text-xs">H3</button>
+      <div class="w-px h-5 bg-blue-500/20 mx-1"></div>
+      <button onclick="richCmd('bold')" class="rich-toolbar-btn" title="Gras"><i class="fas fa-bold"></i></button>
+      <button onclick="richCmd('italic')" class="rich-toolbar-btn" title="Italique"><i class="fas fa-italic"></i></button>
+      <button onclick="richCmd('underline')" class="rich-toolbar-btn" title="Souligné"><i class="fas fa-underline"></i></button>
+      <button onclick="richCmd('strikeThrough')" class="rich-toolbar-btn" title="Barré"><i class="fas fa-strikethrough"></i></button>
+      <div class="w-px h-5 bg-blue-500/20 mx-1"></div>
+      <button onclick="richCmd('insertUnorderedList')" class="rich-toolbar-btn" title="Liste"><i class="fas fa-list-ul"></i></button>
+      <button onclick="richCmd('insertOrderedList')" class="rich-toolbar-btn" title="Liste numérotée"><i class="fas fa-list-ol"></i></button>
+      <button onclick="richCmd('formatBlock','blockquote')" class="rich-toolbar-btn" title="Citation"><i class="fas fa-quote-left"></i></button>
+      <div class="w-px h-5 bg-blue-500/20 mx-1"></div>
+      <button onclick="richAlign('left')" class="rich-toolbar-btn" title="Gauche"><i class="fas fa-align-left"></i></button>
+      <button onclick="richAlign('center')" class="rich-toolbar-btn" title="Centre"><i class="fas fa-align-center"></i></button>
+      <button onclick="richAlign('right')" class="rich-toolbar-btn" title="Droite"><i class="fas fa-align-right"></i></button>
+      <div class="w-px h-5 bg-blue-500/20 mx-1"></div>
+      <button onclick="richInsertLink()" class="rich-toolbar-btn" title="Lien"><i class="fas fa-link"></i></button>
+      <button onclick="richInsertCodeBlock()" class="rich-toolbar-btn" title="Code"><i class="fas fa-code"></i></button>
+      <button onclick="richInsertTable()" class="rich-toolbar-btn" title="Tableau"><i class="fas fa-table"></i></button>
+      <button onclick="richInsertMention()" class="rich-toolbar-btn" title="Mentionner @"><i class="fas fa-at"></i></button>
+      <div class="flex-1"></div>
+      <button onclick="_saveRichContent()" class="btn-primary px-4 py-1.5 rounded-lg text-xs text-white flex items-center gap-1"><i class="fas fa-save"></i>Enregistrer</button>
+    </div>
+
+    <!-- Zone d'édition -->
+    <div class="flex-1 overflow-y-auto">
+      <div
+        id="richEditorContent"
+        class="rich-editor-content"
+        contenteditable="true"
+        oninput="_onRichEditorInput()"
+        spellcheck="true"
+      ></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-between px-5 py-2 border-t border-blue-500/10 flex-shrink-0 text-xs text-blue-400/40" style="background:rgba(8,12,40,0.99);">
+      <span>SystemesGED v6.0 — Éditeur collaboratif riche</span>
+      <span id="richEditorWordCount"></span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════ SIGNER MODAL v7 ════ -->
+<div id="signatureModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:560px">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-signature text-purple-400"></i>Signer le document</h3>
+      <button onclick="closeSignModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <p class="text-blue-300/70 text-sm mb-4">Dessinez votre signature dans la zone ci-dessous :</p>
+    <canvas id="signatureCanvas" class="w-full rounded-xl cursor-crosshair touch-none" style="height:180px;background:rgba(8,15,40,0.8);border:1px solid rgba(96,165,250,0.3);"></canvas>
+    <div class="flex gap-3 mt-4">
+      <button onclick="clearSignature()" class="flex-1 py-2.5 rounded-xl text-yellow-400 text-sm border border-yellow-500/30 hover:bg-yellow-500/10"><i class="fas fa-eraser mr-2"></i>Effacer</button>
+      <button onclick="submitSignature()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold"><i class="fas fa-check mr-2"></i>Valider la signature</button>
+    </div>
+    <p class="text-blue-300/40 text-xs mt-3 text-center">Votre signature sera horodatée et liée à votre compte.</p>
+  </div>
+</div>
+
+<!-- ════ DEMANDER SIGNATURE MODAL v7 ════ -->
+<div id="requestSignatureModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-file-signature text-purple-400"></i>Demander une signature</h3>
+      <button onclick="closeRequestSignatureModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="mb-3 p-3 rounded-xl" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2)">
+      <p class="text-purple-300 font-medium text-sm" id="reqSigDocName">Document</p>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Signataire</label>
+        <select id="reqSigUserEmail" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">-- Choisir un utilisateur --</option></select>
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Message (optionnel)</label>
+        <textarea id="reqSigMessage" rows="3" placeholder="Veuillez signer ce document pour validation…" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeRequestSignatureModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button onclick="submitSignatureRequest()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Envoyer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ RÈGLE AUTOMATION MODAL v7 ════ -->
+<div id="wfRuleModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-magic text-orange-400"></i>Nouvelle règle d'automatisation</h3>
+      <button onclick="closeWfRuleModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <form onsubmit="createWfRule(event)" class="space-y-4">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Nom de la règle</label>
+        <input id="wfRuleName" type="text" placeholder="Ex: Upload → Notification Slack" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Déclencheur (SI)</label>
+          <select id="wfRuleTrigger" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="document_upload">Upload document</option>
+            <option value="document_delete">Suppression</option>
+            <option value="workflow_approve">Approbation workflow</option>
+            <option value="workflow_reject">Rejet workflow</option>
+            <option value="signature_done">Signature effectuée</option>
+            <option value="user_login">Connexion utilisateur</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Action (ALORS)</label>
+          <select id="wfRuleAction" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="start_workflow">Démarrer workflow</option>
+            <option value="send_notification">Notifier utilisateurs</option>
+            <option value="assign_tag">Assigner un tag</option>
+            <option value="move_folder">Déplacer dans dossier</option>
+            <option value="send_email">Envoyer email</option>
+            <option value="call_webhook">Appeler webhook</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeWfRuleModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-save mr-2"></i>Créer la règle</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="app.js" defer></script>
+</body>
+</html>
