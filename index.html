@@ -1175,6 +1175,92 @@ create table if not exists workflows (
       <h3 class="text-white font-semibold flex items-center gap-2"><i class="fas fa-key text-yellow-400"></i>Matrice des permissions</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="rbacV7PermMatrix"></div>
     </div>
+<!-- ══ VALIDATIONS EN ATTENTE (PENDING USERS) -->
+<div id="view-pending-users" class="view-section space-y-6">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+        <i class="fas fa-user-clock text-yellow-400"></i>Validations en attente
+      </h2>
+      <p class="text-sm text-blue-300/80">Gérez les demandes d'inscription des nouveaux utilisateurs</p>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="refreshPendingUsers()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2">
+        <i class="fas fa-sync-alt"></i>Actualiser
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="glass-card rounded-2xl p-5 border border-yellow-500/20">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-yellow-400 text-2xl font-bold" id="pendingCount">0</p>
+          <p class="text-blue-300/60 text-sm">En attente</p>
+        </div>
+        <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-400">
+          <i class="fas fa-clock text-xl"></i>
+        </div>
+      </div>
+    </div>
+    <div class="glass-card rounded-2xl p-5 border border-green-500/20">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-green-400 text-2xl font-bold" id="approvedTodayCount">0</p>
+          <p class="text-blue-300/60 text-sm">Approuvés aujourd'hui</p>
+        </div>
+        <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400">
+          <i class="fas fa-check-circle text-xl"></i>
+        </div>
+      </div>
+    </div>
+    <div class="glass-card rounded-2xl p-5 border border-red-500/20">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-red-400 text-2xl font-bold" id="rejectedTodayCount">0</p>
+          <p class="text-blue-300/60 text-sm">Rejetés aujourd'hui</p>
+        </div>
+        <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400">
+          <i class="fas fa-times-circle text-xl"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Liste des utilisateurs en attente -->
+  <div class="glass-card rounded-2xl border border-yellow-500/20 overflow-hidden">
+    <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
+      <h3 class="text-white font-bold flex items-center gap-2">
+        <i class="fas fa-users text-yellow-400"></i>Demandes d'inscription
+      </h3>
+      <div class="flex gap-2">
+        <button onclick="approveAllPending()" class="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-xs hover:bg-green-500/30 flex items-center gap-1">
+          <i class="fas fa-check-double"></i>Tout approuver
+        </button>
+        <button onclick="rejectAllPending()" class="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-xs hover:bg-red-500/30 flex items-center gap-1">
+          <i class="fas fa-times"></i>Tout rejeter
+        </button>
+      </div>
+    </div>
+    <div id="pendingUsersList" class="divide-y divide-blue-500/10">
+      <div class="text-center py-12 text-blue-300/50">
+        <i class="fas fa-spinner fa-spin text-2xl mb-3"></i>
+        <p>Chargement des demandes...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historique récent -->
+  <div class="glass-card rounded-2xl border border-blue-500/20 p-5">
+    <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+      <i class="fas fa-history text-blue-400"></i>Actions récentes
+    </h3>
+    <div id="pendingUsersHistory" class="space-y-2 max-h-64 overflow-y-auto">
+      <p class="text-blue-300/50 text-sm text-center py-4">Aucune action récente</p>
+    </div>
+  </div>
+</div>
   </main>
 </div>
 
