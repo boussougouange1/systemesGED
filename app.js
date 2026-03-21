@@ -1616,30 +1616,6 @@ function loadShareHistory() {
           <p class="text-xs text-blue-300/60">${s.permission} • ${formatDate(s.createdAt)}</p>
         </div>
       </div>
-      <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ?Shares = G.shares.filter(s => s.documentId === G.currentDocId);
-  const shareHistoryCount = document.getElementById('shareHistoryCount');
-  
-  if (shareHistoryCount) {
-    shareHistoryCount.textContent = docShares.length;
-    shareHistoryCount.classList.toggle('hidden', docShares.length === 0);
-  }
-  
-  if (docShares.length === 0) {
-    list.innerHTML = '<div class="text-center py-6 text-blue-300/40"><p class="text-sm">Aucun partage pour ce document</p></div>';
-    return;
-  }
-  
-  list.innerHTML = docShares.map(s => `
-    <div class="flex items-center justify-between p-3 rounded-lg bg-blue-900/20 border border-blue-500/10">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">
-          <i class="fas fa-user"></i>
-        </div>
-        <div>
-          <p class="text-sm text-white">${s.recipientEmail}</p>
-          <p class="text-xs text-blue-300/60">${s.permission} • ${formatDate(s.createdAt)}</p>
-        </div>
-      </div>
       <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
     </div>
   `).join('');
@@ -1973,9 +1949,7 @@ function actOnWorkflow(action) {
   
   if (action === 'approve') {
     if (wf.currentStep < (wf.steps?.length || 1) - 1) {
-      wf.currentStepStepStep++;
-      wf.status = 'in_review';
-++;
+      wf.currentStep++;
       wf.status = 'in_review';
     } else {
       wf.status = 'approved';
@@ -2124,14 +2098,6 @@ function renderSentShares() {
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400"><i class="fas fa-file"></i></div>
           <div>
-></div>
-          <div>
-            <p class="text-white text-sm font-medium">${s.documentName}</p>
-            <p class="text-xs text-blue-300/60">À: ${s.recipientEmail} • ${s.permission}</p>
-          </div>
-        </div>
-        <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20></div>
-          <div>
             <p class="text-white text-sm font-medium">${s.documentName}</p>
             <p class="text-xs text-blue-300/60">À: ${s.recipientEmail} • ${s.permission}</p>
           </div>
@@ -2242,50 +2208,6 @@ function renderUsers() {
         <div class="flex gap-2">
           ${u.status === 'pending_validation' && canValidateUsers() ? 
             `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30" title="Valider"><i class="fas fa-check"></i></button>` : ''}
-          <button onclick="openEditUserModal('${u.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400"><i class="fas fa-edit"></i></button>
-          ${u.id !== G.currentUser?.id ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
-        </div>
-      </td>
-    </tr>
-  `).join('');
-}
-
-function validateUser(userId) {
-  if (!canValidateUsers()) {
-    showToast('Permission refusée', 'error');
-    return;
-  }
-  
-  const u = G.users.find(user => user.id === userId);
-  if (!u || u.status !== 'pending_validation') return;
-  
-  u.status = 'active';
-  u.validatedAt = new Date().toISOString();
-  u.validatedBy = G.currentUser?.id;
-  
-  saveUsers();
-  updatePendingUsersCount();
-  
-  showToast(`Utilisateur ${u.name} validé avec succès`, 'success');
-  addAudit('validate', 'user', userId);
-  renderUsers();
-  
-  const userKey = `user_${u.email}`;
-  const stored = localStorage.getItem(userKey);
-  if (stored) {
-    const userData = JSON.parse(stored);
-    userData.status = 'active';
-    localStorage.setItem(userKey, JSON.stringify(userData));
-  }
-  
-  if (G.currentView === 'pending-users') {
-    renderPendingUsers();
-  }
-}
-
-function renderPendingUsers() {
-  const container = document.getElementById('pendingUsersList');
- " title="Valider"><i class="fas fa" title="Valider"><i class="fas fa-check"></i></button>` : ''}
           <button onclick="openEditUserModal('${u.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400"><i class="fas fa-edit"></i></button>
           ${u.id !== G.currentUser?.id ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
         </div>
