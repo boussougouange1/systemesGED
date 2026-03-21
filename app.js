@@ -3524,49 +3524,98 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
   }
 });
-
-// Expose functions globally for HTML onclick handlers
-
-// ─── Danger Modal ───
-function openDangerModal(action) {
-  G.dangerAction = action;
-  const messages = {
-    'delete_all': 'Vous allez supprimer TOUS vos documents. Cette action est irréversible.'
-  };
-  document.getElementById('dangerModalMessage').textContent = messages[action] || 'Action irréversible';
-  document.getElementById('dangerModal').classList.remove('hidden');
-  document.getElementById('dangerConfirmInput').value = '';
-  document.getElementById('dangerConfirmBtn').disabled = true;
-}
-
-function checkDangerConfirm() {
-  const input = document.getElementById('dangerConfirmInput').value;
-  document.getElementById('dangerConfirmBtn').disabled = input !== 'CONFIRMER';
-}
-
-function executeDangerAction() {
-  if (G.dangerAction === 'delete_all') {
-    G.documents.forEach(d => {
-      if (d.ownerId === G.currentUser?.id) {
-        d.isDeleted = true;
-        d.deletedAt = new Date().toISOString();
-      }
-    });
-    saveDocuments();
-    showToast('Tous vos documents ont été supprimés', 'success');
-    addAudit('delete_all', 'documents', 'all');
+// Fonction addCollaborator manquante
+function addCollaborator() {
+  const email = document.getElementById('collabEmail')?.value.trim();
+  const permission = document.getElementById('collabPermission')?.value;
+  
+  if (!email) {
+    showToast('Veuillez entrer un email', 'warning');
+    return;
   }
-  closeDangerModal();
-  renderDocuments();
-  updateBadges();
-  updateStorageDisplay();
+  
+  const doc = G.documents.find(d => d.id === G.currentDocId);
+  if (!doc) return;
+  
+  if (!doc.collaborators) doc.collaborators = [];
+  
+  const user = G.users.find(u => u.email === email);
+  const newCollaborator = {
+    id: generateId(),
+    email: email,
+    name: user ? user.name : email.split('@')[0],
+    permission: permission,
+    addedAt: new Date().toISOString(),
+    addedBy: G.currentUser?.id
+  };
+  
+  doc.collaborators.push(newCollaborator);
+  saveDocuments();
+  
+  document.getElementById('collabEmail').value = '';
+  renderCollaboratorsList();
+  showToast('Collaborateur ajouté', 'success');
+  addAudit('add_collaborator', 'document', G.currentDocId, { email, permission });
 }
 
-function refreshPendingUsers() {
-  renderPendingUsers();
-  showToast('Liste actualisée', 'success');
+function removeCollaborator(collabId) {
+  const doc = G.documents.find(d => d.id === G.currentDocId);
+  if (!doc || !doc.collaborators) return;
+  
+  doc.collaborators = doc.collaborators.filter(c => c.id !== collabId);
+  saveDocuments();
+  renderCollaboratorsList();
+  showToast('Collaborateur retiré', 'success');
 }
 
+function openPermModal(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  
+  G.currentDocId = docId;
+  document.getElementById('permDocName').textContent = doc.name;
+  renderCollaboratorsList();
+  document.getElementById('permModal').classList.remove('hidden');
+}
+
+function closePermModal() {
+  document.getElementById('permModal').classList.add('hidden');
+  G.currentDocId = null;
+}
+
+function renderCollaboratorsList() {
+  const container = document.getElementById('collaboratorsList');
+  const doc = G.documents.find(d => d.id === G.currentDocId);
+  
+  if (!doc || !doc.collaborators || doc.collaborators.length === 0) {
+    container.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucun collaborateur</p>';
+    return;
+  }
+  
+  container.innerHTML = doc.collaborators.map(c => `
+    <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/30 border border-blue-500/10">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">${c.name.charAt(0)}</div>
+        <div>
+          <p class="text-sm text-white">${c.name}</p>
+          <p class="text-xs text-blue-300/60">${c.email} • ${c.permission}</p>
+        </div>
+      </div>
+      <button onclick="removeCollaborator('${c.id}')" class="p-1 text-red-400 hover:text-red-300"><i class="fas fa-times"></i></button>
+    </div>
+  `).join('');
+}
+
+// Exposer les fonctions
+window.addCollaborator = addCollaborator;
+window.removeCollaborator = removeCollaborator;
+window.openPermModal = openPermModal;
+window.closePermModal = closePermModal;
+window.renderCollaboratorsList = renderCollaboratorsList;
+
+console.log('✅ Fonctions collaborateur ajoutées !');
+console.log('addCollaborator:', typeof addCollaborator);
+// Expose functions globally for HTML onclick handlers
 Object.assign(window, {
   switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout,
   switchView, openMobileSidebar, closeMobileSidebar,
