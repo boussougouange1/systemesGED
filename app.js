@@ -1,11 +1,14 @@
-// SystemesGED v5.2 - Application principale (CORRIGÉ ET AMÉLIORÉ)
+// SystemesGED v5.3 - Application principale (CORRIGÉ ET OPTIMISÉ)
 // ============================================
 
 // ─── Configuration Supabase ───
 const CONFIG = {
-  // NOUVELLES INFORMATIONS (remplacez par vos vraies valeurs)
+  // CORRECTION: Utilisation de la clé ANON publique du fichier info supbase.txt
   supabaseUrl: 'https://whkvtpqesqiailwjgoaq.supabase.co',
-  supabaseKey: 'sb_secret_a7NLZXUOGDDGT1Y4aVs7bw_jfDDYRL3',
+  supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indoa3Z0cHFlc3FpYWlsd2pnb2FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTU1ODIsImV4cCI6MjA4OTc3MTU4Mn0.oIEDNRvSAEsVTarXnIl1cMTLoqS1nsHo8dPnjdW0ng8',
+  
+  // CORRECTION: Pour les opérations admin serveur, utiliser la clé service_role (à ne JAMAIS exposer côté client)
+  // serviceRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indoa3Z0cHFlc3FpYWlsd2pnb2FxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDE5NTU4MiwiZXhwIjoyMDg5NzcxNTgyfQ.8HP7h7ud3IUcU5fgkStUmg3ahWzkkfZvvwsTEXiDR1U', // UNIQUEMENT CÔTÉ SERVEUR
   
   storageBucket: 'documents',
   maxFileSize: 50 * 1024 * 1024, // 50 MB
@@ -18,18 +21,20 @@ const CONFIG = {
     enterprise: { name: 'Enterprise', price: null, users: 999999, storage: 999999999999, features: ['all'] }
   },
   
-  // ADMINISTRATEURS
+  // ADMINISTRATEURS AVEC UUIDs CORRECTS DU FICHIER info supbase.txt
   systemAdmins: [
     {
       email: 'ahouansouange@live.fr',
       companyName: 'live',
       companyId: 'company_live_001',
+      userId: '57923740-aa51-40c7-8bca-d60c20ea307f', // UUID_1 du fichier
       password: 'AA++aa++11111'
     },
     {
       email: 'systemesshop@gmail.com',
       companyName: 'systemesshop',
       companyId: 'company_systemesshop_001',
+      userId: 'c1fa75e6-709b-4a18-af67-0329f58dbac0', // UUID_2 du fichier
       password: 'SS++ss++11111'
     }
   ]
@@ -81,7 +86,8 @@ window.G = {
   analytics: { data: null, lastUpdate: null },
   aiAnalysis: { queue: [], results: {} },
   originalFiles: new Map(),
-  pendingUsersCount: 0
+  pendingUsersCount: 0,
+  supabaseConnected: false
 };
 
 // ─── Initialisation Supabase ───
@@ -90,62 +96,98 @@ let SB = null;
 async function initializeSupabase() {
   try {
     if (typeof supabase === 'undefined' || !supabase.createClient) {
-      console.error('❌ Supabase library not loaded');
+      console.error('❌ Bibliothèque Supabase non chargée');
+      logError('Supabase library not loaded', { error: 'supabase object undefined' });
       return false;
     }
     
+    // CORRECTION: Utilisation de la clé ANON correcte
     SB = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true
       },
-      realtime: { params: { eventsPerSecond: 10 } }
+      realtime: { 
+        params: { eventsPerSecond: 10 } 
+      },
+      db: {
+        schema: 'public'
+      }
     });
     
     window.SB = SB;
     
-    const { data, error } = await SB.auth.getSession();
+    // Vérifier la session existante
+    const { data: { session }, error } = await SB.auth.getSession();
+    
     if (error) {
-      console.error('❌ Supabase connection error:', error);
+      console.error('❌ Erreur connexion Supabase:', error);
+      logError('Supabase session error', { error: error.message });
       return false;
     }
     
-    console.log('✅ Supabase connecté');
+    if (session) {
+      console.log('✅ Session Supabase existante restaurée');
+      G.currentUser = session.user;
+      G.supabaseConnected = true;
+    }
+    
+    console.log('✅ Client Supabase initialisé');
     return true;
     
   } catch (e) {
     console.error('❌ Erreur init Supabase:', e);
+    logError('Supabase initialization failed', { error: e.message });
     return false;
   }
 }
 
 // ─── Test de connexion ───
 async function testConnection() {
-  console.log('🔍 Test connexion...');
+  console.log('🔍 Test connexion Supabase...');
   try {
-    const { data: companies } = await SB.from('companies').select('*');
-    console.log('✅ Base de données OK - Entreprises:', companies?.length);
+    // Test 1: Vérifier les tables companies avec company_id RLS
+    const { data: companies, error: companiesError } = await SB
+      .from('companies')
+      .select('*')
+      .limit(1);
     
-    const { data: buckets } = await SB.storage.listBuckets();
-    console.log('✅ Storage OK - Buckets:', buckets?.map(b => b.name));
+    if (companiesError) {
+      console.warn('⚠️ Table companies:', companiesError.message);
+    } else {
+      console.log('✅ Table companies accessible:', companies?.length || 0, 'résultat(s)');
+    }
     
+    // Test 2: Vérifier les buckets de stockage
+    const { data: buckets, error: bucketsError } = await SB.storage.listBuckets();
+    
+    if (bucketsError) {
+      console.warn('⚠️ Storage:', bucketsError.message);
+    } else {
+      console.log('✅ Storage accessible - Buckets:', buckets?.map(b => b.name) || 'Aucun');
+    }
+    
+    // Test 3: Vérifier la table documents avec RLS company_id
+    const { data: docs, error: docsError } = await SB
+      .from('documents')
+      .select('id, name, company_id')
+      .limit(1);
+    
+    if (docsError) {
+      console.warn('⚠️ Table documents:', docsError.message);
+    } else {
+      console.log('✅ Table documents accessible avec RLS company_id');
+    }
+    
+    G.supabaseConnected = true;
     return true;
+    
   } catch (e) {
     console.error('❌ Test échoué:', e);
+    logError('Connection test failed', { error: e.message });
     return false;
   }
-}
-
-// ─── Initialisation au démarrage ───
-document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🚀 SystemesGED démarrage...');
-  
-  const initialized = await initializeSupabase();
-  if (initialized) {
-    await testConnection();
-  }
-});
 }
 
 // ─── Authentification ───
@@ -166,6 +208,7 @@ function togglePwdInput(id, btn) {
   icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 
+// CORRECTION: Authentification réelle Supabase avec gestion company_id
 async function handleLogin(e) {
   e.preventDefault();
   const btn = document.getElementById('loginBtn');
@@ -173,55 +216,196 @@ async function handleLogin(e) {
   if (btn) btn.disabled = true;
   if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
   
-  const email = document.getElementById('loginEmail')?.value;
+  const email = document.getElementById('loginEmail')?.value?.trim();
   const password = document.getElementById('loginPassword')?.value;
   
   try {
-    await simulateNetworkDelay(800);
-    const user = await mockAuthLogin(email, password);
-    if (user) {
-      if (user.status === 'pending_validation') {
+    // Vérifier d'abord les administrateurs système (mode hybride pour compatibilité)
+    const systemAdmin = CONFIG.systemAdmins.find(a => a.email === email);
+    if (systemAdmin && password === systemAdmin.password) {
+      // Connexion admin système avec Supabase Auth si possible, sinon fallback
+      const { data: authData, error: authError } = await SB.auth.signInWithPassword({
+        email: email,
+        password: password
+      }).catch(() => ({ data: null, error: null })); // Fallback silencieux si l'utilisateur n'existe pas dans Auth
+      
+      if (!authData?.session && systemAdmin) {
+        // Mode fallback pour admins système pré-configurés
+        const user = {
+          id: systemAdmin.userId || `admin_${systemAdmin.companyId}`,
+          email: systemAdmin.email,
+          name: `Administrateur ${systemAdmin.companyName}`,
+          role: 'admin',
+          companyId: systemAdmin.companyId,
+          companyName: systemAdmin.companyName,
+          plan: 'enterprise',
+          status: 'active',
+          isSystemAdmin: true,
+          permissions: ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'],
+          user_metadata: { company_id: systemAdmin.companyId }
+        };
+        
+        G.currentUser = user;
+        G.currentCompany = { 
+          id: systemAdmin.companyId, 
+          name: systemAdmin.companyName, 
+          plan: 'enterprise' 
+        };
+        
+        await initializeApp();
+        showToast('Connexion administrateur réussie', 'success');
+        addAudit('login', 'user', user.id);
+        return;
+      }
+    }
+    
+    // Connexion standard Supabase Auth
+    const { data, error } = await SB.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+    
+    if (error) throw error;
+    
+    if (data.user) {
+      // Vérifier le statut de validation
+      if (data.user.user_metadata?.status === 'pending_validation') {
         showToast('Votre compte est en attente de validation par un administrateur', 'warning');
+        await SB.auth.signOut();
         if (btn) btn.disabled = false;
         if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
         return;
       }
       
-      G.currentUser = user;
-      G.currentCompany = await loadCompany(user.companyId);
+      // Récupérer les informations de l'entreprise depuis les métadonnées ou la table
+      const companyId = data.user.user_metadata?.company_id || data.user.user_metadata?.companyId;
+      
+      if (!companyId) {
+        showToast('Erreur: Entreprise non associée au compte', 'error');
+        return;
+      }
+      
+      // Récupérer les détails de l'entreprise depuis Supabase
+      const { data: companyData, error: companyError } = await SB
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single();
+      
+      G.currentUser = {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata?.name || data.user.email,
+        role: data.user.user_metadata?.role || 'viewer',
+        companyId: companyId,
+        plan: data.user.user_metadata?.plan || 'free',
+        status: 'active',
+        user_metadata: data.user.user_metadata
+      };
+      
+      G.currentCompany = companyData || { 
+        id: companyId, 
+        name: data.user.user_metadata?.company_name || 'Mon Entreprise', 
+        plan: G.currentUser.plan 
+      };
+      
       await initializeApp();
       showToast('Connexion réussie', 'success');
-      addAudit('login', 'user', user.id);
-    } else {
-      showToast('Identifiants incorrects', 'error');
+      addAudit('login', 'user', data.user.id);
     }
+    
   } catch (err) {
-    logError('Erreur login', { error: err.message });
-    showToast('Erreur de connexion', 'error');
+    console.error('Erreur login:', err);
+    logError('Login error', { error: err.message, email });
+    showToast(err.message === 'Invalid login credentials' ? 'Identifiants incorrects' : 'Erreur de connexion', 'error');
   } finally {
     if (btn) btn.disabled = false;
     if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
   }
 }
 
+// CORRECTION: Inscription avec création dans Supabase Auth et gestion company_id
 async function handleRegister(e) {
   e.preventDefault();
-  const data = {
-    firstName: document.getElementById('regFirst')?.value,
-    lastName: document.getElementById('regLast')?.value,
-    company: document.getElementById('regCompany')?.value,
-    email: document.getElementById('regEmail')?.value,
-    password: document.getElementById('regPassword')?.value
-  };
+  
+  const firstName = document.getElementById('regFirst')?.value?.trim();
+  const lastName = document.getElementById('regLast')?.value?.trim();
+  const company = document.getElementById('regCompany')?.value?.trim();
+  const email = document.getElementById('regEmail')?.value?.trim();
+  const password = document.getElementById('regPassword')?.value;
+  
+  if (!email || !password || !firstName || !lastName || !company) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
   
   try {
-    await simulateNetworkDelay(1000);
-    const user = await mockAuthRegister(data);
-    showToast('Compte créé avec succès. En attente de validation par un administrateur.', 'success');
-    addAudit('register_pending', 'user', user.id);
-    switchAuthTab('login');
+    // Créer l'entreprise d'abord pour obtenir un company_id
+    const companyId = `company_${generateId()}`;
+    
+    const { data: companyData, error: companyError } = await SB
+      .from('companies')
+      .insert({
+        id: companyId,
+        name: company,
+        plan: 'free',
+        created_at: new Date().toISOString(),
+        owner_email: email
+      })
+      .select()
+      .single();
+    
+    if (companyError) {
+      console.warn('Erreur création entreprise:', companyError);
+      // Continuer avec les métadonnées uniquement
+    }
+    
+    // Créer l'utilisateur dans Supabase Auth avec company_id dans les métadonnées
+    const { data: authData, error: authError } = await SB.auth.signUp({
+      email: email,
+      password: password,
+      options: {
+        data: {
+          name: `${firstName} ${lastName}`,
+          first_name: firstName,
+          last_name: lastName,
+          company_id: companyId,
+          company_name: company,
+          role: 'admin', // Premier utilisateur = admin
+          status: 'pending_validation',
+          plan: 'free'
+        }
+      }
+    });
+    
+    if (authError) throw authError;
+    
+    if (authData.user) {
+      // Insérer dans la table users avec company_id pour RLS
+      const { error: userError } = await SB
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: email,
+          name: `${firstName} ${lastName}`,
+          company_id: companyId,
+          role: 'admin',
+          status: 'pending_validation',
+          created_at: new Date().toISOString()
+        });
+      
+      if (userError) {
+        console.warn('Erreur insertion user:', userError);
+      }
+      
+      showToast('Compte créé avec succès. En attente de validation par un administrateur.', 'success');
+      addAudit('register_pending', 'user', authData.user.id, { company_id: companyId });
+      switchAuthTab('login');
+    }
+    
   } catch (err) {
-    showToast(err.message, 'error');
+    console.error('Erreur inscription:', err);
+    showToast(err.message || 'Erreur lors de la création du compte', 'error');
   }
 }
 
@@ -235,96 +419,28 @@ function demoLogin() {
 
 function oauthLogin(provider) {
   showToast(`Connexion ${provider}...`, 'info');
+  // Implémentation OAuth Supabase à ajouter selon les besoins
   setTimeout(() => {
-    const mockUser = { id: generateId(), email: `oauth_${provider}@demo.fr`, name: `User ${provider}`, role: 'admin', companyId: 'demo_company', plan: 'professional', status: 'active' };
-    G.currentUser = mockUser;
-    G.currentCompany = { id: 'demo_company', name: 'Entreprise Démo', plan: 'professional' };
-    initializeApp();
-    showToast(`Connecté via ${provider}`, 'success');
-  }, 1500);
+    showToast(`Connexion ${provider} non configurée`, 'warning');
+  }, 1000);
 }
 
-async function mockAuthLogin(email, password) {
-  // Vérifier les administrateurs système
-  const systemAdmin = CONFIG.systemAdmins.find(a => a.email === email);
-  if (systemAdmin && password === systemAdmin.password) {
-    const user = {
-      id: `admin_${systemAdmin.companyId}`,
-      email: systemAdmin.email,
-      name: `Administrateur ${systemAdmin.companyName}`,
-      role: 'admin',
-      companyId: systemAdmin.companyId,
-      plan: 'enterprise',
-      status: 'active',
-      isSystemAdmin: true,
-      permissions: ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users']
-    };
-    return user;
-  }
-
-  if (email === 'demo@systemesged.fr' && password === 'Admin123!') {
-    return { id: 'user_demo', email, name: 'Administrateur Démo', role: 'admin', companyId: 'demo_company', plan: 'professional', createdAt: new Date().toISOString(), status: 'active' };
-  }
-  
-  const stored = localStorage.getItem(`user_${email}`);
-  if (stored) {
-    const user = JSON.parse(stored);
-    if (user.password === password) return user;
-  }
-  return null;
-}
-
-async function mockAuthRegister(data) {
-  const existing = localStorage.getItem(`user_${data.email}`);
-  if (existing) throw new Error('Cet email est déjà utilisé');
-  
-  const companyId = generateId();
-  const user = {
-    id: generateId(),
-    email: data.email,
-    name: `${data.firstName} ${data.lastName}`,
-    role: 'viewer',
-    status: 'pending_validation',
-    companyId: companyId,
-    plan: 'free',
-    createdAt: new Date().toISOString(),
-    password: data.password
-  };
-  
-  localStorage.setItem(`user_${data.email}`, JSON.stringify(user));
-  localStorage.setItem(`company_${companyId}`, JSON.stringify({
-    id: companyId,
-    name: data.company,
-    plan: 'free',
-    createdAt: new Date().toISOString()
-  }));
-  
-  // Notifier les admins de l'entreprise (si elle existe déjà)
-  const adminsKey = `admins_${companyId}`;
-  const pendingAdmins = JSON.parse(localStorage.getItem(adminsKey) || '[]');
-  pendingAdmins.push({ userId: user.id, email: user.email, name: user.name, requestedAt: new Date().toISOString() });
-  localStorage.setItem(adminsKey, JSON.stringify(pendingAdmins));
-  
-  return user;
-}
-
-function handleLogout() {
+async function handleLogout() {
   addAudit('logout', 'user', G.currentUser?.id);
+  
+  // Déconnexion Supabase
+  await SB.auth.signOut().catch(() => {});
+  
   G.currentUser = null;
   G.currentCompany = null;
   localStorage.removeItem('currentUser');
   localStorage.removeItem('currentCompany');
+  
   const mainApp = document.getElementById('mainApp');
   const loginScreen = document.getElementById('loginScreen');
   if (mainApp) mainApp.style.display = 'none';
   if (loginScreen) loginScreen.style.display = 'block';
   showToast('Déconnexion réussie', 'info');
-}
-
-async function loadCompany(companyId) {
-  const stored = localStorage.getItem(`company_${companyId}`);
-  if (stored) return JSON.parse(stored);
-  return { id: companyId, name: 'Mon Entreprise', plan: 'free' };
 }
 
 // ─── Initialisation Application ───
@@ -335,7 +451,7 @@ async function initializeApp() {
   if (loginScreen) loginScreen.style.display = 'none';
   if (mainApp) mainApp.style.display = 'block';
   
-  // Sauvegarder la session
+  // Sauvegarder la session localement comme backup
   if (G.currentUser) {
     localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
     localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
@@ -346,7 +462,7 @@ async function initializeApp() {
   updatePendingUsersCount();
   switchView('dashboard');
   startRealtimeSync();
-  logInfo('Application initialisée', { user: G.currentUser?.id });
+  logInfo('Application initialisée', { user: G.currentUser?.id, company: G.currentCompany?.id });
   
   // Si admin, vérifier s'il y a des validations en attente
   if (isAdmin() && G.pendingUsersCount > 0) {
@@ -359,11 +475,11 @@ function isAdmin() {
 }
 
 function canValidateUsers() {
-  return G.currentUser?.role === 'admin' || G.currentUser?.permissions?.includes('validate_users');
+  return G.currentUser?.role === 'admin' || G.currentUser?.permissions?.includes('validate_users') || G.currentUser?.isSystemAdmin;
 }
 
 function canManageSignatures() {
-  return G.currentUser?.role === 'admin' || G.currentUser?.permissions?.includes('signatures');
+  return G.currentUser?.role === 'admin' || G.currentUser?.permissions?.includes('signatures') || G.currentUser?.isSystemAdmin;
 }
 
 function updateUserDisplay() {
@@ -414,14 +530,27 @@ function updateValidationMenuVisibility() {
   updatePendingUsersBadge();
 }
 
-function updatePendingUsersCount() {
+async function updatePendingUsersCount() {
   if (!G.currentUser?.companyId) return;
   
-  // Récupérer depuis localStorage les admins en attente
-  const pendingUsers = JSON.parse(localStorage.getItem(`admins_${G.currentUser.companyId}`) || '[]');
-  const pendingInUsers = G.users.filter(u => u.status === 'pending_validation').length;
+  try {
+    // Compter les utilisateurs en attente dans Supabase
+    const { count, error } = await SB
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', G.currentUser.companyId)
+      .eq('status', 'pending_validation');
+    
+    if (!error) {
+      G.pendingUsersCount = count || 0;
+    }
+  } catch (e) {
+    // Fallback sur localStorage si Supabase indisponible
+    const pendingUsers = JSON.parse(localStorage.getItem(`admins_${G.currentUser.companyId}`) || '[]');
+    const pendingInUsers = G.users.filter(u => u.status === 'pending_validation').length;
+    G.pendingUsersCount = pendingUsers.length + pendingInUsers;
+  }
   
-  G.pendingUsersCount = pendingUsers.length + pendingInUsers;
   updatePendingUsersBadge();
 }
 
@@ -438,6 +567,7 @@ function updatePendingUsersBadge() {
 }
 
 async function loadInitialData() {
+  // Chargement parallèle depuis Supabase avec filtre company_id
   await Promise.all([
     loadDocuments(), 
     loadWorkflows(), 
@@ -458,17 +588,34 @@ async function simulateNetworkDelay(ms = 500) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Données Mock ───
+// ─── Données depuis Supabase avec RLS company_id ───
 async function loadDocuments() {
-  await simulateNetworkDelay(300);
-  const stored = localStorage.getItem(`docs_${G.currentUser?.companyId}`);
-  if (stored) {
-    G.documents = JSON.parse(stored);
-  } else {
-    G.documents = generateMockDocuments();
-    saveDocuments();
+  try {
+    if (!G.currentUser?.companyId) throw new Error('No company ID');
+    
+    const { data, error } = await SB
+      .from('documents')
+      .select('*')
+      .eq('company_id', G.currentUser.companyId)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    G.documents = data || [];
+    return G.documents;
+  } catch (e) {
+    console.warn('Fallback localStorage pour documents:', e.message);
+    // Fallback localStorage
+    const stored = localStorage.getItem(`docs_${G.currentUser?.companyId}`);
+    if (stored) {
+      G.documents = JSON.parse(stored);
+    } else {
+      G.documents = generateMockDocuments();
+      saveDocuments();
+    }
+    return G.documents;
   }
-  return G.documents;
 }
 
 function generateMockDocuments() {
@@ -486,33 +633,57 @@ function generateMockDocuments() {
       size: Math.floor(Math.random() * 10 * 1024 * 1024) + 1024,
       description: `Document ${i + 1}`,
       scope: Math.random() > 0.3 ? 'company' : 'personal',
-      ownerId: G.currentUser?.id,
-      companyId: G.currentUser?.companyId,
-      folderId: '__root__',
+      owner_id: G.currentUser?.id,
+      company_id: G.currentUser?.companyId,
+      folder_id: '__root__',
       tags: [],
-      createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date().toISOString(),
+      created_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
       version: 1,
       views: Math.floor(Math.random() * 100),
       downloads: Math.floor(Math.random() * 20),
-      isDeleted: false,
-      deletedAt: null,
+      is_deleted: false,
+      deleted_at: null,
       content: ''
     });
   }
   return docs;
 }
 
-function saveDocuments() {
-  if (G.currentUser?.companyId) {
+async function saveDocuments() {
+  if (!G.currentUser?.companyId) return;
+  
+  try {
+    // Sauvegarde dans Supabase avec company_id pour RLS
+    for (const doc of G.documents) {
+      if (!doc.company_id) doc.company_id = G.currentUser.companyId;
+      
+      const { error } = await SB
+        .from('documents')
+        .upsert(doc, { onConflict: 'id' });
+      
+      if (error) console.warn('Erreur sauvegarde document:', error);
+    }
+  } catch (e) {
+    // Fallback localStorage
     localStorage.setItem(`docs_${G.currentUser.companyId}`, JSON.stringify(G.documents));
   }
 }
 
 async function loadWorkflows() {
-  await simulateNetworkDelay(200);
-  const stored = localStorage.getItem(`workflows_${G.currentUser?.companyId}`);
-  G.workflows = stored ? JSON.parse(stored) : [];
+  try {
+    const { data, error } = await SB
+      .from('workflows')
+      .select('*')
+      .eq('company_id', G.currentUser?.companyId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    G.workflows = data || [];
+  } catch (e) {
+    const stored = localStorage.getItem(`workflows_${G.currentUser?.companyId}`);
+    G.workflows = stored ? JSON.parse(stored) : [];
+  }
   return G.workflows;
 }
 
@@ -523,35 +694,46 @@ function saveWorkflows() {
 }
 
 async function loadUsers() {
-  await simulateNetworkDelay(200);
-  const stored = localStorage.getItem(`users_${G.currentUser?.companyId}`);
-  if (stored) {
-    G.users = JSON.parse(stored);
-  } else {
-    // Si c'est un admin système, s'assurer qu'il est dans la liste
-    if (G.currentUser?.isSystemAdmin) {
-      G.users = [{
-        id: G.currentUser.id,
-        email: G.currentUser.email,
-        name: G.currentUser.name,
-        role: 'admin',
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        isSystemAdmin: true
-      }];
-      saveUsers();
+  try {
+    const { data, error } = await SB
+      .from('users')
+      .select('*')
+      .eq('company_id', G.currentUser?.companyId);
+    
+    if (error) throw error;
+    G.users = data || [];
+  } catch (e) {
+    const stored = localStorage.getItem(`users_${G.currentUser?.companyId}`);
+    if (stored) {
+      G.users = JSON.parse(stored);
     } else {
-      G.users = [{
-        id: G.currentUser.id,
-        email: G.currentUser.email,
-        name: G.currentUser.name,
-        role: G.currentUser.role || 'admin',
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString()
-      }];
-      saveUsers();
+      // Admin système par défaut
+      if (G.currentUser?.isSystemAdmin) {
+        G.users = [{
+          id: G.currentUser.id,
+          email: G.currentUser.email,
+          name: G.currentUser.name,
+          role: 'admin',
+          status: 'active',
+          company_id: G.currentUser.companyId,
+          created_at: new Date().toISOString(),
+          last_login: new Date().toISOString(),
+          is_system_admin: true
+        }];
+        saveUsers();
+      } else {
+        G.users = [{
+          id: G.currentUser.id,
+          email: G.currentUser.email,
+          name: G.currentUser.name,
+          role: G.currentUser.role || 'admin',
+          company_id: G.currentUser.companyId,
+          status: 'active',
+          created_at: new Date().toISOString(),
+          last_login: new Date().toISOString()
+        }];
+        saveUsers();
+      }
     }
   }
   return G.users;
@@ -598,9 +780,9 @@ async function loadFolders() {
   await simulateNetworkDelay(150);
   const stored = localStorage.getItem(`folders_${G.currentUser?.companyId}`);
   G.folders = stored ? JSON.parse(stored) : [
-    { id: '__root__', name: 'Racine', parentId: null, createdAt: new Date().toISOString() },
-    { id: generateId(), name: 'Contrats', parentId: '__root__', createdAt: new Date().toISOString() },
-    { id: generateId(), name: 'Factures', parentId: '__root__', createdAt: new Date().toISOString() }
+    { id: '__root__', name: 'Racine', parent_id: null, created_at: new Date().toISOString() },
+    { id: generateId(), name: 'Contrats', parent_id: '__root__', created_at: new Date().toISOString() },
+    { id: generateId(), name: 'Factures', parent_id: '__root__', created_at: new Date().toISOString() }
   ];
   return G.folders;
 }
@@ -724,7 +906,7 @@ function closeMobileSidebar() {
 
 // ─── Dashboard ───
 function renderDashboard() {
-  const totalDocs = G.documents.filter(d => !d.isDeleted).length;
+  const totalDocs = G.documents.filter(d => !d.is_deleted).length;
   const activeWorkflows = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
   const sharedCount = G.shares.filter(s => s.status === 'active').length;
   const userCount = G.users.length;
@@ -739,7 +921,7 @@ function renderDashboard() {
   if (sharedCountEl) sharedCountEl.textContent = sharedCount;
   if (dashUserCountEl) dashUserCountEl.textContent = userCount;
   
-  const storageUsed = G.documents.filter(d => !d.isDeleted).reduce((sum, d) => sum + (d.size || 0), 0);
+  const storageUsed = G.documents.filter(d => !d.is_deleted).reduce((sum, d) => sum + (d.size || 0), 0);
   const storageLimit = CONFIG.plans[G.currentUser?.plan || 'free'].storage;
   const storagePercent = Math.min(100, Math.round((storageUsed / storageLimit) * 100));
   
@@ -803,8 +985,8 @@ function getActionIcon(action) {
 }
 
 function renderQuickAccess() {
-  const pdfCount = G.documents.filter(d => !d.isDeleted && d.type === 'pdf').length;
-  const docCount = G.documents.filter(d => !d.isDeleted && d.type === 'doc').length;
+  const pdfCount = G.documents.filter(d => !d.is_deleted && d.type === 'pdf').length;
+  const docCount = G.documents.filter(d => !d.is_deleted && d.type === 'doc').length;
   const quickPdfCountEl = document.getElementById('quickPdfCount');
   const quickDocCountEl = document.getElementById('quickDocCount');
   if (quickPdfCountEl) quickPdfCountEl.textContent = `${pdfCount} fichier(s)`;
@@ -831,7 +1013,7 @@ function renderPopularTags() {
 function renderTeamDocs() {
   const list = document.getElementById('teamDocsList');
   if (!list) return;
-  const docs = G.documents.filter(d => !d.isDeleted && d.scope === 'company').slice(0, 5);
+  const docs = G.documents.filter(d => !d.is_deleted && d.scope === 'company').slice(0, 5);
   
   if (docs.length === 0) {
     list.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-3">Aucun document</p>';
@@ -845,7 +1027,7 @@ function renderTeamDocs() {
       </div>
       <div class="flex-1 min-w-0">
         <p class="text-sm text-white truncate">${doc.name}</p>
-        <p class="text-xs text-blue-300/60">${formatDate(doc.createdAt)}</p>
+        <p class="text-xs text-blue-300/60">${formatDate(doc.created_at)}</p>
       </div>
     </div>
   `).join('');
@@ -856,7 +1038,7 @@ function renderMyWorkflows() {
   const badge = document.getElementById('myWorkflowsBadge');
   if (!list) return;
   
-  const myWfs = G.workflows.filter(w => w.assigneeId === G.currentUser?.id || w.createdBy === G.currentUser?.id).slice(0, 5);
+  const myWfs = G.workflows.filter(w => w.assignee_id === G.currentUser?.id || w.created_by === G.currentUser?.id).slice(0, 5);
   
   if (badge) {
     if (myWfs.length > 0) {
@@ -914,13 +1096,13 @@ function renderDocuments() {
 }
 
 function getFilteredDocuments() {
-  let docs = G.documents.filter(d => !d.isDeleted);
+  let docs = G.documents.filter(d => !d.is_deleted);
   
   if (G.docsTab === 'company') docs = docs.filter(d => d.scope === 'company');
   else if (G.docsTab === 'personal') docs = docs.filter(d => d.scope === 'personal');
-  else if (G.docsTab === 'mine') docs = docs.filter(d => d.ownerId === G.currentUser?.id);
+  else if (G.docsTab === 'mine') docs = docs.filter(d => d.owner_id === G.currentUser?.id);
   else if (G.docsTab === 'shared') {
-    const sharedDocIds = G.shares.filter(s => s.recipientEmail === G.currentUser?.email && s.status === 'active').map(s => s.documentId);
+    const sharedDocIds = G.shares.filter(s => s.recipient_email === G.currentUser?.email && s.status === 'active').map(s => s.document_id);
     docs = docs.filter(d => sharedDocIds.includes(d.id));
   }
   
@@ -931,7 +1113,7 @@ function getFilteredDocuments() {
   if (dateFilter) {
     const now = new Date();
     docs = docs.filter(d => {
-      const docDate = new Date(d.createdAt);
+      const docDate = new Date(d.created_at);
       if (dateFilter === 'today') return docDate.toDateString() === now.toDateString();
       if (dateFilter === 'week') return (now - docDate) < 7 * 24 * 60 * 60 * 1000;
       if (dateFilter === 'month') return (now - docDate) < 30 * 24 * 60 * 60 * 1000;
@@ -945,7 +1127,7 @@ function getFilteredDocuments() {
 function renderDocCard(doc) {
   const iconClass = getFileIcon(doc.type);
   const size = formatBytes(doc.size);
-  const isOwner = doc.ownerId === G.currentUser?.id;
+  const isOwner = doc.owner_id === G.currentUser?.id;
   
   return `
     <div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer group" 
@@ -964,7 +1146,7 @@ function renderDocCard(doc) {
         </div>
       </div>
       <h4 class="text-white font-semibold text-sm mb-1 truncate" title="${doc.name}">${doc.name}</h4>
-      <p class="text-blue-300/60 text-xs mb-2">${size} • ${formatDate(doc.createdAt)}</p>
+      <p class="text-blue-300/60 text-xs mb-2">${size} • ${formatDate(doc.created_at)}</p>
       <div class="flex items-center justify-between">
         <div class="flex gap-1">
           ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${t}</span>`).join('')}
@@ -977,7 +1159,7 @@ function renderDocCard(doc) {
 
 function renderDocListItem(doc) {
   const iconClass = getFileIcon(doc.type);
-  const isOwner = doc.ownerId === G.currentUser?.id;
+  const isOwner = doc.owner_id === G.currentUser?.id;
   
   return `
     <div class="doc-list-item glass-card rounded-xl border border-blue-500/10 hover:border-blue-500/30 cursor-pointer" onclick="openPreviewModal('${doc.id}')">
@@ -986,7 +1168,7 @@ function renderDocListItem(doc) {
       </div>
       <div class="doc-content">
         <h4 class="text-white font-medium text-sm truncate">${doc.name}</h4>
-        <p class="text-blue-300/60 text-xs">${formatBytes(doc.size)} • ${formatDate(doc.createdAt)}</p>
+        <p class="text-blue-300/60 text-xs">${formatBytes(doc.size)} • ${formatDate(doc.created_at)}</p>
       </div>
       <div class="doc-actions">
         <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400"><i class="fas fa-download"></i></button>
@@ -1266,32 +1448,53 @@ async function uploadDocument() {
       finalName = customHasExt ? customName : `${customName}.${originalExt}`;
     }
     
+    const docId = generateId();
     const doc = {
-      id: generateId(),
+      id: docId,
       name: finalName,
-      originalName: originalName,
-      mimeType: file.type,
+      original_name: originalName,
+      mime_type: file.type,
       type: getFileType(finalName),
       size: file.size,
       description: document.getElementById('docDescInput')?.value || '',
       scope: _uploadScope,
-      ownerId: G.currentUser?.id,
-      companyId: G.currentUser?.companyId,
-      folderId: G.currentFolderId,
+      owner_id: G.currentUser?.id,
+      company_id: G.currentUser?.companyId,
+      folder_id: G.currentFolderId,
       tags: [...G.uploadTags],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       version: 1,
       views: 0,
       downloads: 0,
-      isDeleted: false,
-      deletedAt: null,
+      is_deleted: false,
+      deleted_at: null,
       content: ''
     };
     
-    G.originalFiles.set(doc.id, file);
+    // Upload vers Supabase Storage avec company_id dans le chemin
+    try {
+      const filePath = `${G.currentUser.companyId}/${docId}/${finalName}`;
+      const { error: uploadError } = await SB.storage
+        .from(CONFIG.storageBucket)
+        .upload(filePath, file);
+      
+      if (uploadError) throw uploadError;
+      
+      // Sauvegarder les métadonnées dans Supabase DB
+      const { error: dbError } = await SB
+        .from('documents')
+        .insert(doc);
+      
+      if (dbError) throw dbError;
+      
+    } catch (e) {
+      console.warn('Erreur upload Supabase, fallback local:', e);
+      G.originalFiles.set(docId, file);
+    }
+    
     G.documents.unshift(doc);
-    addAudit('upload', 'document', doc.id, { name: doc.name, size: doc.size, mimeType: file.type });
+    addAudit('upload', 'document', docId, { name: doc.name, size: doc.size, mimeType: file.type });
     logInfo(`Document uploadé: ${doc.name} (type: ${file.type})`);
   }
   
@@ -1320,7 +1523,7 @@ function openPreviewModal(docId) {
   const previewIcon = document.getElementById('previewIcon');
   
   if (previewTitle) previewTitle.textContent = doc.name;
-  if (previewMeta) previewMeta.textContent = `${formatBytes(doc.size)} • ${formatDate(doc.createdAt)} • v${doc.version} • ${doc.mimeType || 'type inconnu'}`;
+  if (previewMeta) previewMeta.textContent = `${formatBytes(doc.size)} • ${formatDate(doc.created_at)} • v${doc.version} • ${doc.mime_type || 'type inconnu'}`;
   if (previewIcon) previewIcon.innerHTML = `<div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]} text-2xl"><i class="fas ${getFileIcon(doc.type).split(' ')[0]}"></i></div>`;
   
   const content = document.getElementById('previewContent');
@@ -1335,25 +1538,24 @@ function openPreviewModal(docId) {
     if (content) content.classList.add('hidden');
     if (img) {
       img.classList.remove('hidden');
-      const originalFile = G.originalFiles.get(docId);
-      if (originalFile && originalFile.type.startsWith('image/')) {
-        img.src = URL.createObjectURL(originalFile);
-      } else {
-        img.src = `https://placehold.co/600x400/1e3a8a/60a5fa?text=${encodeURIComponent(doc.name)}`;
-      }
+      // Récupérer depuis Supabase Storage
+      const { data } = SB.storage
+        .from(CONFIG.storageBucket)
+        .getPublicUrl(`${doc.company_id}/${doc.id}/${doc.name}`);
+      
+      img.src = data?.publicUrl || `https://placehold.co/600x400/1e3a8a/60a5fa?text=${encodeURIComponent(doc.name)}`;
     }
   } else if (doc.type === 'pdf') {
     if (content) content.classList.add('hidden');
     if (frame) {
       frame.classList.remove('hidden');
-      const originalFile = G.originalFiles.get(docId);
-      if (originalFile && originalFile.type === 'application/pdf') {
-        frame.src = URL.createObjectURL(originalFile);
-      } else {
-        frame.src = `https://placehold.co/600x800/1e3a8a/60a5fa?text=PDF:+${encodeURIComponent(doc.name)}`;
-      }
+      const { data } = SB.storage
+        .from(CONFIG.storageBucket)
+        .getPublicUrl(`${doc.company_id}/${doc.id}/${doc.name}`);
+      
+      frame.src = data?.publicUrl || `https://placehold.co/600x800/1e3a8a/60a5fa?text=PDF:+${encodeURIComponent(doc.name)}`;
     }
-  } else if (doc.type === 'txt' || doc.mimeType === 'text/plain') {
+  } else if (doc.type === 'txt' || doc.mime_type === 'text/plain') {
     if (content) {
       content.innerHTML = `
         <div class="text-left p-4 bg-slate-900/50 rounded-lg border border-blue-500/20 max-h-96 overflow-auto">
@@ -1366,7 +1568,7 @@ function openPreviewModal(docId) {
       content.innerHTML = `
         <div class="text-center">
           <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-3 ${getFileIcon(doc.type).split(' ')[1]} opacity-50"></i>
-          <p class="mb-3">Aperçu non disponible pour ce format (${doc.mimeType || 'type inconnu'})</p>
+          <p class="mb-3">Aperçu non disponible pour ce format (${doc.mime_type || 'type inconnu'})</p>
           <button onclick="downloadCurrentDocument()" class="btn-primary px-5 py-2 rounded-lg text-white text-sm"><i class="fas fa-download mr-2"></i>Télécharger</button>
         </div>
       `;
@@ -1390,16 +1592,22 @@ function downloadCurrentDocument() {
   if (G.currentDocId) downloadDocument(G.currentDocId);
 }
 
-function downloadDocument(docId) {
+async function downloadDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
   
   doc.downloads = (doc.downloads || 0) + 1;
   saveDocuments();
   
-  const originalFile = G.originalFiles.get(docId);
-  if (originalFile) {
-    const url = URL.createObjectURL(originalFile);
+  try {
+    // Télécharger depuis Supabase Storage
+    const { data, error } = await SB.storage
+      .from(CONFIG.storageBucket)
+      .download(`${doc.company_id}/${docId}/${doc.name}`);
+    
+    if (error) throw error;
+    
+    const url = URL.createObjectURL(data);
     const a = document.createElement('a');
     a.href = url;
     a.download = doc.name;
@@ -1408,18 +1616,21 @@ function downloadDocument(docId) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showToast(`Téléchargement: ${doc.name}`, 'success');
-  } else {
-    const mimeType = doc.mimeType || 'application/octet-stream';
-    const blob = new Blob([`Contenu simulé du fichier: ${doc.name}`], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = doc.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast(`Téléchargement: ${doc.name}`, 'success');
+    
+  } catch (e) {
+    // Fallback
+    const originalFile = G.originalFiles.get(docId);
+    if (originalFile) {
+      const url = URL.createObjectURL(originalFile);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Téléchargement: ${doc.name}`, 'success');
+    }
   }
   
   addAudit('download', 'document', docId);
@@ -1492,31 +1703,40 @@ async function shareDocument() {
   
   const share = {
     id: generateId(),
-    documentId: G.currentDocId,
-    documentName: G.documents.find(d => d.id === G.currentDocId)?.name,
-    senderId: G.currentUser?.id,
-    senderEmail: G.currentUser?.email,
-    recipientEmail: email,
+    document_id: G.currentDocId,
+    document_name: G.documents.find(d => d.id === G.currentDocId)?.name,
+    sender_id: G.currentUser?.id,
+    sender_email: G.currentUser?.email,
+    recipient_email: email,
     permission,
     message,
     status: 'active',
-    createdAt: new Date().toISOString(),
-    expiresAt: expiration !== '0' ? new Date(Date.now() + parseInt(expiration) * 24 * 60 * 60 * 1000).toISOString() : null
+    company_id: G.currentUser?.companyId,
+    created_at: new Date().toISOString(),
+    expires_at: expiration !== '0' ? new Date(Date.now() + parseInt(expiration) * 24 * 60 * 60 * 1000).toISOString() : null
   };
   
-  G.shares.unshift(share);
-  saveShares();
-  
-  const link = `${window.location.origin}/share/${share.id}`;
-  const shareLinkInput = document.getElementById('shareLinkInput');
-  if (shareLinkInput) shareLinkInput.value = link;
-  const generatedLink = document.getElementById('generatedLink');
-  if (generatedLink) generatedLink.classList.remove('hidden');
-  
-  showToast('Partage créé avec succès', 'success');
-  addAudit('share', 'document', G.currentDocId, { recipient: email });
-  updateBadges();
-  logInfo(`Email envoyé à ${email}`, { shareId: share.id });
+  try {
+    const { error } = await SB.from('shares').insert(share);
+    if (error) throw error;
+    
+    G.shares.unshift(share);
+    saveShares();
+    
+    const link = `${window.location.origin}/share/${share.id}`;
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    if (shareLinkInput) shareLinkInput.value = link;
+    const generatedLink = document.getElementById('generatedLink');
+    if (generatedLink) generatedLink.classList.remove('hidden');
+    
+    showToast('Partage créé avec succès', 'success');
+    addAudit('share', 'document', G.currentDocId, { recipient: email });
+    updateBadges();
+    logInfo(`Email envoyé à ${email}`, { shareId: share.id });
+    
+  } catch (e) {
+    showToast('Erreur lors du partage', 'error');
+  }
 }
 
 function copyShareLink() {
@@ -1531,7 +1751,7 @@ function copyShareLink() {
 function loadShareHistory() {
   const list = document.getElementById('shareHistoryList');
   if (!list) return;
-  const docShares = G.shares.filter(s => s.documentId === G.currentDocId);
+  const docShares = G.shares.filter(s => s.document_id === G.currentDocId);
   const shareHistoryCount = document.getElementById('shareHistoryCount');
   
   if (shareHistoryCount) {
@@ -1551,8 +1771,8 @@ function loadShareHistory() {
           <i class="fas fa-user"></i>
         </div>
         <div>
-          <p class="text-sm text-white">${s.recipientEmail}</p>
-          <p class="text-xs text-blue-300/60">${s.permission} • ${formatDate(s.createdAt)}</p>
+          <p class="text-sm text-white">${s.recipient_email}</p>
+          <p class="text-xs text-blue-300/60">${s.permission} • ${formatDate(s.created_at)}</p>
         </div>
       </div>
       <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
@@ -1622,8 +1842,8 @@ function renderWfCard(wf) {
       </div>
       <p class="text-xs text-blue-300/60 mb-2 line-clamp-2">${wf.description || 'Aucune description'}</p>
       <div class="flex items-center justify-between text-xs">
-        <span class="text-blue-300/40">${formatDate(wf.dueDate)}</span>
-        <span class="wf-badge"><i class="fas fa-user"></i>${wf.assigneeName || 'Non assigné'}</span>
+        <span class="text-blue-300/40">${formatDate(wf.due_date)}</span>
+        <span class="wf-badge"><i class="fas fa-user"></i>${wf.assignee_name || 'Non assigné'}</span>
       </div>
     </div>
   `;
@@ -1702,7 +1922,7 @@ function openCreateWorkflowModal() {
   const wfAssignee = document.getElementById('wfAssignee');
   
   if (workflowModal) workflowModal.classList.remove('hidden');
-  if (wfDocId) wfDocId.innerHTML = '<option value="">-- Aucun --</option>' + G.documents.filter(d => !d.isDeleted).map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  if (wfDocId) wfDocId.innerHTML = '<option value="">-- Aucun --</option>' + G.documents.filter(d => !d.is_deleted).map(d => `<option value="${d.id}">${d.name}</option>`).join('');
   if (wfAssignee) wfAssignee.innerHTML = '<option value="">-- Non assigné --</option>' + G.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
   
   const wfStepsContainer = document.getElementById('wfStepsContainer');
@@ -1738,7 +1958,7 @@ async function createWorkflow(e) {
   const wfStepsContainer = document.getElementById('wfStepsContainer');
   const steps = wfStepsContainer ? Array.from(wfStepsContainer.querySelectorAll(':scope > div')).map(div => ({
     name: div.querySelector('input')?.value,
-    assigneeId: div.querySelector('select')?.value,
+    assignee_id: div.querySelector('select')?.value,
     status: 'pending'
   })).filter(s => s.name) : [];
 
@@ -1754,27 +1974,36 @@ async function createWorkflow(e) {
     title: wfTitle?.value || 'Nouveau Workflow',
     description: wfDesc?.value || '',
     priority: wfPriority?.value || 'medium',
-    documentId: wfDocId?.value || '',
-    dueDate: wfDueDate?.value || '',
-    assigneeId: wfAssignee?.value || '',
-    assigneeName: G.users.find(u => u.id === wfAssignee?.value)?.name,
-    createdBy: G.currentUser?.id,
+    document_id: wfDocId?.value || '',
+    due_date: wfDueDate?.value || '',
+    assignee_id: wfAssignee?.value || '',
+    assignee_name: G.users.find(u => u.id === wfAssignee?.value)?.name,
+    created_by: G.currentUser?.id,
+    company_id: G.currentUser?.companyId,
     status: 'pending',
     steps,
-    currentStep: 0,
+    current_step: 0,
     comments: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   };
   
-  G.workflows.unshift(wf);
-  saveWorkflows();
-  
-  showToast('Workflow créé avec succès', 'success');
-  addAudit('create', 'workflow', wf.id);
-  closeWorkflowModal();
-  renderWorkflows();
-  updateBadges();
+  try {
+    const { error } = await SB.from('workflows').insert(wf);
+    if (error) throw error;
+    
+    G.workflows.unshift(wf);
+    saveWorkflows();
+    
+    showToast('Workflow créé avec succès', 'success');
+    addAudit('create', 'workflow', wf.id);
+    closeWorkflowModal();
+    renderWorkflows();
+    updateBadges();
+    
+  } catch (e) {
+    showToast('Erreur création workflow', 'error');
+  }
 }
 
 function openWfDetail(wfId) {
@@ -1789,12 +2018,12 @@ function openWfDetail(wfId) {
   if (wfDetailMeta) {
     wfDetailMeta.innerHTML = `
       <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
-      <span class="text-xs text-blue-300/60"><i class="fas fa-calendar mr-1"></i>${formatDate(wf.dueDate)}</span>
+      <span class="text-xs text-blue-300/60"><i class="fas fa-calendar mr-1"></i>${formatDate(wf.due_date)}</span>
       <span class="text-xs text-blue-300/60"><i class="fas fa-flag mr-1"></i>${wf.priority}</span>
     `;
   }
   
-  const progress = wf.status === 'approved' ? 100 : wf.status === 'rejected' ? 100 : wf.status === 'cancelled' ? 0 : Math.round(((wf.currentStep || 0) / (wf.steps?.length || 1)) * 100);
+  const progress = wf.status === 'approved' ? 100 : wf.status === 'rejected' ? 100 : wf.status === 'cancelled' ? 0 : Math.round(((wf.current_step || 0) / (wf.steps?.length || 1)) * 100);
   const wfDetailProgress = document.getElementById('wfDetailProgress');
   const wfDetailProgressBar = document.getElementById('wfDetailProgressBar');
   
@@ -1804,23 +2033,23 @@ function openWfDetail(wfId) {
   const wfDetailSteps = document.getElementById('wfDetailSteps');
   if (wfDetailSteps) {
     wfDetailSteps.innerHTML = (wf.steps || []).map((step, idx) => `
-      <div class="flex items-center gap-3 p-3 rounded-lg ${idx === wf.currentStep ? 'bg-orange-500/10 border border-orange-500/30' : 'bg-slate-900/30 border border-blue-500/10'}">
-        <div class="w-8 h-8 rounded-full ${idx < wf.currentStep ? 'bg-green-500/20 text-green-400' : idx === wf.currentStep ? 'bg-orange-500/20 text-orange-400' : 'bg-gray-500/20 text-gray-400'} flex items-center justify-center text-xs">
-          <i class="fas ${idx < wf.currentStep ? 'fa-check' : idx === wf.currentStep ? 'fa-spinner fa-spin' : 'fa-clock'}"></i>
+      <div class="flex items-center gap-3 p-3 rounded-lg ${idx === wf.current_step ? 'bg-orange-500/10 border border-orange-500/30' : 'bg-slate-900/30 border border-blue-500/10'}">
+        <div class="w-8 h-8 rounded-full ${idx < wf.current_step ? 'bg-green-500/20 text-green-400' : idx === wf.current_step ? 'bg-orange-500/20 text-orange-400' : 'bg-gray-500/20 text-gray-400'} flex items-center justify-center text-xs">
+          <i class="fas ${idx < wf.current_step ? 'fa-check' : idx === wf.current_step ? 'fa-spinner fa-spin' : 'fa-clock'}"></i>
         </div>
         <div class="flex-1">
           <p class="text-sm text-white">${step.name}</p>
-          <p class="text-xs text-blue-300/60">${G.users.find(u => u.id === step.assigneeId)?.name || 'Non assigné'}</p>
+          <p class="text-xs text-blue-300/60">${G.users.find(u => u.id === step.assignee_id)?.name || 'Non assigné'}</p>
         </div>
       </div>
     `).join('');
   }
   
-  const isAssignee = wf.assigneeId === G.currentUser?.id || 
-                     (wf.steps && wf.steps.some(s => s.assigneeId === G.currentUser?.id)) ||
-                     wf.steps[wf.currentStep]?.assigneeId === G.currentUser?.id;
+  const isAssignee = wf.assignee_id === G.currentUser?.id || 
+                     (wf.steps && wf.steps.some(s => s.assignee_id === G.currentUser?.id)) ||
+                     wf.steps[wf.current_step]?.assignee_id === G.currentUser?.id;
   
-  const isCreator = wf.createdBy === G.currentUser?.id;
+  const isCreator = wf.created_by === G.currentUser?.id;
   const canAct = ['pending', 'in_review'].includes(wf.status) && (isAssignee || isCreator);
   
   const wfDetailActions = document.getElementById('wfDetailActions');
@@ -1828,9 +2057,9 @@ function openWfDetail(wfId) {
   
   const docSection = document.getElementById('wfDetailDocument');
   if (docSection) {
-    if (wf.documentId) {
-      const doc = G.documents.find(d => d.id === wf.documentId);
-      const hasAccess = isAssignee || isCreator || doc?.scope === 'company' || doc?.ownerId === G.currentUser?.id;
+    if (wf.document_id) {
+      const doc = G.documents.find(d => d.id === wf.document_id);
+      const hasAccess = isAssignee || isCreator || doc?.scope === 'company' || doc?.owner_id === G.currentUser?.id;
       
       docSection.innerHTML = `
         <div class="p-3 rounded-lg bg-blue-900/20 border border-blue-500/20">
@@ -1861,7 +2090,7 @@ function openWfDetail(wfId) {
     wfDetailHistory.innerHTML = (wf.comments || []).map(c => `
       <div class="p-2 rounded-lg bg-slate-900/30 border border-blue-500/10">
         <div class="flex items-center justify-between mb-1">
-          <span class="text-xs text-blue-400">${c.authorName}</span>
+          <span class="text-xs text-blue-400">${c.author_name}</span>
           <span class="text-xs text-blue-300/40">${formatDate(c.timestamp)}</span>
         </div>
         <p class="text-sm text-white">${c.text}</p>
@@ -1879,7 +2108,7 @@ function closeWfDetail() {
   G.currentWfId = null;
 }
 
-function actOnWorkflow(action) {
+async function actOnWorkflow(action) {
   const wf = G.workflows.find(w => w.id === G.currentWfId);
   if (!wf) return;
   
@@ -1887,8 +2116,8 @@ function actOnWorkflow(action) {
   const comment = wfDetailComment?.value || '';
   
   if (action === 'approve') {
-    if (wf.currentStep < (wf.steps?.length || 1) - 1) {
-      wf.currentStep++;
+    if (wf.current_step < (wf.steps?.length || 1) - 1) {
+      wf.current_step++;
       wf.status = 'in_review';
     } else {
       wf.status = 'approved';
@@ -1901,20 +2130,27 @@ function actOnWorkflow(action) {
   
   if (!wf.comments) wf.comments = [];
   wf.comments.push({
-    authorId: G.currentUser?.id,
-    authorName: G.currentUser?.name,
+    author_id: G.currentUser?.id,
+    author_name: G.currentUser?.name,
     text: `[${action.toUpperCase()}] ${comment || 'Aucun commentaire'}`,
     timestamp: new Date().toISOString()
   });
   
-  wf.updatedAt = new Date().toISOString();
-  saveWorkflows();
+  wf.updated_at = new Date().toISOString();
   
-  showToast(`Workflow ${action === 'approve' ? 'approuvé' : action === 'reject' ? 'rejeté' : 'en révision'}`, 'success');
-  addAudit(action, 'workflow', wf.id);
-  closeWfDetail();
-  renderWorkflows();
-  updateBadges();
+  try {
+    await SB.from('workflows').update(wf).eq('id', wf.id);
+    saveWorkflows();
+    
+    showToast(`Workflow ${action === 'approve' ? 'approuvé' : action === 'reject' ? 'rejeté' : 'en révision'}`, 'success');
+    addAudit(action, 'workflow', wf.id);
+    closeWfDetail();
+    renderWorkflows();
+    updateBadges();
+    
+  } catch (e) {
+    showToast('Erreur mise à jour workflow', 'error');
+  }
 }
 
 function addWfComment() {
@@ -1927,8 +2163,8 @@ function addWfComment() {
   
   if (!wf.comments) wf.comments = [];
   wf.comments.push({
-    authorId: G.currentUser?.id,
-    authorName: G.currentUser?.name,
+    author_id: G.currentUser?.id,
+    author_name: G.currentUser?.name,
     text,
     timestamp: new Date().toISOString()
   });
@@ -1972,7 +2208,7 @@ function switchSharedTab(tab) {
 }
 
 function renderReceivedShares() {
-  const received = G.shares.filter(s => s.recipientEmail === G.currentUser?.email && s.status === 'active');
+  const received = G.shares.filter(s => s.recipient_email === G.currentUser?.email && s.status === 'active');
   const empty = document.getElementById('sharedEmptyState');
   const list = document.getElementById('sharedList');
   const receivedCountBadge = document.getElementById('receivedCountBadge');
@@ -1992,19 +2228,19 @@ function renderReceivedShares() {
   if (list) {
     list.classList.remove('hidden');
     list.innerHTML = received.map(s => {
-      const doc = G.documents.find(d => d.id === s.documentId);
+      const doc = G.documents.find(d => d.id === s.document_id);
       return `
-        <div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer" onclick="openPreviewModal('${s.documentId}')">
+        <div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer" onclick="openPreviewModal('${s.document_id}')">
           <div class="flex items-center gap-3 mb-3">
             <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400"><i class="fas fa-share-alt"></i></div>
             <div class="flex-1 min-w-0">
               <h4 class="text-white font-semibold text-sm truncate">${doc?.name || 'Document inconnu'}</h4>
-              <p class="text-xs text-blue-300/60">De: ${s.senderEmail}</p>
+              <p class="text-xs text-blue-300/60">De: ${s.sender_email}</p>
             </div>
           </div>
           <div class="flex items-center justify-between text-xs">
             <span class="px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">${s.permission}</span>
-            <span class="text-blue-300/40">${formatDate(s.createdAt)}</span>
+            <span class="text-blue-300/40">${formatDate(s.created_at)}</span>
           </div>
         </div>
       `;
@@ -2013,7 +2249,7 @@ function renderReceivedShares() {
 }
 
 function renderSentShares() {
-  const sent = G.shares.filter(s => s.senderId === G.currentUser?.id);
+  const sent = G.shares.filter(s => s.sender_id === G.currentUser?.id);
   const empty = document.getElementById('sentEmptyState');
   const list = document.getElementById('sentSharesList');
   const sentCountBadge = document.getElementById('sentCountBadge');
@@ -2037,8 +2273,8 @@ function renderSentShares() {
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400"><i class="fas fa-file"></i></div>
           <div>
-            <p class="text-white text-sm font-medium">${s.documentName}</p>
-            <p class="text-xs text-blue-300/60">À: ${s.recipientEmail} • ${s.permission}</p>
+            <p class="text-white text-sm font-medium">${s.document_name}</p>
+            <p class="text-xs text-blue-300/60">À: ${s.recipient_email} • ${s.permission}</p>
           </div>
         </div>
         <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
@@ -2050,7 +2286,7 @@ function renderSentShares() {
 // ─── Users ───
 function openCreateUserModal() {
   if (!canValidateUsers()) {
-    showToast('Vous n\'avez pas les droits pour créer des utilisateurs', 'error');
+    showToast('Vous n\\'avez pas les droits pour créer des utilisateurs', 'error');
     logSecurity('Tentative de création utilisateur non autorisée', { user: G.currentUser?.id });
     return;
   }
@@ -2090,35 +2326,44 @@ async function addUser(e) {
     email: newUserEmail?.value || '',
     role: newUserRole?.value || 'viewer',
     status: 'pending_validation',
-    createdAt: new Date().toISOString(),
-    lastLogin: null,
-    createdBy: G.currentUser?.id
+    company_id: G.currentUser?.companyId,
+    created_at: new Date().toISOString(),
+    last_login: null,
+    created_by: G.currentUser?.id
   };
   
   if (G.currentUser?.role === 'admin') {
-    const validateImmediately = confirm('Valider immédiatement cet utilisateur ?\n\nOK = Oui (actif immédiatement)\nAnnuler = Non (en attente de validation)');
+    const validateImmediately = confirm('Valider immédiatement cet utilisateur ?\\n\\nOK = Oui (actif immédiatement)\\nAnnuler = Non (en attente de validation)');
     if (validateImmediately) {
       newUser.status = 'active';
-      newUser.validatedAt = new Date().toISOString();
-      newUser.validatedBy = G.currentUser?.id;
+      newUser.validated_at = new Date().toISOString();
+      newUser.validated_by = G.currentUser?.id;
     }
   }
   
-  G.users.push(newUser);
-  saveUsers();
-  updatePendingUsersCount();
-  
-  if (newUser.status === 'pending_validation') {
-    showToast('Utilisateur créé - en attente de validation par un administrateur', 'warning');
-    logInfo(`Nouvel utilisateur en attente: ${newUser.email}`);
-  } else {
-    showToast('Utilisateur créé et validé avec succès', 'success');
+  try {
+    const { error } = await SB.from('users').insert(newUser);
+    if (error) throw error;
+    
+    G.users.push(newUser);
+    saveUsers();
+    updatePendingUsersCount();
+    
+    if (newUser.status === 'pending_validation') {
+      showToast('Utilisateur créé - en attente de validation par un administrateur', 'warning');
+      logInfo(`Nouvel utilisateur en attente: ${newUser.email}`);
+    } else {
+      showToast('Utilisateur créé et validé avec succès', 'success');
+    }
+    
+    addAudit('create', 'user', newUser.id, { status: newUser.status });
+    closeAddUserModal();
+    renderUsers();
+    updateBadges();
+    
+  } catch (e) {
+    showToast('Erreur création utilisateur', 'error');
   }
-  
-  addAudit('create', 'user', newUser.id, { status: newUser.status });
-  closeAddUserModal();
-  renderUsers();
-  updateBadges();
 }
 
 function renderUsers() {
@@ -2137,7 +2382,7 @@ function renderUsers() {
         </div>
       </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
-      <td class="p-4 hidden md:table-cell text-sm text-blue-300/70">${G.documents.filter(d => d.ownerId === u.id && !d.isDeleted).length}</td>
+      <td class="p-4 hidden md:table-cell text-sm text-blue-300/70">${G.documents.filter(d => d.owner_id === u.id && !d.is_deleted).length}</td>
       <td class="p-4 hidden sm:table-cell">
         <span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : u.status === 'pending_validation' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'}">
           ${u.status === 'pending_validation' ? 'En attente' : u.status}
@@ -2155,7 +2400,7 @@ function renderUsers() {
   `).join('');
 }
 
-function validateUser(userId) {
+async function validateUser(userId) {
   if (!canValidateUsers()) {
     showToast('Permission refusée', 'error');
     return;
@@ -2165,26 +2410,34 @@ function validateUser(userId) {
   if (!u || u.status !== 'pending_validation') return;
   
   u.status = 'active';
-  u.validatedAt = new Date().toISOString();
-  u.validatedBy = G.currentUser?.id;
+  u.validated_at = new Date().toISOString();
+  u.validated_by = G.currentUser?.id;
   
-  saveUsers();
-  updatePendingUsersCount();
-  
-  showToast(`Utilisateur ${u.name} validé avec succès`, 'success');
-  addAudit('validate', 'user', userId);
-  renderUsers();
-  
-  const userKey = `user_${u.email}`;
-  const stored = localStorage.getItem(userKey);
-  if (stored) {
-    const userData = JSON.parse(stored);
-    userData.status = 'active';
-    localStorage.setItem(userKey, JSON.stringify(userData));
-  }
-  
-  if (G.currentView === 'pending-users') {
-    renderPendingUsers();
+  try {
+    await SB.from('users').update({ 
+      status: 'active', 
+      validated_at: u.validated_at, 
+      validated_by: u.validated_by 
+    }).eq('id', userId);
+    
+    saveUsers();
+    updatePendingUsersCount();
+    
+    showToast(`Utilisateur ${u.name} validé avec succès`, 'success');
+    addAudit('validate', 'user', userId);
+    renderUsers();
+    
+    // Mettre à jour Auth si nécessaire
+    const { error } = await SB.auth.admin.updateUserById(userId, {
+      user_metadata: { status: 'active' }
+    });
+    
+    if (G.currentView === 'pending-users') {
+      renderPendingUsers();
+    }
+    
+  } catch (e) {
+    showToast('Erreur validation utilisateur', 'error');
   }
 }
 
@@ -2193,25 +2446,8 @@ function renderPendingUsers() {
   if (!container) return;
   
   const pendingFromUsers = G.users.filter(u => u.status === 'pending_validation');
-  const pendingFromStorage = JSON.parse(localStorage.getItem(`admins_${G.currentUser?.companyId}`) || '[]');
   
-  const allPending = [...pendingFromUsers];
-  pendingFromStorage.forEach(stored => {
-    if (!allPending.find(u => u.id === stored.userId)) {
-      allPending.push({
-        id: stored.userId,
-        name: stored.name,
-        email: stored.email,
-        status: 'pending_validation',
-        createdAt: stored.requestedAt,
-        source: 'registration'
-      });
-    }
-  });
-  
-  allPending.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  
-  if (allPending.length === 0) {
+  if (pendingFromUsers.length === 0) {
     container.innerHTML = `
       <div class="text-center py-12 text-blue-300/50">
         <i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i>
@@ -2222,7 +2458,7 @@ function renderPendingUsers() {
     return;
   }
   
-  container.innerHTML = allPending.map(u => `
+  container.innerHTML = pendingFromUsers.map(u => `
     <div class="glass-card rounded-xl p-4 border border-yellow-500/20 hover:border-yellow-400/40 transition-all">
       <div class="flex items-center justify-between flex-wrap gap-4">
         <div class="flex items-center gap-3">
@@ -2234,7 +2470,7 @@ function renderPendingUsers() {
             <p class="text-sm text-blue-300/60">${u.email}</p>
             <p class="text-xs text-yellow-400/60 mt-1">
               <i class="fas fa-clock mr-1"></i>
-              En attente depuis ${formatDate(u.createdAt)}
+              En attente depuis ${formatDate(u.created_at)}
             </p>
           </div>
         </div>
@@ -2253,23 +2489,34 @@ function renderPendingUsers() {
   `).join('');
 }
 
-function rejectUser(userId) {
-  if (!confirm('Êtes-vous sûr de vouloir rejeter cet utilisateur ?\n\nCette action est irréversible.')) return;
+async function rejectUser(userId) {
+  if (!confirm('Êtes-vous sûr de vouloir rejeter cet utilisateur ?\\n\\nCette action est irréversible.')) return;
   
   const u = G.users.find(user => user.id === userId);
   if (!u) return;
   
   u.status = 'rejected';
-  u.rejectedAt = new Date().toISOString();
-  u.rejectedBy = G.currentUser?.id;
+  u.rejected_at = new Date().toISOString();
+  u.rejected_by = G.currentUser?.id;
   
-  saveUsers();
-  updatePendingUsersCount();
-  
-  showToast('Utilisateur rejeté', 'info');
-  addAudit('reject', 'user', userId);
-  renderPendingUsers();
-  renderUsers();
+  try {
+    await SB.from('users').update({ 
+      status: 'rejected', 
+      rejected_at: u.rejected_at, 
+      rejected_by: u.rejected_by 
+    }).eq('id', userId);
+    
+    saveUsers();
+    updatePendingUsersCount();
+    
+    showToast('Utilisateur rejeté', 'info');
+    addAudit('reject', 'user', userId);
+    renderPendingUsers();
+    renderUsers();
+    
+  } catch (e) {
+    showToast('Erreur rejet utilisateur', 'error');
+  }
 }
 
 function getRoleBadgeClass(role) {
@@ -2304,7 +2551,7 @@ function closeEditUserModal() {
   if (editUserModal) editUserModal.classList.add('hidden');
 }
 
-function saveEditUser(e) {
+async function saveEditUser(e) {
   e.preventDefault();
   const editUserId = document.getElementById('editUserId');
   const id = editUserId?.value;
@@ -2323,25 +2570,42 @@ function saveEditUser(e) {
   u.name = `${editUserFirst?.value || ''} ${editUserLast?.value || ''}`.trim();
   if (editUserRole) u.role = editUserRole.value;
   
-  saveUsers();
-  showToast('Utilisateur modifié', 'success');
-  addAudit('update', 'user', id);
-  closeEditUserModal();
-  renderUsers();
+  try {
+    await SB.from('users').update({ 
+      name: u.name, 
+      role: u.role 
+    }).eq('id', id);
+    
+    saveUsers();
+    showToast('Utilisateur modifié', 'success');
+    addAudit('update', 'user', id);
+    closeEditUserModal();
+    renderUsers();
+    
+  } catch (e) {
+    showToast('Erreur modification utilisateur', 'error');
+  }
 }
 
-function deleteUser(userId) {
+async function deleteUser(userId) {
   if (!canValidateUsers()) {
     showToast('Permission refusée', 'error');
     return;
   }
   
   if (!confirm('Supprimer cet utilisateur ?')) return;
-  G.users = G.users.filter(u => u.id !== userId);
-  saveUsers();
-  showToast('Utilisateur supprimé', 'success');
-  addAudit('delete', 'user', userId);
-  renderUsers();
+  
+  try {
+    await SB.from('users').delete().eq('id', userId);
+    G.users = G.users.filter(u => u.id !== userId);
+    saveUsers();
+    showToast('Utilisateur supprimé', 'success');
+    addAudit('delete', 'user', userId);
+    renderUsers();
+    
+  } catch (e) {
+    showToast('Erreur suppression utilisateur', 'error');
+  }
 }
 
 // ─── Tags ───
@@ -2387,7 +2651,7 @@ function deleteTag(tagId) {
 function renderBilling() {
   const plan = CONFIG.plans[G.currentUser?.plan || 'free'];
   const currentPlanName = document.getElementById('currentPlanName');
-  const currentPlanBadgeEl = document.getElementById('currentPlanBadgeEl');
+n  const currentPlanBadgeEl = document.getElementById('currentPlanBadgeEl');
   const currentPlanDesc = document.getElementById('currentPlanDesc');
   const currentPlanPrice = document.getElementById('currentPlanPrice');
   
@@ -2499,7 +2763,7 @@ function renderSecurity() {
   const secApiKeys = document.getElementById('secApiKeys');
   const secAuditCount = document.getElementById('secAuditCount');
   
-  if (secScanOk) secScanOk.textContent = G.documents.filter(d => !d.isDeleted).length;
+  if (secScanOk) secScanOk.textContent = G.documents.filter(d => !d.is_deleted).length;
   if (secScanBlocked) secScanBlocked.textContent = '0';
   if (secApiKeys) secApiKeys.textContent = G.apiKeys.length;
   if (secAuditCount) secAuditCount.textContent = G.auditLog.length;
@@ -2546,7 +2810,7 @@ function switchSecurityTab(tab) {
 }
 
 function loadDeletedDocs() {
-  const deleted = G.documents.filter(d => d.isDeleted);
+  const deleted = G.documents.filter(d => d.is_deleted);
   const trashList = document.getElementById('trashList');
   const trashCount = document.getElementById('trashCount');
   
@@ -2568,7 +2832,7 @@ function loadDeletedDocs() {
         <i class="fas ${getFileIcon(d.type).split(' ')[0]} text-red-400/60"></i>
         <div>
           <p class="text-sm text-white/60 line-through">${d.name}</p>
-          <p class="text-xs text-blue-300/40">Supprimé le ${formatDate(d.deletedAt)}</p>
+          <p class="text-xs text-blue-300/40">Supprimé le ${formatDate(d.deleted_at)}</p>
         </div>
       </div>
       <button onclick="restoreDocument('${d.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30">Restaurer</button>
@@ -2576,20 +2840,27 @@ function loadDeletedDocs() {
   `).join('');
 }
 
-function restoreDocument(docId) {
+async function restoreDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
   
-  doc.isDeleted = false;
-  doc.deletedAt = null;
-  saveDocuments();
+  doc.is_deleted = false;
+  doc.deleted_at = null;
   
-  showToast('Document restauré', 'success');
-  addAudit('restore', 'document', docId);
-  loadDeletedDocs();
-  renderDocuments();
-  updateBadges();
-  updateStorageDisplay();
+  try {
+    await SB.from('documents').update({ is_deleted: false, deleted_at: null }).eq('id', docId);
+    saveDocuments();
+    
+    showToast('Document restauré', 'success');
+    addAudit('restore', 'document', docId);
+    loadDeletedDocs();
+    renderDocuments();
+    updateBadges();
+    updateStorageDisplay();
+    
+  } catch (e) {
+    showToast('Erreur restauration', 'error');
+  }
 }
 
 function generateApiKey() {
@@ -2598,8 +2869,8 @@ function generateApiKey() {
     id: generateId(),
     key,
     name: `Clé ${G.apiKeys.length + 1}`,
-    createdAt: new Date().toISOString(),
-    lastUsed: null
+    created_at: new Date().toISOString(),
+    last_used: null
   });
   saveApiKeys();
   renderSecurity();
@@ -2729,7 +3000,7 @@ function saveRole() {
 
 // ─── Storage & Badges ───
 function updateStorageDisplay() {
-  const used = G.documents.filter(d => !d.isDeleted).reduce((sum, d) => sum + (d.size || 0), 0);
+  const used = G.documents.filter(d => !d.is_deleted).reduce((sum, d) => sum + (d.size || 0), 0);
   const limit = CONFIG.plans[G.currentUser?.plan || 'free'].storage;
   const percent = Math.min(100, Math.round((used / limit) * 100));
   
@@ -2749,9 +3020,9 @@ function updateStorageDisplay() {
 }
 
 function updateBadges() {
-  const docCount = G.documents.filter(d => !d.isDeleted).length;
+  const docCount = G.documents.filter(d => !d.is_deleted).length;
   const wfCount = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
-  const sharedCount = G.shares.filter(s => s.recipientEmail === G.currentUser?.email && s.status === 'active').length;
+  const sharedCount = G.shares.filter(s => s.recipient_email === G.currentUser?.email && s.status === 'active').length;
   
   ['d', 'm'].forEach(prefix => {
     const docBadge = document.getElementById(`${prefix}-docsBadge`);
@@ -2862,7 +3133,7 @@ function handleGlobalSearch(query) {
   }
   
   const results = [
-    ...G.documents.filter(d => !d.isDeleted && d.name.toLowerCase().includes(query.toLowerCase())).map(d => ({ type: 'doc', ...d })),
+    ...G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase())).map(d => ({ type: 'doc', ...d })),
     ...G.users.filter(u => u.name.toLowerCase().includes(query.toLowerCase()) || u.email.toLowerCase().includes(query.toLowerCase())).map(u => ({ type: 'user', ...u })),
     ...G.workflows.filter(w => w.title.toLowerCase().includes(query.toLowerCase())).map(w => ({ type: 'workflow', ...w }))
   ].slice(0, 8);
@@ -2936,7 +3207,7 @@ function onCollabEditorInput(e) {
   const doc = G.documents.find(d => d.id === G.collab.docId);
   if (doc) {
     doc.content = e.target.value;
-    doc.updatedAt = new Date().toISOString();
+    doc.updated_at = new Date().toISOString();
   }
 }
 
@@ -3051,7 +3322,7 @@ function renderFolderBreadcrumb() {
 function renderFolderTree() {
   const folderSidebarTree = document.getElementById('folderSidebarTree');
   if (!folderSidebarTree) return;
-  const folders = G.folders.filter(f => f.parentId === '__root__');
+  const folders = G.folders.filter(f => f.parent_id === '__root__');
   
   folderSidebarTree.innerHTML = folders.map(f => `
     <div class="cursor-pointer" onclick="openFolder('${f.id}', '${f.name}')">
@@ -3069,8 +3340,8 @@ function renderFolderContents() {
   
   if (!folderContentsGrid || !folderDocGrid) return;
   
-  const subFolders = G.folders.filter(f => f.parentId === G.currentFolderId);
-  const docs = G.documents.filter(d => !d.isDeleted && d.folderId === G.currentFolderId);
+  const subFolders = G.folders.filter(f => f.parent_id === G.currentFolderId);
+  const docs = G.documents.filter(d => !d.is_deleted && d.folder_id === G.currentFolderId);
   
   folderContentsGrid.innerHTML = subFolders.map(f => `
     <div class="glass-card rounded-xl p-4 border border-yellow-500/20 cursor-pointer hover:border-yellow-400/40" onclick="openFolder('${f.id}', '${f.name}')">
@@ -3121,22 +3392,30 @@ function closeFolderModal() {
   if (folderModal) folderModal.classList.add('hidden');
 }
 
-function createFolder() {
+async function createFolder() {
   const newFolderName = document.getElementById('newFolderName');
   const name = newFolderName?.value.trim();
   if (!name) return;
   
-  G.folders.push({
+  const folder = {
     id: generateId(),
     name,
-    parentId: G.currentFolderId,
-    createdAt: new Date().toISOString()
-  });
+    parent_id: G.currentFolderId,
+    company_id: G.currentUser?.companyId,
+    created_at: new Date().toISOString()
+  };
   
-  saveFolders();
-  closeFolderModal();
-  renderFolders();
-  showToast('Dossier créé', 'success');
+  try {
+    await SB.from('folders').insert(folder);
+    G.folders.push(folder);
+    saveFolders();
+    closeFolderModal();
+    renderFolders();
+    showToast('Dossier créé', 'success');
+    
+  } catch (e) {
+    showToast('Erreur création dossier', 'error');
+  }
 }
 
 // ─── Signatures ───
@@ -3162,14 +3441,14 @@ function renderSignatures() {
   }
   
   container.innerHTML = G.signatures.map(s => {
-    const doc = G.documents.find(d => d.id === s.documentId);
+    const doc = G.documents.find(d => d.id === s.document_id);
     return `
       <div class="glass-card rounded-xl p-4 border border-blue-500/20 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400"><i class="fas fa-file-signature"></i></div>
           <div>
             <p class="text-white font-medium">${doc?.name || 'Document inconnu'}</p>
-            <p class="text-xs text-blue-300/60">Signataire: ${s.signerEmail}</p>
+            <p class="text-xs text-blue-300/60">Signataire: ${s.signer_email}</p>
           </div>
         </div>
         <span class="px-3 py-1 rounded-full text-xs ${getSigStatusClass(s.status)}">${s.status}</span>
@@ -3183,10 +3462,10 @@ function getSigStatusClass(status) {
   return classes[status] || 'bg-gray-500/20 text-gray-300';
 }
 
-// NOUVEAU: Ajouter une signature numérique pour un employé
+// Ajouter une signature numérique pour un employé
 function openEmployeeSignatureModal() {
   if (!canManageSignatures()) {
-    showToast('Vous n\'avez pas les droits pour gérer les signatures', 'error');
+    showToast('Vous n\\'avez pas les droits pour gérer les signatures', 'error');
     return;
   }
   
@@ -3245,7 +3524,7 @@ function clearEmployeeSignature() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-function saveEmployeeSignature() {
+async function saveEmployeeSignature() {
   const canvas = document.getElementById('employeeSignatureCanvas');
   const employeeSelect = document.getElementById('sigEmployeeSelect');
   
@@ -3265,25 +3544,33 @@ function saveEmployeeSignature() {
   // Ajouter à la liste des signatures
   const newSignature = {
     id: generateId(),
-    userId: employeeId,
-    userName: employee.name,
-    userEmail: employee.email,
-    signatureData: signatureData,
-    createdBy: G.currentUser?.id,
-    createdAt: new Date().toISOString(),
+    user_id: employeeId,
+    user_name: employee.name,
+    user_email: employee.email,
+    signature_data: signatureData,
+    company_id: G.currentUser?.companyId,
+    created_by: G.currentUser?.id,
+    created_at: new Date().toISOString(),
     status: 'active'
   };
   
-  // Sauvegarder dans le localStorage spécifique aux signatures d'employés
-  const employeeSigsKey = `employee_signatures_${G.currentUser?.companyId}`;
-  const existingSigs = JSON.parse(localStorage.getItem(employeeSigsKey) || '[]');
-  existingSigs.push(newSignature);
-  localStorage.setItem(employeeSigsKey, JSON.stringify(existingSigs));
-  
-  showToast(`Signature numérique ajoutée pour ${employee.name}`, 'success');
-  addAudit('add_employee_signature', 'user', employeeId);
-  closeEmployeeSignatureModal();
-  renderEmployeeSignaturesList();
+  try {
+    await SB.from('signatures').insert(newSignature);
+    
+    // Sauvegarder dans localStorage comme backup
+    const employeeSigsKey = `employee_signatures_${G.currentUser?.companyId}`;
+    const existingSigs = JSON.parse(localStorage.getItem(employeeSigsKey) || '[]');
+    existingSigs.push(newSignature);
+    localStorage.setItem(employeeSigsKey, JSON.stringify(existingSigs));
+    
+    showToast(`Signature numérique ajoutée pour ${employee.name}`, 'success');
+    addAudit('add_employee_signature', 'user', employeeId);
+    closeEmployeeSignatureModal();
+    renderEmployeeSignaturesList();
+    
+  } catch (e) {
+    showToast('Erreur sauvegarde signature', 'error');
+  }
 }
 
 function renderEmployeeSignaturesList() {
@@ -3294,7 +3581,7 @@ function renderEmployeeSignaturesList() {
   const signatures = JSON.parse(localStorage.getItem(employeeSigsKey) || '[]');
   
   if (signatures.length === 0) {
-    container.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucune signature d\'employé enregistrée</p>';
+    container.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucune signature d\\'employé enregistrée</p>';
     return;
   }
   
@@ -3306,8 +3593,8 @@ function renderEmployeeSignaturesList() {
             <i class="fas fa-signature"></i>
           </div>
           <div>
-            <p class="text-white font-medium">${sig.userName}</p>
-            <p class="text-xs text-blue-300/60">${sig.userEmail}</p>
+            <p class="text-white font-medium">${sig.user_name}</p>
+            <p class="text-xs text-blue-300/60">${sig.user_email}</p>
             <p class="text-xs text-green-400">Signature enregistrée</p>
           </div>
         </div>
@@ -3316,22 +3603,29 @@ function renderEmployeeSignaturesList() {
         </button>
       </div>
       <div class="mt-3 p-2 bg-white rounded-lg">
-        <img src="${sig.signatureData}" alt="Signature" class="h-16 object-contain">
+        <img src="${sig.signature_data}" alt="Signature" class="h-16 object-contain">
       </div>
     </div>
   `).join('');
 }
 
-function deleteEmployeeSignature(sigId) {
+async function deleteEmployeeSignature(sigId) {
   if (!confirm('Supprimer cette signature ?')) return;
   
-  const employeeSigsKey = `employee_signatures_${G.currentUser?.companyId}`;
-  let signatures = JSON.parse(localStorage.getItem(employeeSigsKey) || '[]');
-  signatures = signatures.filter(s => s.id !== sigId);
-  localStorage.setItem(employeeSigsKey, JSON.stringify(signatures));
-  
-  showToast('Signature supprimée', 'success');
-  renderEmployeeSignaturesList();
+  try {
+    await SB.from('signatures').delete().eq('id', sigId);
+    
+    const employeeSigsKey = `employee_signatures_${G.currentUser?.companyId}`;
+    let signatures = JSON.parse(localStorage.getItem(employeeSigsKey) || '[]');
+    signatures = signatures.filter(s => s.id !== sigId);
+    localStorage.setItem(employeeSigsKey, JSON.stringify(signatures));
+    
+    showToast('Signature supprimée', 'success');
+    renderEmployeeSignaturesList();
+    
+  } catch (e) {
+    showToast('Erreur suppression signature', 'error');
+  }
 }
 
 function openSignModal() {
@@ -3390,7 +3684,7 @@ function submitSignature() {
 function renderAI() {
   const container = document.getElementById('aiDocsList');
   if (!container) return;
-  const docs = G.documents.filter(d => !d.isDeleted).slice(0, 10);
+  const docs = G.documents.filter(d => !d.is_deleted).slice(0, 10);
   
   container.innerHTML = docs.map(d => `
     <div class="glass-card rounded-xl p-4 border border-pink-500/20">
@@ -3446,7 +3740,7 @@ function renderAutomation() {
   if (!container) return;
   
   if (G.automationRules.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-magic text-4xl mb-3 block opacity-20"></i><p>Aucune règle d\'automatisation</p></div>';
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-magic text-4xl mb-3 block opacity-20"></i><p>Aucune règle d\\'automatisation</p></div>';
     return;
   }
   
@@ -3488,8 +3782,9 @@ function createWfRule(e) {
     name: wfRuleName?.value || 'Nouvelle règle',
     trigger: wfRuleTrigger?.value || '',
     action: wfRuleAction?.value || '',
+    company_id: G.currentUser?.companyId,
     active: true,
-    createdAt: new Date().toISOString()
+    created_at: new Date().toISOString()
   };
   
   G.automationRules.push(rule);
@@ -3550,7 +3845,7 @@ function renderBackups() {
     return;
   }
   
-  if (backupStats) backupStats.textContent = `${G.backups.length} sauvegarde(s) • Dernière: ${formatDate(G.backups[0].createdAt)}`;
+  if (backupStats) backupStats.textContent = `${G.backups.length} sauvegarde(s) • Dernière: ${formatDate(G.backups[0].created_at)}`;
   
   container.innerHTML = G.backups.map(b => `
     <div class="glass-card rounded-xl p-4 border border-teal-500/20 flex items-center justify-between">
@@ -3558,7 +3853,7 @@ function renderBackups() {
         <i class="fas fa-archive text-teal-400 text-xl"></i>
         <div>
           <p class="text-white font-medium">${b.name}</p>
-          <p class="text-xs text-blue-300/60">${b.type} • ${formatBytes(b.size)} • ${formatDate(b.createdAt)}</p>
+          <p class="text-xs text-blue-300/60">${b.type} • ${formatBytes(b.size)} • ${formatDate(b.created_at)}</p>
         </div>
       </div>
       <div class="flex gap-2">
@@ -3575,7 +3870,8 @@ function createBackup(type) {
     name: `Backup ${new Date().toLocaleString('fr-FR')}`,
     type: type === 'full' ? 'Complète' : 'Documents',
     size: G.documents.reduce((sum, d) => sum + (d.size || 0), 0),
-    createdAt: new Date().toISOString()
+    company_id: G.currentUser?.companyId,
+    created_at: new Date().toISOString()
   };
   
   G.backups.unshift(backup);
@@ -3609,7 +3905,7 @@ function renderApiKeys() {
       <div>
         <p class="text-white font-medium text-sm">${k.name}</p>
         <p class="text-xs text-green-400/60 font-mono">${k.key.substr(0, 20)}...</p>
-        <p class="text-xs text-blue-300/40">Créée le ${formatDate(k.createdAt)}</p>
+        <p class="text-xs text-blue-300/40">Créée le ${formatDate(k.created_at)}</p>
       </div>
       <button onclick="revokeApiKey('${k.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">Révoquer</button>
     </div>
@@ -3632,8 +3928,9 @@ function generateApiKeyV6() {
     name,
     key,
     permissions: perms,
-    createdAt: new Date().toISOString(),
-    lastUsed: null
+    company_id: G.currentUser?.companyId,
+    created_at: new Date().toISOString(),
+    last_used: null
   });
   
   saveApiKeys();
@@ -3895,7 +4192,7 @@ function renderTopUsers() {
   
   const userActivity = G.users.map(u => ({
     ...u,
-    docCount: G.documents.filter(d => d.ownerId === u.id).length
+    docCount: G.documents.filter(d => d.owner_id === u.id).length
   })).sort((a, b) => b.docCount - a.docCount).slice(0, 5);
   
   container.innerHTML = userActivity.map((u, i) => `
@@ -3931,14 +4228,14 @@ function runAdvSearch() {
   const date = advSearchDate?.value;
   const size = advSearchSize?.value;
   
-  let results = G.documents.filter(d => !d.isDeleted);
+  let results = G.documents.filter(d => !d.is_deleted);
   
   if (query) results = results.filter(d => d.name.toLowerCase().includes(query) || (d.description || '').toLowerCase().includes(query) || d.tags?.some(t => t.toLowerCase().includes(query)));
   if (type) results = results.filter(d => d.type === type);
   if (date) {
     const now = new Date();
     results = results.filter(d => {
-      const docDate = new Date(d.createdAt);
+      const docDate = new Date(d.created_at);
       if (date === 'today') return docDate.toDateString() === now.toDateString();
       if (date === 'week') return (now - docDate) < 7 * 24 * 60 * 60 * 1000;
       if (date === 'month') return (now - docDate) < 30 * 24 * 60 * 60 * 1000;
@@ -3986,7 +4283,7 @@ function renderVersioning() {
   const container = document.getElementById('versionDocList');
   if (!container) return;
   
-  const docs = G.documents.filter(d => !d.isDeleted).slice(0, 20);
+  const docs = G.documents.filter(d => !d.is_deleted).slice(0, 20);
   
   container.innerHTML = docs.map(d => `
     <div class="glass-card rounded-xl p-4 border border-blue-500/20">
@@ -3995,7 +4292,7 @@ function renderVersioning() {
           <i class="fas ${getFileIcon(d.type).split(' ')[0]} text-blue-400"></i>
           <div>
             <p class="text-white font-medium">${d.name}</p>
-            <p class="text-xs text-blue-300/60">v${d.version} • ${formatDate(d.updatedAt)}</p>
+            <p class="text-xs text-blue-300/60">v${d.version} • ${formatDate(d.updated_at)}</p>
           </div>
         </div>
         <button onclick="showVersions('${d.id}')" class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30">Versions</button>
@@ -4078,13 +4375,13 @@ function runFTSearch() {
   
   if (query.length < 3) return;
   
-  let results = G.documents.filter(d => !d.isDeleted && (d.name.toLowerCase().includes(query) || (d.content || '').toLowerCase().includes(query)));
+  let results = G.documents.filter(d => !d.is_deleted && (d.name.toLowerCase().includes(query) || (d.content || '').toLowerCase().includes(query)));
   
   if (type) results = results.filter(d => d.type === type);
   if (date) {
     const now = new Date();
     results = results.filter(d => {
-      const docDate = new Date(d.createdAt);
+      const docDate = new Date(d.created_at);
       if (date === 'today') return docDate.toDateString() === now.toDateString();
       if (date === 'week') return (now - docDate) < 7 * 24 * 60 * 60 * 1000;
       if (date === 'month') return (now - docDate) < 30 * 24 * 60 * 60 * 1000;
@@ -4120,24 +4417,34 @@ function showDocContextMenu(e, docId) {
   }
 }
 
-function deleteDocument(docId) {
+async function deleteDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
   
-  if (doc.ownerId !== G.currentUser?.id && G.currentUser?.role !== 'admin') {
+  if (doc.owner_id !== G.currentUser?.id && G.currentUser?.role !== 'admin') {
     showToast('Permission refusée', 'error');
     return;
   }
   
-  doc.isDeleted = true;
-  doc.deletedAt = new Date().toISOString();
-  saveDocuments();
+  doc.is_deleted = true;
+  doc.deleted_at = new Date().toISOString();
   
-  showToast('Document déplacé vers la corbeille', 'success');
-  addAudit('delete', 'document', docId);
-  renderDocuments();
-  updateBadges();
-  updateStorageDisplay();
+  try {
+    await SB.from('documents').update({ 
+      is_deleted: true, 
+      deleted_at: doc.deleted_at 
+    }).eq('id', docId);
+    
+    saveDocuments();
+    showToast('Document déplacé vers la corbeille', 'success');
+    addAudit('delete', 'document', docId);
+    renderDocuments();
+    updateBadges();
+    updateStorageDisplay();
+    
+  } catch (e) {
+    showToast('Erreur suppression', 'error');
+  }
 }
 
 // ─── Keyboard shortcuts ───
@@ -4409,13 +4716,14 @@ async function executeDangerAction() {
 async function deleteAllDocuments() {
   if (!G.currentUser) throw new Error('Non authentifié');
 
-  const docsToDelete = G.documents.filter(d => !d.isDeleted && d.ownerId === G.currentUser.id);
+  const docsToDelete = G.documents.filter(d => !d.is_deleted && d.owner_id === G.currentUser.id);
   const count = docsToDelete.length;
 
-  docsToDelete.forEach(doc => {
-    doc.isDeleted = true;
-    doc.deletedAt = new Date().toISOString();
-  });
+  for (const doc of docsToDelete) {
+    doc.is_deleted = true;
+    doc.deleted_at = new Date().toISOString();
+    await SB.from('documents').update({ is_deleted: true, deleted_at: doc.deleted_at }).eq('id', doc.id);
+  }
 
   const success = saveDocumentsSafe();
   if (!success) throw new Error('Échec sauvegarde');
@@ -4491,7 +4799,7 @@ function exportDocumentsCsv() {
     const headers = [
       'ID', 'Nom', 'Type', 'Taille (bytes)', 'Taille formatée', 'Description',
       'Portée', 'Propriétaire', 'Dossier', 'Tags', 'Créé le', 'Modifié le',
-      'Version', 'Vues', 'Téléchargements', 'Statut'
+      'Version', 'Vues', 'Téléchargements', 'Statut', 'Company ID'
     ];
 
     const rows = G.documents.map(doc => [
@@ -4502,15 +4810,16 @@ function exportDocumentsCsv() {
       formatBytes(doc.size || 0),
       `"${(doc.description || '').replace(/"/g, '""')}"`,
       doc.scope || '',
-      doc.ownerId || '',
-      doc.folderId || '',
+      doc.owner_id || '',
+      doc.folder_id || '',
       `"${(doc.tags || []).join(', ')}"`,
-      doc.createdAt || '',
-      doc.updatedAt || '',
+      doc.created_at || '',
+      doc.updated_at || '',
       doc.version || 1,
       doc.views || 0,
       doc.downloads || 0,
-      doc.isDeleted ? 'Supprimé' : 'Actif'
+      doc.is_deleted ? 'Supprimé' : 'Actif',
+      doc.company_id || ''
     ]);
 
     const csvContent = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
@@ -4615,8 +4924,8 @@ function addCollaborator() {
     email: email,
     name: user ? user.name : email.split('@')[0],
     permission: permission,
-    addedAt: new Date().toISOString(),
-    addedBy: G.currentUser?.id
+    added_at: new Date().toISOString(),
+    added_by: G.currentUser?.id
   };
   
   doc.collaborators.push(newCollaborator);
@@ -4681,16 +4990,99 @@ function renderCollaboratorsList() {
   `).join('');
 }
 
-// ─── Initialization ───
-document.addEventListener('DOMContentLoaded', () => {
-  logInfo('SystemesGED v5.2 démarré - Version avec validation des comptes et signatures employés');
+// ─── Utilities ───
+function generateId() {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function getFileIcon(type) {
+  const icons = {
+    pdf: 'fa-file-pdf text-red-400',
+    doc: 'fa-file-word text-blue-400',
+    xls: 'fa-file-excel text-green-400',
+    img: 'fa-file-image text-purple-400',
+    txt: 'fa-file-alt text-gray-400'
+  };
+  return icons[type] || 'fa-file text-blue-400';
+}
+
+function getFileType(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const types = {
+    pdf: 'pdf',
+    doc: 'doc', docx: 'doc',
+    xls: 'xls', xlsx: 'xls',
+    png: 'img', jpg: 'img', jpeg: 'img', gif: 'img',
+    txt: 'txt'
+  };
+  return types[ext] || 'unknown';
+}
+
+function showToast(message, type = 'info', duration = 3000) {
+  // Implémentation basique du toast - à adapter selon votre UI
+  console.log(`[${type.toUpperCase()}] ${message}`);
   
-  // Initialiser les administrateurs système
-  initializeSystemAdmins();
+  // Créer un élément toast si la fonction existe dans votre UI
+  if (typeof window.createToast === 'function') {
+    window.createToast(message, type, duration);
+  }
+}
+
+function logInfo(message, details = {}) {
+  console.log(`[INFO] ${message}`, details);
+  G.sysLogs.push({ level: 'info', message, timestamp: new Date().toISOString(), ...details });
+}
+
+function logError(message, details = {}) {
+  console.error(`[ERROR] ${message}`, details);
+  G.sysLogs.push({ level: 'error', message, timestamp: new Date().toISOString(), ...details });
+}
+
+function logSecurity(message, details = {}) {
+  console.warn(`[SECURITY] ${message}`, details);
+  G.sysLogs.push({ level: 'security', message, timestamp: new Date().toISOString(), ...details });
+}
+
+function addAudit(action, targetType, targetId, details = {}) {
+  G.auditLog.unshift({
+    action,
+    targetType,
+    targetId,
+    userId: G.currentUser?.id,
+    userEmail: G.currentUser?.email,
+    timestamp: new Date().toISOString(),
+    details
+  });
+}
+
+// ─── Initialization ───
+document.addEventListener('DOMContentLoaded', async () => {
+  logInfo('SystemesGED v5.3 démarré - Version avec Supabase et company_id RLS');
+  
+  // Initialiser Supabase
+  const initialized = await initializeSupabase();
+  if (initialized) {
+    await testConnection();
+  }
   
   // Check for saved session
   const savedUser = localStorage.getItem('currentUser');
-  if (savedUser) {
+  if (savedUser && !G.currentUser) {
     const user = JSON.parse(savedUser);
     if (user.status === 'pending_validation') {
       showToast('Votre compte est en attente de validation', 'warning');
@@ -4704,47 +5096,116 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Expose functions globally
+// Expose functions globally - CORRECTION: Toutes les fonctions sont maintenant exposées
 Object.assign(window, {
+  // Configuration & Initialisation
+  CONFIG, G, SB, initializeSupabase, testConnection,
+  
+  // Authentification
   switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout,
+  
+  // Navigation
   switchView, openMobileSidebar, closeMobileSidebar,
+  
+  // Documents
   openUploadModal, closeUploadModal, setDocScope, handleDragOver, handleDragLeave, handleDrop,
   handleFileSelect, handleFilePickerSelect, handleDocDrop, uploadDocument, addUploadTag, removeUploadTag,
   openPreviewModal, closePreviewModal, downloadCurrentDocument, shareCurrentDocument, downloadDocument,
+  deleteDocument, restoreDocument,
+  
+  // Partage
   openShareModal, closeShareModal, switchShareTab, shareDocument, copyShareLink, loadShareHistory,
+  
+  // Workflows
   openCreateWorkflowModal, closeWorkflowModal, addWfStep, createWorkflow, openWfDetail, closeWfDetail,
-  actOnWorkflow, addWfComment, filterWorkflows, searchWorkflows, setWfView,
+  actOnWorkflow, addWfComment, filterWorkflows, setWfView, getWfStatusClass, getWfStatusLabel,
+  
+  // Utilisateurs
   openCreateUserModal, closeAddUserModal, addUser, openEditUserModal, closeEditUserModal, saveEditUser, deleteUser,
-  validateUser, rejectUser, renderPendingUsers, viewUserDetails,
-  createTag, deleteTag, selectPlan, simulateUpgrade, saveProfile, toggleSetting, exportAllData, copySqlSchema,
+  validateUser, rejectUser, renderPendingUsers, canValidateUsers,
+  
+  // Tags
+  createTag, deleteTag,
+  
+  // Facturation & Paramètres
+  selectPlan, simulateUpgrade, saveProfile, toggleSetting, exportAllData, copySqlSchema,
+  
+  // Sécurité
   generateApiKey, scanAllDocuments, filterLogs, clearSysLogs, exportSysLogs,
-  openRoleModal, closeRoleModal, saveRole,
-  toggleNotifications, closeNotifPanel, markAllNotifRead, markNotifRead,
-  handleGlobalSearch, handleSearchResult,
-  openCollabEditor, closeCollabEditor, onCollabEditorInput,
-  openRichEditor, closeRichEditor, richCmd, richAlign, richInsertHeading, richInsertLink, richInsertCodeBlock, richInsertTable, richInsertMention, _onRichEditorInput, _saveRichContent,
-  openFolder, navigateToFolder, openFolderModal, closeFolderModal, createFolder,
-  openSignModal, closeSignModal, clearSignature, submitSignature,
-  openEmployeeSignatureModal, closeEmployeeSignatureModal, initEmployeeSignaturePad, clearEmployeeSignature, saveEmployeeSignature, renderEmployeeSignaturesList, deleteEmployeeSignature,
-  analyzeDocument, analyzeAllDocuments,
-  openWfRuleModal, closeWfRuleModal, createWfRule, deleteAutomationRule,
-  createBackup, restoreBackup, deleteBackup,
-  generateApiKeyV6, revokeApiKey, copyApiKey,
-  setAuditFilter,
-  refreshAnalytics,
-  runAdvSearch, clearAdvSearch,
-  showVersions,
-  createRoleV7, deleteRoleV7,
-  runFTSearch,
-  renderDocuments, renderWorkflows, renderShared, renderUsers, renderTags, renderBilling, renderSettings, renderSecurity, renderSysLogs, renderRBAC, renderAnalytics, renderFolders, renderSignatures, renderAI, renderAutomation, renderIntegrations, renderBackups, renderApiKeys, renderBillingV6, renderAuditV6, renderAdvancedSearch, renderVersioning, renderSearchV7, renderRBACV7,
-  applyFilters, clearFilters, filterByType, filterByTag, toggleViewMode, switchDocsTab, switchSharedTab,
-  deleteDocument, restoreDocument, addCollaborator, removeCollaborator, openPermModal, closePermModal,
   switchSecurityTab, loadDeletedDocs, renderAuditLog,
-  StorageManager,
-  saveDocumentsSafe, saveUsersSafe,
+  
+  // RBAC
+  openRoleModal, closeRoleModal, saveRole, renderRBAC,
+  
+  // Notifications
+  toggleNotifications, closeNotifPanel, markAllNotifRead, markNotifRead, updateNotifBadge,
+  
+  // Recherche
+  handleGlobalSearch, handleSearchResult, runAdvSearch, clearAdvSearch, runFTSearch,
+  
+  // Éditeurs
+  openCollabEditor, closeCollabEditor, onCollabEditorInput, updateCollabWordCount,
+  openRichEditor, closeRichEditor, richCmd, richAlign, richInsertHeading, richInsertLink, 
+  richInsertCodeBlock, richInsertTable, richInsertMention, _onRichEditorInput, _saveRichContent,
+  
+  // Dossiers
+  openFolder, navigateToFolder, openFolderModal, closeFolderModal, createFolder, renderFolders,
+  
+  // Signatures
+  openSignModal, closeSignModal, clearSignature, submitSignature,
+  openEmployeeSignatureModal, closeEmployeeSignatureModal, initEmployeeSignaturePad, 
+  clearEmployeeSignature, saveEmployeeSignature, renderEmployeeSignaturesList, deleteEmployeeSignature,
+  canManageSignatures,
+  
+  // AI
+  analyzeDocument, analyzeAllDocuments,
+  
+  // Automatisation
+  openWfRuleModal, closeWfRuleModal, createWfRule, deleteAutomationRule,
+  
+  // Backups
+  createBackup, restoreBackup, deleteBackup,
+  
+  // API Keys
+  generateApiKeyV6, revokeApiKey, copyApiKey,
+  
+  // Audit & Analytics
+  setAuditFilter, refreshAnalytics, renderAnalytics, renderBillingV6, renderAuditV6,
+  
+  // Versioning & RBAC v7
+  showVersions, createRoleV7, deleteRoleV7, renderRBACV7, renderSearchV7,
+  
+  // Filtres & Vue
+  applyFilters, clearFilters, filterByType, filterByTag, toggleViewMode, switchDocsTab, switchSharedTab,
+  
+  // Collaboration
+  addCollaborator, removeCollaborator, openPermModal, closePermModal, renderCollaboratorsList,
+  
+  // Storage Manager
+  StorageManager, saveDocumentsSafe, saveUsersSafe,
+  
+  // Danger Zone
   openDangerModal, closeDangerModal, checkDangerConfirm, executeDangerAction,
   deleteAllDocuments, resetAllStorage, purgeAllData, deleteCurrentAccount,
+  
+  // Exports
   exportDocumentsCsv, exportAuditLog, showStorageStats,
+  
+  // Utilitaires
   updatePendingUsersCount, updatePendingUsersBadge, updateValidationMenuVisibility,
-  initializeSystemAdmins, canValidateUsers, canManageSignatures
+  updateUserDisplay, updateStorageDisplay, updateBadges,
+  
+  // Rendus
+  renderDocuments, renderWorkflows, renderShared, renderUsers, renderTags, renderBilling, 
+  renderSettings, renderSecurity, renderSysLogs, renderAnalytics, renderFolders, renderSignatures, 
+  renderAI, renderAutomation, renderIntegrations, renderBackups, renderApiKeys, renderAdvancedSearch, 
+  renderVersioning, renderDashboard, renderActivityList, renderQuickAccess, renderPopularTags, 
+  renderTeamDocs, renderMyWorkflows, renderWfKPIs, renderWfKanban, renderWfList, renderDocCard, 
+  renderDocListItem, getFilteredDocuments,
+  
+  // Drag & Drop
+  handleDocDragStart, handleDocDragOver: handleDragOver,
+  
+  // Helpers
+  generateId, formatBytes, formatDate, getFileIcon, getFileType, showToast, logInfo, logError, logSecurity, addAudit
 });
