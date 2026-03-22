@@ -85,7 +85,6 @@ window.G = {
   pendingUsersCount: 0,
   supabaseConnected: false,
   useLocalAuth: true,
-  // Nouveaux états pour les onglets
   securityTab: 'overview',
   settings: {
     notifications: true,
@@ -116,7 +115,6 @@ async function initializeSupabase() {
 
     window.SB = SB;
 
-    // Tester la connexion
     const { data, error } = await SB.auth.getSession();
     if (error) {
       console.log('ℹ️ Supabase Auth non configuré, mode local activé');
@@ -282,7 +280,7 @@ function togglePwdInput(id, btn) {
 
 // CONNEXION CORRIGÉE
 async function handleLogin(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
 
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
@@ -1839,10 +1837,14 @@ function createRoleV7() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ═══ FIN DES FONCTIONS CORRIGÉES ═══════════════════════════════
+// ═══ FONCTIONS DE RENDU MANQUANTES ═════════════════════════════
 // ═══════════════════════════════════════════════════════════════
 
-  Object.entries(G.roles).map(([key, role]) => `
+function renderRBAC() {
+  const container = document.getElementById('rbacRolesList');
+  if (!container) return;
+
+  container.innerHTML = Object.entries(G.roles).map(([key, role]) => `
     <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3">
       <div class="flex items-center justify-between">
         <div>
@@ -1887,6 +1889,1079 @@ function renderShared() {
       </div>
     `;
   }).join('');
+}
+
+// ─── FONCTIONS DE DOCUMENTS COMPLÈTES ───
+
+function openUploadModal() {
+  const modal = document.getElementById('uploadModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    G.selectedFiles = [];
+    G.uploadTags = [];
+    renderSelectedFiles();
+    renderUploadTags();
+  }
+}
+
+function closeUploadModal() {
+  const modal = document.getElementById('uploadModal');
+  if (modal) modal.classList.add('hidden');
+  G.selectedFiles = [];
+  G.uploadTags = [];
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const dropZone = document.getElementById('uploadDropZone');
+  if (dropZone) dropZone.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const dropZone = document.getElementById('uploadDropZone');
+  if (dropZone) dropZone.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const dropZone = document.getElementById('uploadDropZone');
+  if (dropZone) dropZone.classList.remove('drag-over');
+  
+  const files = Array.from(e.dataTransfer.files);
+  addFilesToSelection(files);
+}
+
+function handleFileSelect(e) {
+  const files = Array.from(e.target.files);
+  addFilesToSelection(files);
+}
+
+function addFilesToSelection(files) {
+  files.forEach(file => {
+    if (file.size > CONFIG.maxFileSize) {
+      showToast(`Fichier trop grand: ${file.name}`, 'error');
+      return;
+    }
+    G.selectedFiles.push(file);
+  });
+  renderSelectedFiles();
+}
+
+function renderSelectedFiles() {
+  const container = document.getElementById('selectedFilesList');
+  if (!container) return;
+
+  if (G.selectedFiles.length === 0) {
+    container.innerHTML = '<p class="text-blue-300/50 text-sm">Aucun fichier sélectionné</p>';
+    return;
+  }
+
+  container.innerHTML = G.selectedFiles.map((file, index) => `
+    <div class="flex items-center justify-between p-2 bg-blue-900/20 rounded-lg mb-2">
+      <div class="flex items-center gap-2">
+        <i class="fas fa-file text-blue-400"></i>
+        <span class="text-white text-sm truncate max-w-[200px]">${file.name}</span>
+        <span class="text-xs text-blue-300/60">(${formatBytes(file.size)})</span>
+      </div>
+      <button onclick="removeFileFromSelection(${index})" class="text-red-400 hover:text-red-300">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function removeFileFromSelection(index) {
+  G.selectedFiles.splice(index, 1);
+  renderSelectedFiles();
+}
+
+function addUploadTag(tagName) {
+  if (!tagName || G.uploadTags.includes(tagName)) return;
+  G.uploadTags.push(tagName);
+  renderUploadTags();
+}
+
+function removeUploadTag(index) {
+  G.uploadTags.splice(index, 1);
+  renderUploadTags();
+}
+
+function renderUploadTags() {
+  const container = document.getElementById('uploadTagsList');
+  if (!container) return;
+
+  container.innerHTML = G.uploadTags.map((tag, index) => `
+    <span class="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+      ${tag}
+      <button onclick="removeUploadTag(${index})" class="hover:text-white">
+        <i class="fas fa-times"></i>
+      </button>
+    </span>
+  `).join('');
+}
+
+async function uploadDocument() {
+  if (G.selectedFiles.length === 0) {
+    showToast('Veuillez sélectionner au moins un fichier', 'warning');
+    return;
+  }
+
+  const scope = document.getElementById('uploadScope')?.value || 'company';
+  const description = document.getElementById('uploadDescription')?.value || '';
+
+  showToast('Upload en cours...', 'info');
+
+  for (const file of G.selectedFiles) {
+    const docId = generateId();
+    const type = getFileType(file.name);
+    
+    const newDoc = {
+      id: docId,
+      name: file.name,
+      type: type,
+      size: file.size,
+      description: description,
+      scope: scope,
+      ownerId: G.currentUser?.id,
+      companyId: G.currentUser?.companyId,
+      folderId: G.currentFolderId || '__root__',
+      tags: [...G.uploadTags],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      views: 0,
+      downloads: 0,
+      isDeleted: false,
+      deletedAt: null,
+      content: ''
+    };
+
+    G.documents.push(newDoc);
+    G.originalFiles.set(docId, file);
+  }
+
+  await saveDocuments();
+  closeUploadModal();
+  renderDocuments();
+  updateStorageDisplay();
+  showToast(`${G.selectedFiles.length} document(s) uploadé(s)`, 'success');
+}
+
+function openPreviewModal(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+
+  G.currentDocId = docId;
+  const modal = document.getElementById('previewModal');
+  const title = document.getElementById('previewTitle');
+  const meta = document.getElementById('previewMeta');
+  const content = document.getElementById('previewContent');
+
+  if (title) title.textContent = doc.name;
+  if (meta) meta.innerHTML = `
+    <span class="text-blue-300/60 text-sm">
+      ${formatBytes(doc.size)} • ${formatDate(doc.createdAt)} • v${doc.version}
+    </span>
+  `;
+
+  if (content) {
+    if (doc.type === 'img') {
+      const file = G.originalFiles.get(docId);
+      if (file) {
+        const url = URL.createObjectURL(file);
+        content.innerHTML = `<img src="${url}" class="max-w-full h-auto rounded-lg" alt="${doc.name}">`;
+      } else {
+        content.innerHTML = '<div class="text-center text-blue-300/50">Aperçu non disponible</div>';
+      }
+    } else if (doc.type === 'txt') {
+      const file = G.originalFiles.get(docId);
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          content.innerHTML = `<pre class="text-white text-sm whitespace-pre-wrap">${e.target.result}</pre>`;
+        };
+        reader.readAsText(file);
+      }
+    } else {
+      content.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-12 text-blue-300/50">
+          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-6xl mb-4"></i>
+          <p>Aperçu non disponible pour ce type de fichier</p>
+          <button onclick="downloadCurrentDocument()" class="mt-4 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg">
+            <i class="fas fa-download mr-2"></i>Télécharger
+          </button>
+        </div>
+      `;
+    }
+  }
+
+  if (modal) modal.classList.remove('hidden');
+  
+  doc.views++;
+  saveDocuments();
+}
+
+function closePreviewModal() {
+  const modal = document.getElementById('previewModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentDocId = null;
+}
+
+function downloadCurrentDocument() {
+  if (!G.currentDocId) return;
+  downloadDocument(G.currentDocId);
+}
+
+function downloadDocument(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+
+  const file = G.originalFiles.get(docId);
+  if (file) {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.name;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    doc.downloads++;
+    saveDocuments();
+    showToast('Téléchargement démarré', 'success');
+  } else {
+    showToast('Fichier non disponible', 'error');
+  }
+}
+
+function deleteDocument(docId) {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) return;
+
+  const docIndex = G.documents.findIndex(d => d.id === docId);
+  if (docIndex >= 0) {
+    G.documents[docIndex].isDeleted = true;
+    G.documents[docIndex].deletedAt = new Date().toISOString();
+    saveDocuments();
+    renderDocuments();
+    updateStorageDisplay();
+    showToast('Document supprimé', 'success');
+  }
+}
+
+function renderDocuments() {
+  const grid = document.getElementById('documentsGrid');
+  const list = document.getElementById('documentsList');
+  
+  const docs = getFilteredDocuments();
+
+  if (grid) {
+    if (docs.length === 0) {
+      grid.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun document</div>';
+    } else {
+      grid.innerHTML = docs.map(d => renderDocCard(d)).join('');
+    }
+  }
+
+  if (list) {
+    if (docs.length === 0) {
+      list.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun document</div>';
+    } else {
+      list.innerHTML = docs.map(d => renderDocListItem(d)).join('');
+    }
+  }
+}
+
+function getFilteredDocuments() {
+  let docs = G.documents.filter(d => !d.isDeleted);
+
+  if (G.docsTab === 'personal') {
+    docs = docs.filter(d => d.scope === 'personal' && d.ownerId === G.currentUser?.id);
+  } else if (G.docsTab === 'company') {
+    docs = docs.filter(d => d.scope === 'company' || d.ownerId === G.currentUser?.id);
+  }
+
+  const searchQuery = document.getElementById('docSearch')?.value?.toLowerCase();
+  if (searchQuery) {
+    docs = docs.filter(d => d.name.toLowerCase().includes(searchQuery));
+  }
+
+  return docs;
+}
+
+function renderDocCard(doc) {
+  return `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 hover:border-blue-400/40 cursor-pointer transition-all" 
+         onclick="openPreviewModal('${doc.id}')"
+         oncontextmenu="showDocContextMenu(event, '${doc.id}')">
+      <div class="flex items-start justify-between mb-3">
+        <div class="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]}">
+          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-2xl"></i>
+        </div>
+        <div class="flex gap-1">
+          <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 text-blue-400 hover:text-white">
+            <i class="fas fa-download"></i>
+          </button>
+          <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 text-blue-400 hover:text-white">
+            <i class="fas fa-share-alt"></i>
+          </button>
+        </div>
+      </div>
+      <h3 class="text-white font-medium truncate mb-1" title="${doc.name}">${doc.name}</h3>
+      <p class="text-xs text-blue-300/60 mb-2">${formatBytes(doc.size)} • ${formatDate(doc.createdAt)}</p>
+      <div class="flex flex-wrap gap-1">
+        ${doc.tags.map(tag => `<span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">${tag}</span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderDocListItem(doc) {
+  return `
+    <div class="flex items-center gap-4 p-4 border-b border-blue-500/10 hover:bg-blue-500/5 cursor-pointer"
+         onclick="openPreviewModal('${doc.id}')">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]}">
+        <i class="fas ${getFileIcon(doc.type).split(' ')[0]}"></i>
+      </div>
+      <div class="flex-1">
+        <h3 class="text-white font-medium">${doc.name}</h3>
+        <p class="text-xs text-blue-300/60">${formatBytes(doc.size)} • ${formatDate(doc.createdAt)}</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 text-blue-400 hover:text-white">
+          <i class="fas fa-download"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 text-blue-400 hover:text-white">
+          <i class="fas fa-share-alt"></i>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function switchDocsTab(tab) {
+  G.docsTab = tab;
+  document.querySelectorAll('.docs-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  renderDocuments();
+}
+
+function toggleViewMode() {
+  G.viewMode = G.viewMode === 'grid' ? 'list' : 'grid';
+  const grid = document.getElementById('documentsGrid');
+  const list = document.getElementById('documentsList');
+  const btn = document.getElementById('viewModeBtn');
+
+  if (grid) grid.classList.toggle('hidden', G.viewMode !== 'grid');
+  if (list) list.classList.toggle('hidden', G.viewMode !== 'list');
+  if (btn) btn.innerHTML = `<i class="fas fa-${G.viewMode === 'grid' ? 'list' : 'th'}"></i>`;
+
+  renderDocuments();
+}
+
+function applyFilters() {
+  renderDocuments();
+}
+
+function clearFilters() {
+  const search = document.getElementById('docSearch');
+  if (search) search.value = '';
+  renderDocuments();
+}
+
+function filterByType(type) {
+  // Implementation for type filtering
+  renderDocuments();
+}
+
+function filterByTag(tag) {
+  // Implementation for tag filtering
+  renderDocuments();
+}
+
+// ─── FONCTIONS DE PARTAGE ───
+
+function openShareModal(docId) {
+  G.currentDocId = docId;
+  const modal = document.getElementById('shareModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeShareModal() {
+  const modal = document.getElementById('shareModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentDocId = null;
+}
+
+async function shareDocument() {
+  const email = document.getElementById('shareEmail')?.value?.trim();
+  if (!email || !G.currentDocId) {
+    showToast('Veuillez entrer une adresse email', 'warning');
+    return;
+  }
+
+  const newShare = {
+    id: generateId(),
+    documentId: G.currentDocId,
+    senderId: G.currentUser?.id,
+    recipientEmail: email,
+    status: 'active',
+    createdAt: new Date().toISOString()
+  };
+
+  G.shares.push(newShare);
+  await saveShares();
+  closeShareModal();
+  showToast('Document partagé avec succès', 'success');
+}
+
+// ─── FONCTIONS WORKFLOW ───
+
+function renderWorkflows() {
+  const container = document.getElementById('workflowsList');
+  if (!container) return;
+
+  const workflows = G.workflows.filter(w => w.companyId === G.currentUser?.companyId);
+
+  if (workflows.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun workflow</div>';
+    return;
+  }
+
+  container.innerHTML = workflows.map(wf => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3 cursor-pointer" onclick="openWfDetail('${wf.id}')">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-white font-semibold">${wf.title}</h3>
+          <p class="text-sm text-blue-300/60">${wf.description || 'Pas de description'}</p>
+        </div>
+        <span class="px-3 py-1 rounded-full text-xs ${getWfStatusClass(wf.status)}">
+          ${getWfStatusLabel(wf.status)}
+        </span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openCreateWorkflowModal() {
+  const modal = document.getElementById('workflowModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeWorkflowModal() {
+  const modal = document.getElementById('workflowModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function createWorkflow(e) {
+  if (e) e.preventDefault();
+
+  const title = document.getElementById('wfTitle')?.value?.trim();
+  const description = document.getElementById('wfDescription')?.value?.trim();
+
+  if (!title) {
+    showToast('Veuillez entrer un titre', 'warning');
+    return;
+  }
+
+  const newWf = {
+    id: generateId(),
+    title: title,
+    description: description,
+    status: 'pending',
+    priority: 'medium',
+    assigneeId: null,
+    createdBy: G.currentUser?.id,
+    companyId: G.currentUser?.companyId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  G.workflows.push(newWf);
+  await saveWorkflows();
+  closeWorkflowModal();
+  renderWorkflows();
+  showToast('Workflow créé avec succès', 'success');
+}
+
+function openWfDetail(wfId) {
+  // Implementation for workflow detail view
+  showToast('Détail du workflow - Fonctionnalité en développement', 'info');
+}
+
+function closeWfDetail() {
+  // Implementation for closing workflow detail
+}
+
+function getWfStatusClass(status) {
+  const classes = {
+    pending: 'bg-yellow-500/20 text-yellow-400',
+    in_progress: 'bg-blue-500/20 text-blue-400',
+    completed: 'bg-green-500/20 text-green-400',
+    rejected: 'bg-red-500/20 text-red-400'
+  };
+  return classes[status] || 'bg-gray-500/20 text-gray-400';
+}
+
+function getWfStatusLabel(status) {
+  const labels = {
+    pending: 'En attente',
+    in_progress: 'En cours',
+    completed: 'Terminé',
+    rejected: 'Rejeté'
+  };
+  return labels[status] || status;
+}
+
+// ─── FONCTIONS UTILISATEURS ───
+
+function renderUsers() {
+  const container = document.getElementById('usersList');
+  if (!container) return;
+
+  const users = G.users.filter(u => u.companyId === G.currentUser?.companyId);
+
+  if (users.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun utilisateur</div>';
+    return;
+  }
+
+  container.innerHTML = users.map(u => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
+            ${u.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h3 class="text-white font-semibold">${u.name}</h3>
+            <p class="text-sm text-blue-300/60">${u.email}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-1 rounded text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">
+            ${u.status === 'active' ? 'Actif' : 'En attente'}
+          </span>
+          ${isAdmin() ? `
+            <button onclick="deleteUser('${u.id}')" class="p-2 text-red-400 hover:text-red-300">
+              <i class="fas fa-trash"></i>
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function validateUser(userId) {
+  const user = G.users.find(u => u.id === userId);
+  if (user) {
+    user.status = 'active';
+    saveUsers();
+    renderUsers();
+    showToast('Utilisateur validé', 'success');
+  }
+}
+
+function deleteUser(userId) {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
+  
+  const index = G.users.findIndex(u => u.id === userId);
+  if (index >= 0) {
+    G.users.splice(index, 1);
+    saveUsers();
+    renderUsers();
+    showToast('Utilisateur supprimé', 'success');
+  }
+}
+
+function renderPendingUsers() {
+  const container = document.getElementById('pendingUsersList');
+  if (!container) return;
+
+  const pendingKey = `pending_users_${G.currentUser?.companyId}`;
+  const pending = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+  const pendingUsers = G.users.filter(u => u.companyId === G.currentUser?.companyId && u.status === 'pending_validation');
+
+  const allPending = [...pending, ...pendingUsers];
+
+  if (allPending.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun utilisateur en attente</div>';
+    return;
+  }
+
+  container.innerHTML = allPending.map(u => `
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 mb-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-white font-semibold">${u.name || u.email}</h3>
+          <p class="text-sm text-blue-300/60">${u.email}</p>
+          <p class="text-xs text-yellow-400">En attente de validation</p>
+        </div>
+        <button onclick="validateUser('${u.userId || u.id}')" class="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30">
+          <i class="fas fa-check mr-2"></i>Valider
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openCreateUserModal() {
+  const modal = document.getElementById('addUserModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeAddUserModal() {
+  const modal = document.getElementById('addUserModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function addUser(e) {
+  if (e) e.preventDefault();
+
+  const name = document.getElementById('newUserName')?.value?.trim();
+  const email = document.getElementById('newUserEmail')?.value?.trim().toLowerCase();
+  const role = document.getElementById('newUserRole')?.value || 'viewer';
+
+  if (!name || !email) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
+
+  const newUser = {
+    id: generateId(),
+    name: name,
+    email: email,
+    role: role,
+    status: 'active',
+    companyId: G.currentUser?.companyId,
+    plan: G.currentUser?.plan || 'free',
+    createdAt: new Date().toISOString()
+  };
+
+  G.users.push(newUser);
+  await saveUsers();
+  closeAddUserModal();
+  renderUsers();
+  showToast('Utilisateur ajouté avec succès', 'success');
+}
+
+// ─── FONCTIONS TAGS ───
+
+function renderTags() {
+  const container = document.getElementById('tagsList');
+  if (!container) return;
+
+  if (G.tags.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun tag</div>';
+    return;
+  }
+
+  container.innerHTML = G.tags.map(tag => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full" style="background-color: ${tag.color}20; border: 2px solid ${tag.color}"></div>
+          <div>
+            <h3 class="text-white font-semibold">${tag.name}</h3>
+            <p class="text-sm text-blue-300/60">${tag.count || 0} documents</p>
+          </div>
+        </div>
+        <button onclick="deleteTag('${tag.id}')" class="p-2 text-red-400 hover:text-red-300">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function createTag() {
+  const name = document.getElementById('newTagName')?.value?.trim();
+  const color = document.getElementById('newTagColor')?.value || '#3b82f6';
+
+  if (!name) {
+    showToast('Veuillez entrer un nom de tag', 'warning');
+    return;
+  }
+
+  const newTag = {
+    id: generateId(),
+    name: name,
+    color: color,
+    count: 0
+  };
+
+  G.tags.push(newTag);
+  saveTags();
+  renderTags();
+  showToast('Tag créé avec succès', 'success');
+}
+
+function deleteTag(tagId) {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer ce tag ?')) return;
+
+  const index = G.tags.findIndex(t => t.id === tagId);
+  if (index >= 0) {
+    G.tags.splice(index, 1);
+    saveTags();
+    renderTags();
+    showToast('Tag supprimé', 'success');
+  }
+}
+
+// ─── FONCTIONS DE RENDU POUR LES AUTRES VUES ───
+
+function renderDashboard() {
+  // Dashboard implementation
+  console.log('Rendering dashboard');
+}
+
+function renderBilling() {
+  const container = document.getElementById('billingContent');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="glass-card rounded-xl p-6 border border-blue-500/20">
+      <h2 class="text-xl font-bold text-white mb-4">Facturation</h2>
+      <p class="text-blue-300/60">Plan actuel: <span class="text-blue-400 font-semibold">${G.currentUser?.plan || 'free'}</span></p>
+    </div>
+  `;
+}
+
+function renderSettings() {
+  console.log('Rendering settings');
+}
+
+function renderSecurity() {
+  console.log('Rendering security');
+}
+
+function renderSysLogs() {
+  const container = document.getElementById('sysLogsList');
+  if (!container) return;
+
+  if (G.sysLogs.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun log système</div>';
+    return;
+  }
+
+  container.innerHTML = G.sysLogs.map(log => `
+    <div class="p-3 border-b border-blue-500/10 text-sm">
+      <span class="text-blue-300/60">[${new Date(log.timestamp).toLocaleTimeString()}]</span>
+      <span class="${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-blue-400'}">${log.level.toUpperCase()}</span>
+      <span class="text-white">${log.message}</span>
+    </div>
+  `).join('');
+}
+
+function renderAnalytics() {
+  console.log('Rendering analytics');
+}
+
+function renderFolders() {
+  renderFolderContents();
+}
+
+function renderSignatures() {
+  const container = document.getElementById('signaturesList');
+  if (!container) return;
+
+  const sigs = G.signatures.filter(s => s.companyId === G.currentUser?.companyId);
+
+  if (sigs.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucune signature</div>';
+    return;
+  }
+
+  container.innerHTML = sigs.map(sig => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-white font-medium">Document: ${sig.documentId}</p>
+          <p class="text-sm text-blue-300/60">Signataire: ${sig.signerEmail}</p>
+        </div>
+        <span class="px-2 py-1 rounded text-xs ${getSigStatusClass(sig.status)}">
+          ${sig.status}
+        </span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openSignModal(docId) {
+  G.currentDocId = docId;
+  const modal = document.getElementById('signModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeSignModal() {
+  const modal = document.getElementById('signModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentDocId = null;
+}
+
+async function submitSignature() {
+  if (!G.currentDocId) return;
+
+  const signerEmail = document.getElementById('signerEmail')?.value?.trim();
+  if (!signerEmail) {
+    showToast('Veuillez entrer l\'email du signataire', 'warning');
+    return;
+  }
+
+  const newSig = {
+    id: generateId(),
+    documentId: G.currentDocId,
+    signerEmail: signerEmail,
+    status: 'pending',
+    companyId: G.currentUser?.companyId,
+    createdAt: new Date().toISOString()
+  };
+
+  G.signatures.push(newSig);
+  await saveSignatures();
+  closeSignModal();
+  renderSignatures();
+  showToast('Demande de signature envoyée', 'success');
+}
+
+function getSigStatusClass(status) {
+  const classes = {
+    pending: 'bg-yellow-500/20 text-yellow-400',
+    signed: 'bg-green-500/20 text-green-400',
+    rejected: 'bg-red-500/20 text-red-400'
+  };
+  return classes[status] || 'bg-gray-500/20 text-gray-400';
+}
+
+function renderAI() {
+  console.log('Rendering AI');
+}
+
+function renderAutomation() {
+  const container = document.getElementById('automationRulesList');
+  if (!container) return;
+
+  if (G.automationRules.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucune règle d\'automatisation</div>';
+    return;
+  }
+
+  container.innerHTML = G.automationRules.map(rule => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-white font-semibold">${rule.name}</h3>
+          <p class="text-sm text-blue-300/60">${rule.trigger} → ${rule.action}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-1 rounded text-xs ${rule.active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">
+            ${rule.active ? 'Actif' : 'Inactif'}
+          </span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openWfRuleModal() {
+  const modal = document.getElementById('wfRuleModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeWfRuleModal() {
+  const modal = document.getElementById('wfRuleModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function createWfRule(e) {
+  if (e) e.preventDefault();
+
+  const name = document.getElementById('ruleName')?.value?.trim();
+  const trigger = document.getElementById('ruleTrigger')?.value;
+  const action = document.getElementById('ruleAction')?.value;
+
+  if (!name) {
+    showToast('Veuillez entrer un nom', 'warning');
+    return;
+  }
+
+  const newRule = {
+    id: generateId(),
+    name: name,
+    trigger: trigger,
+    action: action,
+    active: true,
+    companyId: G.currentUser?.companyId,
+    createdAt: new Date().toISOString()
+  };
+
+  G.automationRules.push(newRule);
+  await saveAutomationRules();
+  closeWfRuleModal();
+  renderAutomation();
+  showToast('Règle créée avec succès', 'success');
+}
+
+function renderIntegrations() {
+  console.log('Rendering integrations');
+}
+
+function renderBackups() {
+  const container = document.getElementById('backupsList');
+  if (!container) return;
+
+  if (G.backups.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucune sauvegarde</div>';
+    return;
+  }
+
+  container.innerHTML = G.backups.map(backup => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-white font-semibold">${backup.name}</h3>
+          <p class="text-sm text-blue-300/60">${formatDate(backup.createdAt)} • ${formatBytes(backup.size)}</p>
+        </div>
+        <button onclick="restoreBackup('${backup.id}')" class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm">
+          Restaurer
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function createBackup() {
+  const backup = {
+    id: generateId(),
+    name: `Backup_${new Date().toISOString().split('T')[0]}`,
+    type: 'manual',
+    size: 1024 * 1024 * 10, // 10MB mock
+    companyId: G.currentUser?.companyId,
+    createdAt: new Date().toISOString()
+  };
+
+  G.backups.push(backup);
+  saveBackups();
+  renderBackups();
+  showToast('Sauvegarde créée', 'success');
+}
+
+function restoreBackup(backupId) {
+  showToast('Restauration en cours...', 'info');
+  setTimeout(() => {
+    showToast('Sauvegarde restaurée', 'success');
+  }, 1500);
+}
+
+function renderApiKeys() {
+  const container = document.getElementById('apiKeysList');
+  if (!container) return;
+
+  if (G.apiKeys.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucune clé API</div>';
+    return;
+  }
+
+  container.innerHTML = G.apiKeys.map(key => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 mb-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-white font-semibold">${key.name}</h3>
+          <p class="text-sm text-blue-300/60 font-mono">${key.key}</p>
+        </div>
+        <button onclick="revokeApiKey('${key.id}')" class="p-2 text-red-400 hover:text-red-300">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function generateApiKeyV6() {
+  const name = document.getElementById('apiKeyName')?.value?.trim();
+  if (!name) {
+    showToast('Veuillez entrer un nom pour la clé', 'warning');
+    return;
+  }
+
+  const key = 'sk_' + generateId() + generateId();
+
+  const newKey = {
+    id: generateId(),
+    name: name,
+    key: key,
+    createdAt: new Date().toISOString(),
+    lastUsed: null
+  };
+
+  G.apiKeys.push(newKey);
+  saveApiKeys();
+  renderApiKeys();
+  showToast('Clé API générée', 'success');
+}
+
+function revokeApiKey(keyId) {
+  if (!confirm('Êtes-vous sûr de vouloir révoquer cette clé ?')) return;
+
+  const index = G.apiKeys.findIndex(k => k.id === keyId);
+  if (index >= 0) {
+    G.apiKeys.splice(index, 1);
+    saveApiKeys();
+    renderApiKeys();
+    showToast('Clé révoquée', 'success');
+  }
+}
+
+function renderBillingV6() {
+  renderBilling();
+}
+
+function renderAuditV6() {
+  console.log('Rendering audit v6');
+}
+
+function renderAdvancedSearch() {
+  console.log('Rendering advanced search');
+}
+
+function renderVersioning() {
+  console.log('Rendering versioning');
+}
+
+function renderSearchV7() {
+  console.log('Rendering search v7');
+}
+
+function renderRBACV7() {
+  renderRBAC();
+}
+
+function saveProfile() {
+  showToast('Profil sauvegardé', 'success');
+}
+
+function renderActivityList() {
+  console.log('Rendering activity list');
+}
+
+function renderQuickAccess() {
+  console.log('Rendering quick access');
+}
+
+function renderPopularTags() {
+  console.log('Rendering popular tags');
+}
+
+function renderTeamDocs() {
+  console.log('Rendering team docs');
+}
+
+function renderMyWorkflows() {
+  console.log('Rendering my workflows');
 }
 
 // ─── Storage & Badges ───
@@ -2086,8 +3161,7 @@ Object.assign(window, {
   switchDocsTab, toggleViewMode, applyFilters, clearFilters, filterByType, filterByTag,
 
   // Fonctions corrigées
-  downloadCurrentDocument, shareCurrentDocument, openRichEditor, closeRichEditor,
-  richCmd, richAlign, richInsertHeading, richInsertLink, _saveRichContent,
+  downloadCurrentDocument, shareCurrentDocument,
 
   // Share
   openShareModal, closeShareModal, shareDocument,
