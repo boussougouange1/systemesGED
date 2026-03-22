@@ -1,14 +1,13 @@
-// SystemesGED v6.2 - AVEC CLÉS LEGACY (FONCTIONNEL)
+// SystemesGED v7.0 - SYNCHRONISÉ SUPABASE (CORRIGÉ)
 // ============================================
 
 const CONFIG = {
   supabaseUrl: 'https://spgtflhprppeoidjguhs.supabase.co',
   
-  // CLÉS LEGACY (commencent par eyJhbGci...)
-  // Remplacez par vos vraies clés depuis Settings → API → "Legacy anon, service_role API keys"
+  // CLÉ ANON (publique) - pour l'authentification client
   supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNzM1NjEsImV4cCI6MjA4ODg0OTU2MX0.v4-dTva3Tt85zHeU03eFS9kHuOFbHMMLLT5XdbA3vYY',
   
-  // CLÉ SERVICE ROLE (secret) - MÊME PAGE, section "service_role"
+  // CLÉ SERVICE ROLE (secrète) - pour l'administration uniquement
   supabaseServiceKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzI3MzU2MSwiZXhwIjoyMDg4ODQ5NTYxfQ.sXmN9lEmJFx58ocxHOt2J2XhYBMn_P603AOqI1a-p4I',
   
   maxFileSize: 100 * 1024 * 1024,
@@ -89,13 +88,24 @@ window.G = {
 // ─── Initialisation Supabase ───
 function initSupabase() {
   try {
-    // Client standard (anon key)
-    G.supabaseClient = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+    // Client standard (anon key) - pour les opérations utilisateur
+    G.supabaseClient = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      }
+    });
     
-    // Client admin (service_role key)
+    // Client admin (service_role key) - pour créer les admins système uniquement
+    // IMPORTANT: Ce client ne doit PAS être utilisé pour les connexions utilisateur
     if (CONFIG.supabaseServiceKey && CONFIG.supabaseServiceKey.includes('service_role')) {
       G.supabaseAdmin = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false }
+        auth: { 
+          autoRefreshToken: false, 
+          persistSession: false,
+          detectSessionInUrl: false
+        }
       });
       console.log('✅ Client admin Supabase initialisé');
     } else {
@@ -103,6 +113,21 @@ function initSupabase() {
     }
     
     window.SB = G.supabaseClient;
+    
+    // Écouter les changements d'état d'authentification
+    G.supabaseClient.auth.onAuthStateChange((event, session) => {
+      console.log('🔐 Auth event:', event);
+      if (event === 'SIGNED_IN' && session) {
+        console.log('✅ Utilisateur connecté:', session.user.email);
+      } else if (event === 'SIGNED_OUT') {
+        console.log('👋 Utilisateur déconnecté');
+        G.currentUser = null;
+        G.currentCompany = null;
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('🔄 Token rafraîchi');
+      }
+    });
+    
     return true;
   } catch (e) {
     console.error('❌ Erreur init Supabase:', e);
@@ -123,7 +148,7 @@ function showToast(message, type = 'info', duration = 3000) {
   const container = document.getElementById('toastContainer');
   if (!container) { console.log(`[${type}] ${message}`); return; }
   const toast = document.createElement('div');
-  toast.className = 'toast';
+  toast.className = `toast toast-${type}`;
   const icons = { success: 'fa-check-circle text-green-400', error: 'fa-times-circle text-red-400', warning: 'fa-exclamation-triangle text-yellow-400', info: 'fa-info-circle text-blue-400' };
   toast.innerHTML = `<i class="fas ${icons[type] || icons.info} text-lg"></i><span class="flex-1 text-sm">${message}</span>`;
   container.appendChild(toast);
@@ -146,7 +171,7 @@ async function initializeSystemAdmins() {
     console.log(`\n📝 Traitement: ${adminConfig.email}`);
     
     try {
-      // 1. Vérifier si l'utilisateur existe
+      // 1. Vérifier si l'utilisateur existe déjà
       const { data: listData, error: listError } = await G.supabaseAdmin.auth.admin.listUsers();
       
       if (listError) {
@@ -161,16 +186,19 @@ async function initializeSystemAdmins() {
         console.log(`✅ Utilisateur existant: ${existingUser.id}`);
         userId = existingUser.id;
         
-        // Mettre à jour le mot de passe
-        const { error: updateError } = await G.supabaseAdmin.auth.admin.updateUserById(
-          userId,
-          { password: adminConfig.password }
-        );
-        
-        if (updateError) console.error(`⚠️  Erreur update: ${updateError.message}`);
+        // Mettre à jour le mot de passe si nécessaire
+        try {
+          const { error: updateError } = await G.supabaseAdmin.auth.admin.updateUserById(
+            userId,
+            { password: adminConfig.password }
+          );
+          if (updateError) console.warn(`⚠️  Erreur update password: ${updateError.message}`);
+        } catch (e) {
+          console.warn(`⚠️  Impossible de mettre à jour le mot de passe: ${e.message}`);
+        }
       } else {
-        // Créer l'utilisateur
-        console.log(`⏳ Création...`);
+        // Créer l'utilisateur avec email confirmé
+        console.log(`⏳ Création utilisateur...`);
         const { data: newUserData, error: createError } = await G.supabaseAdmin.auth.admin.createUser({
           email: adminConfig.email,
           password: adminConfig.password,
@@ -187,79 +215,103 @@ async function initializeSystemAdmins() {
           continue;
         }
 
+        if (!newUserData || !newUserData.user) {
+          console.error(`❌ Erreur: utilisateur non créé`);
+          continue;
+        }
+
         userId = newUserData.user.id;
         console.log(`✅ Utilisateur créé: ${userId}`);
       }
 
       // 2. Créer/récupérer l'entreprise
-      const { data: companies } = await G.supabaseClient
-        .from('companies')
-        .select('id')
-        .eq('name', adminConfig.companyName);
-
       let companyId;
-      if (companies && companies.length > 0) {
-        companyId = companies[0].id;
-        console.log(`🏢 Entreprise existante: ${companyId}`);
-      } else {
-        const { data: newCompany, error: compError } = await G.supabaseClient
+      try {
+        const { data: companies, error: compQueryError } = await G.supabaseAdmin
           .from('companies')
-          .insert([{
-            name: adminConfig.companyName,
-            plan: 'enterprise',
-            status: 'active',
-            created_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
+          .select('id')
+          .eq('name', adminConfig.companyName);
 
-        if (compError) {
-          console.error(`❌ Erreur entreprise: ${compError.message}`);
-          continue;
+        if (compQueryError) throw compQueryError;
+
+        if (companies && companies.length > 0) {
+          companyId = companies[0].id;
+          console.log(`🏢 Entreprise existante: ${companyId}`);
+        } else {
+          const { data: newCompany, error: compError } = await G.supabaseAdmin
+            .from('companies')
+            .insert([{
+              name: adminConfig.companyName,
+              plan: 'enterprise',
+              status: 'active',
+              created_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+          if (compError) throw compError;
+          companyId = newCompany.id;
+          console.log(`🏢 Entreprise créée: ${companyId}`);
         }
-        companyId = newCompany.id;
-        console.log(`🏢 Entreprise créée: ${companyId}`);
+      } catch (e) {
+        console.error(`❌ Erreur entreprise: ${e.message}`);
+        continue;
       }
 
       // 3. Créer/mettre à jour le profil
-      const { data: existingProfile } = await G.supabaseClient
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single();
+      try {
+        const { data: existingProfile } = await G.supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('id', userId)
+          .single();
 
-      const profileData = {
-        id: userId,
-        email: adminConfig.email,
-        full_name: adminConfig.fullName,
-        role: 'admin',
-        company_id: companyId,
-        status: 'active',
-        can_validate_requests: true,
-        can_add_signatures: true,
-        is_company_admin: true,
-        admin_rights: {
-          validate_pending_requests: true,
-          manage_signatures: true,
-          manage_users: true,
-          manage_company_settings: true,
-          view_all_documents: true,
-          approve_workflows: true
-        },
-        updated_at: new Date().toISOString()
-      };
+        const profileData = {
+          id: userId,
+          email: adminConfig.email,
+          full_name: adminConfig.fullName,
+          role: 'admin',
+          company_id: companyId,
+          status: 'active',
+          can_validate_requests: true,
+          can_add_signatures: true,
+          is_company_admin: true,
+          admin_rights: {
+            validate_pending_requests: true,
+            manage_signatures: true,
+            manage_users: true,
+            manage_company_settings: true,
+            view_all_documents: true,
+            approve_workflows: true
+          },
+          updated_at: new Date().toISOString()
+        };
 
-      if (existingProfile) {
-        await G.supabaseClient.from('profiles').update(profileData).eq('id', userId);
-        console.log(`👤 Profil mis à jour`);
-      } else {
-        profileData.created_at = new Date().toISOString();
-        await G.supabaseClient.from('profiles').insert([profileData]);
-        console.log(`👤 Profil créé`);
+        if (existingProfile) {
+          const { error: updateError } = await G.supabaseAdmin
+            .from('profiles')
+            .update(profileData)
+            .eq('id', userId);
+            
+          if (updateError) throw updateError;
+          console.log(`👤 Profil mis à jour`);
+        } else {
+          profileData.created_at = new Date().toISOString();
+          const { error: insertError } = await G.supabaseAdmin
+            .from('profiles')
+            .insert([profileData]);
+            
+          if (insertError) throw insertError;
+          console.log(`👤 Profil créé`);
+        }
+
+        results.push({ email: adminConfig.email, userId, companyId, success: true });
+        console.log(`\n📌 UID pour ${adminConfig.email}: ${userId}`);
+
+      } catch (e) {
+        console.error(`❌ Erreur profil: ${e.message}`);
+        results.push({ email: adminConfig.email, success: false, error: e.message });
       }
-
-      results.push({ email: adminConfig.email, userId, companyId, success: true });
-      console.log(`\n📌 UID pour ${adminConfig.email}: ${userId}`);
 
     } catch (error) {
       console.error(`❌ Exception: ${error.message}`);
@@ -276,7 +328,6 @@ async function initializeSystemAdmins() {
       console.log(`✅ ${r.email}`);
       console.log(`   UID: ${r.userId}`);
       console.log(`   Company ID: ${r.companyId}`);
-      console.log(`   SQL: SELECT * FROM auth.users WHERE email = '${r.email}';`);
     } else {
       console.log(`❌ ${r.email}: ${r.error}`);
     }
@@ -284,7 +335,7 @@ async function initializeSystemAdmins() {
   console.log('='.repeat(60));
 
   if (results.some(r => r.success)) {
-    showToast('Administrateurs créés - vérifiez la console', 'success');
+    showToast('Administrateurs initialisés', 'success');
   }
 }
 
@@ -300,10 +351,10 @@ function switchAuthTab(tab) {
 
 function togglePwdInput(id, btn) {
   const input = document.getElementById(id);
-  const icon = btn.querySelector('i');
+  const icon = btn?.querySelector('i');
   if (!input) return;
   input.type = input.type === 'password' ? 'text' : 'password';
-  icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+  if (icon) icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 
 async function handleLogin(e) {
@@ -311,8 +362,11 @@ async function handleLogin(e) {
   
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
-  const email = document.getElementById('loginEmail')?.value?.trim();
-  const password = document.getElementById('loginPassword')?.value;
+  const emailInput = document.getElementById('loginEmail');
+  const passwordInput = document.getElementById('loginPassword');
+  
+  const email = emailInput?.value?.trim();
+  const password = passwordInput?.value;
 
   if (!email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
@@ -323,142 +377,298 @@ async function handleLogin(e) {
   if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
 
   try {
+    console.log('🔐 Tentative de connexion:', email);
+    
+    // Utiliser signInWithPassword (API moderne Supabase)
     const { data: authData, error: authError } = await G.supabaseClient.auth.signInWithPassword({
-      email,
-      password
+      email: email,
+      password: password
     });
 
-    if (authError || !authData?.user) {
-      showToast('Email ou mot de passe incorrect', 'error');
+    if (authError) {
+      console.error('❌ Erreur auth:', authError);
+      
+      // Messages d'erreur plus précis
+      if (authError.message.includes('Invalid login credentials')) {
+        showToast('Email ou mot de passe incorrect', 'error');
+      } else if (authError.message.includes('Email not confirmed')) {
+        showToast('Email non confirmé - vérifiez votre boîte mail', 'warning');
+      } else {
+        showToast(authError.message, 'error');
+      }
       return;
     }
 
-    // Récupérer le profil
+    if (!authData || !authData.user) {
+      showToast('Erreur lors de la connexion', 'error');
+      return;
+    }
+
+    console.log('✅ Authentification réussie, récupération du profil...');
+
+    // Récupérer le profil utilisateur
     const { data: profile, error: profileError } = await G.supabaseClient
       .from('profiles')
       .select('*')
       .eq('id', authData.user.id)
       .single();
 
-    if (profileError || !profile) {
+    if (profileError) {
+      console.error('❌ Erreur récupération profil:', profileError);
+      
+      // Si le profil n'existe pas, le créer
+      if (profileError.code === 'PGRST116') {
+        console.log('⚠️  Profil non trouvé, création...');
+        
+        // Déterminer la compagnie depuis les métadonnées ou créer une nouvelle
+        const companyName = authData.user.user_metadata?.company_name || 'Default';
+        
+        // Créer ou récupérer l'entreprise
+        let companyId;
+        const { data: existingComp } = await G.supabaseClient
+          .from('companies')
+          .select('id')
+          .eq('name', companyName)
+          .single();
+          
+        if (existingComp) {
+          companyId = existingComp.id;
+        } else {
+          const { data: newComp } = await G.supabaseClient
+            .from('companies')
+            .insert([{ name: companyName, plan: 'free', status: 'active' }])
+            .select()
+            .single();
+          companyId = newComp?.id;
+        }
+        
+        // Créer le profil
+        const { data: newProfile, error: createProfileError } = await G.supabaseClient
+          .from('profiles')
+          .insert([{
+            id: authData.user.id,
+            email: authData.user.email,
+            full_name: authData.user.user_metadata?.full_name || authData.user.email,
+            role: 'viewer',
+            status: 'active',
+            company_id: companyId
+          }])
+          .select()
+          .single();
+          
+        if (createProfileError) {
+          showToast('Erreur création profil', 'error');
+          return;
+        }
+        
+        // Continuer avec le nouveau profil
+        await finalizeLogin(authData.user, newProfile, companyId);
+        return;
+      }
+      
       showToast('Profil non trouvé', 'error');
       return;
     }
 
+    if (!profile) {
+      showToast('Profil introuvable', 'error');
+      return;
+    }
+
+    // Vérifier le statut du compte
     if (profile.status === 'pending_validation') {
-      showToast('Compte en attente de validation', 'warning');
+      showToast('Compte en attente de validation par un administrateur', 'warning');
       await G.supabaseClient.auth.signOut();
       return;
     }
 
-    G.currentUser = {
-      id: authData.user.id,
-      email: authData.user.email,
-      name: profile.full_name || authData.user.email,
-      role: profile.role || 'viewer',
-      companyId: profile.company_id,
-      plan: profile.plan || 'free',
-      status: profile.status,
-      isSystemAdmin: profile.is_company_admin || false,
-      permissions: profile.admin_rights || []
-    };
+    if (profile.status === 'suspended' || profile.status === 'blocked') {
+      showToast('Compte suspendu - contactez votre administrateur', 'error');
+      await G.supabaseClient.auth.signOut();
+      return;
+    }
 
-    const { data: company } = await G.supabaseClient
-      .from('companies')
-      .select('*')
-      .eq('id', profile.company_id)
-      .single();
+    // Récupérer les infos de l'entreprise
+    let company = null;
+    if (profile.company_id) {
+      const { data: companyData } = await G.supabaseClient
+        .from('companies')
+        .select('*')
+        .eq('id', profile.company_id)
+        .single();
+      company = companyData;
+    }
 
-    if (company) G.currentCompany = company;
-
-    await initializeApp();
-    showToast('Connexion réussie', 'success');
+    await finalizeLogin(authData.user, profile, company);
 
   } catch (err) {
-    console.error('Erreur login:', err);
-    showToast('Erreur de connexion', 'error');
+    console.error('❌ Erreur login:', err);
+    showToast('Erreur de connexion: ' + (err.message || 'Inconnue'), 'error');
   } finally {
     if (btn) btn.disabled = false;
     if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
   }
 }
 
+async function finalizeLogin(authUser, profile, company) {
+  // Construire l'objet utilisateur
+  G.currentUser = {
+    id: authUser.id,
+    email: authUser.email,
+    name: profile.full_name || authUser.email,
+    role: profile.role || 'viewer',
+    companyId: profile.company_id,
+    plan: profile.plan || company?.plan || 'free',
+    status: profile.status,
+    isSystemAdmin: profile.is_company_admin || profile.role === 'admin' || false,
+    permissions: profile.admin_rights || [],
+    userMetadata: authUser.user_metadata
+  };
+
+  G.currentCompany = company;
+
+  console.log('✅ Connexion finalisée:', G.currentUser.email, 'Role:', G.currentUser.role);
+  
+  await initializeApp();
+  showToast(`Bienvenue ${G.currentUser.name}!`, 'success');
+}
+
 async function handleRegister(e) {
   e.preventDefault();
   
-  const data = {
-    firstName: document.getElementById('regFirst')?.value?.trim(),
-    lastName: document.getElementById('regLast')?.value?.trim(),
-    company: document.getElementById('regCompany')?.value?.trim(),
-    email: document.getElementById('regEmail')?.value?.trim(),
-    password: document.getElementById('regPassword')?.value
-  };
+  const firstName = document.getElementById('regFirst')?.value?.trim();
+  const lastName = document.getElementById('regLast')?.value?.trim();
+  const company = document.getElementById('regCompany')?.value?.trim();
+  const email = document.getElementById('regEmail')?.value?.trim();
+  const password = document.getElementById('regPassword')?.value;
 
-  if (!data.firstName || !data.lastName || !data.company || !data.email || !data.password) {
+  if (!firstName || !lastName || !company || !email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
 
+  if (password.length < 6) {
+    showToast('Le mot de passe doit contenir au moins 6 caractères', 'warning');
+    return;
+  }
+
   try {
+    console.log('📝 Inscription:', email);
+    
+    // 1. Créer l'utilisateur dans Auth
     const { data: authData, error: authError } = await G.supabaseClient.auth.signUp({
-      email: data.email,
-      password: data.password,
+      email: email,
+      password: password,
       options: {
         data: {
-          full_name: `${data.firstName} ${data.lastName}`,
-          company_name: data.company
+          full_name: `${firstName} ${lastName}`,
+          company_name: company
         }
       }
     });
 
     if (authError) throw authError;
 
-    const { data: company, error: compError } = await G.supabaseClient
+    if (!authData.user) {
+      showToast('Erreur lors de la création du compte', 'error');
+      return;
+    }
+
+    console.log('✅ Utilisateur auth créé:', authData.user.id);
+
+    // 2. Créer l'entreprise
+    const { data: companyData, error: compError } = await G.supabaseClient
       .from('companies')
-      .insert([{ name: data.company, plan: 'free', status: 'active' }])
+      .insert([{ 
+        name: company, 
+        plan: 'free', 
+        status: 'active',
+        created_at: new Date().toISOString()
+      }])
       .select()
       .single();
 
-    if (compError) throw compError;
+    if (compError) {
+      console.error('❌ Erreur création entreprise:', compError);
+      // Ne pas bloquer - l'entreprise peut exister
+    }
 
-    await G.supabaseClient.from('profiles').insert([{
-      id: authData.user.id,
-      email: data.email,
-      full_name: `${data.firstName} ${data.lastName}`,
-      role: 'viewer',
-      status: 'pending_validation',
-      company_id: company.id
-    }]);
+    const companyId = companyData?.id;
 
-    showToast('Compte créé - en attente de validation', 'success');
+    // 3. Créer le profil utilisateur
+    const { error: profileError } = await G.supabaseClient
+      .from('profiles')
+      .insert([{
+        id: authData.user.id,
+        email: email,
+        full_name: `${firstName} ${lastName}`,
+        role: 'viewer',
+        status: 'pending_validation', // En attente de validation
+        company_id: companyId,
+        created_at: new Date().toISOString()
+      }]);
+
+    if (profileError) {
+      console.error('❌ Erreur création profil:', profileError);
+      throw profileError;
+    }
+
+    showToast('Compte créé avec succès - en attente de validation', 'success');
     switchAuthTab('login');
+    
+    // Pré-remplir le formulaire de login
+    document.getElementById('loginEmail').value = email;
+    document.getElementById('loginPassword').value = '';
 
   } catch (err) {
-    showToast(err.message, 'error');
+    console.error('❌ Erreur inscription:', err);
+    
+    if (err.message?.includes('User already registered')) {
+      showToast('Cet email est déjà utilisé', 'error');
+    } else {
+      showToast(err.message || 'Erreur lors de l\'inscription', 'error');
+    }
   }
 }
 
 function demoLogin() {
-  document.getElementById('loginEmail').value = 'ahouansouange@live.fr';
-  document.getElementById('loginPassword').value = 'AdminLive2024!';
+  const emailInput = document.getElementById('loginEmail');
+  const passwordInput = document.getElementById('loginPassword');
+  
+  if (emailInput) emailInput.value = 'ahouansouange@live.fr';
+  if (passwordInput) passwordInput.value = 'AdminLive2024!';
+  
+  // Déclencher la connexion
   handleLogin(new Event('submit'));
 }
 
 async function handleLogout() {
-  await G.supabaseClient.auth.signOut();
-  G.currentUser = null;
-  G.currentCompany = null;
-  localStorage.removeItem('currentUser');
-  localStorage.removeItem('currentCompany');
-  document.getElementById('mainApp').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'block';
-  showToast('Déconnexion réussie', 'info');
+  try {
+    const { error } = await G.supabaseClient.auth.signOut();
+    if (error) throw error;
+    
+    G.currentUser = null;
+    G.currentCompany = null;
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('currentCompany');
+    
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'block';
+    
+    showToast('Déconnexion réussie', 'info');
+  } catch (err) {
+    console.error('❌ Erreur déconnexion:', err);
+    showToast('Erreur lors de la déconnexion', 'error');
+  }
 }
 
 // ─── Initialisation Application ───
 async function initializeApp() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
+  const loginScreen = document.getElementById('loginScreen');
+  const mainApp = document.getElementById('mainApp');
+  
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (mainApp) mainApp.style.display = 'block';
   
   localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
   localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
@@ -474,7 +684,9 @@ function isAdmin() {
 }
 
 function canValidateUsers() {
-  return G.currentUser?.role === 'admin' || G.currentUser?.permissions?.includes('validate_users');
+  return G.currentUser?.role === 'admin' || 
+         G.currentUser?.permissions?.includes('validate_users') ||
+         G.currentUser?.isSystemAdmin;
 }
 
 function updateUserDisplay() {
@@ -517,15 +729,19 @@ function updateValidationMenuVisibility() {
 async function updatePendingUsersCount() {
   if (!G.currentUser?.companyId) return;
   
-  const { data, error } = await G.supabaseClient
-    .from('profiles')
-    .select('id')
-    .eq('company_id', G.currentUser.companyId)
-    .eq('status', 'pending_validation');
-  
-  if (!error && data) {
-    G.pendingUsersCount = data.length;
-    updatePendingUsersBadge();
+  try {
+    const { data, error, count } = await G.supabaseClient
+      .from('profiles')
+      .select('id', { count: 'exact' })
+      .eq('company_id', G.currentUser.companyId)
+      .eq('status', 'pending_validation');
+    
+    if (!error) {
+      G.pendingUsersCount = count || 0;
+      updatePendingUsersBadge();
+    }
+  } catch (e) {
+    console.error('Erreur comptage utilisateurs:', e);
   }
 }
 
@@ -541,29 +757,71 @@ function updatePendingUsersBadge() {
 }
 
 async function loadInitialData() {
-  await Promise.all([loadDocuments(), loadWorkflows(), loadUsers()]);
-  updateStorageDisplay();
+  try {
+    await Promise.all([loadDocuments(), loadWorkflows(), loadUsers()]);
+    updateStorageDisplay();
+  } catch (e) {
+    console.error('❌ Erreur chargement données:', e);
+  }
 }
 
 async function loadDocuments() {
-  if (!G.currentUser?.companyId) { G.documents = []; return; }
-  const { data, error } = await G.supabaseClient
-    .from('documents').select('*').eq('company_id', G.currentUser.companyId).eq('is_deleted', false);
-  G.documents = error ? [] : (data || []);
+  if (!G.currentUser?.companyId) { 
+    G.documents = []; 
+    return; 
+  }
+  
+  try {
+    const { data, error } = await G.supabaseClient
+      .from('documents')
+      .select('*')
+      .eq('company_id', G.currentUser.companyId)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
+      
+    G.documents = error ? [] : (data || []);
+  } catch (e) {
+    console.error('Erreur chargement documents:', e);
+    G.documents = [];
+  }
 }
 
 async function loadWorkflows() {
-  if (!G.currentUser?.companyId) { G.workflows = []; return; }
-  const { data, error } = await G.supabaseClient
-    .from('workflows').select('*').eq('company_id', G.currentUser.companyId);
-  G.workflows = error ? [] : (data || []);
+  if (!G.currentUser?.companyId) { 
+    G.workflows = []; 
+    return; 
+  }
+  
+  try {
+    const { data, error } = await G.supabaseClient
+      .from('workflows')
+      .select('*')
+      .eq('company_id', G.currentUser.companyId);
+      
+    G.workflows = error ? [] : (data || []);
+  } catch (e) {
+    console.error('Erreur chargement workflows:', e);
+    G.workflows = [];
+  }
 }
 
 async function loadUsers() {
-  if (!G.currentUser?.companyId) { G.users = []; return; }
-  const { data, error } = await G.supabaseClient
-    .from('profiles').select('*').eq('company_id', G.currentUser.companyId);
-  G.users = error ? [] : (data || []);
+  if (!G.currentUser?.companyId) { 
+    G.users = []; 
+    return; 
+  }
+  
+  try {
+    const { data, error } = await G.supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('company_id', G.currentUser.companyId);
+      
+    G.users = error ? [] : (data || []);
+  } catch (e) {
+    console.error('Erreur chargement utilisateurs:', e);
+    G.users = [];
+  }
 }
 
 function switchView(viewName) {
@@ -588,9 +846,13 @@ function closeMobileSidebar() {
 }
 
 function renderDashboard() {
-  document.getElementById('totalDocs').textContent = G.documents?.length || 0;
-  document.getElementById('dashWorkflowCount').textContent = 
-    G.workflows?.filter(w => ['pending', 'in_review'].includes(w.status))?.length || 0;
+  const totalDocs = document.getElementById('totalDocs');
+  const dashWorkflowCount = document.getElementById('dashWorkflowCount');
+  
+  if (totalDocs) totalDocs.textContent = G.documents?.length || 0;
+  if (dashWorkflowCount) {
+    dashWorkflowCount.textContent = G.workflows?.filter(w => ['pending', 'in_review'].includes(w.status))?.length || 0;
+  }
 }
 
 function renderDocuments() {
@@ -603,7 +865,7 @@ function renderDocuments() {
   }
   
   grid.innerHTML = G.documents.map(doc => `
-    <div class="glass-card rounded-2xl p-4 border border-blue-500/20">
+    <div class="glass-card rounded-2xl p-4 border border-blue-500/20 hover:border-blue-400/40 transition-all cursor-pointer">
       <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-2xl mb-3">
         <i class="fas ${getFileIcon(doc.type).split(' ')[0]} ${getFileIcon(doc.type).split(' ')[1]}"></i>
       </div>
@@ -616,10 +878,11 @@ function renderDocuments() {
 async function renderUsers() {
   const tbody = document.getElementById('usersList');
   if (!tbody) return;
+  
   await loadUsers();
   
   tbody.innerHTML = G.users?.map(u => `
-    <tr class="hover:bg-blue-500/5">
+    <tr class="hover:bg-blue-500/5 transition-colors">
       <td class="p-4">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
@@ -637,31 +900,44 @@ async function renderUsers() {
         </span>
       </td>
       <td class="p-4">
-        <span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">
+        <span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : u.status === 'pending_validation' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}">
           ${u.status === 'pending_validation' ? 'En attente' : u.status}
         </span>
       </td>
       <td class="p-4">
         ${u.status === 'pending_validation' && canValidateUsers() ? 
-          `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
+          `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30 transition-colors">Valider</button>` : 
+          `<span class="text-blue-300/40 text-xs">-</span>`}
       </td>
     </tr>
   `).join('') || '<tr><td colspan="4" class="p-4 text-center text-blue-300/50">Aucun utilisateur</td></tr>';
 }
 
 async function validateUser(userId) {
-  if (!canValidateUsers()) return;
+  if (!canValidateUsers()) {
+    showToast('Vous n\'avez pas les droits pour valider', 'error');
+    return;
+  }
   
-  const { error } = await G.supabaseClient
-    .from('profiles')
-    .update({ status: 'active', validated_at: new Date().toISOString(), validated_by: G.currentUser?.id })
-    .eq('id', userId);
-  
-  if (!error) {
-    showToast('Utilisateur validé', 'success');
+  try {
+    const { error } = await G.supabaseClient
+      .from('profiles')
+      .update({ 
+        status: 'active', 
+        validated_at: new Date().toISOString(), 
+        validated_by: G.currentUser?.id 
+      })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    
+    showToast('Utilisateur validé avec succès', 'success');
     await loadUsers();
     renderUsers();
     updatePendingUsersCount();
+  } catch (e) {
+    console.error('❌ Erreur validation:', e);
+    showToast('Erreur lors de la validation', 'error');
   }
 }
 
@@ -669,35 +945,43 @@ async function renderPendingUsers() {
   const container = document.getElementById('pendingUsersList');
   if (!container) return;
   
-  const { data, error } = await G.supabaseClient
-    .from('profiles')
-    .select('*')
-    .eq('company_id', G.currentUser?.companyId)
-    .eq('status', 'pending_validation');
-  
-  if (error || !data?.length) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50">Aucun utilisateur en attente</div>';
-    return;
-  }
-  
-  container.innerHTML = data.map(u => `
-    <div class="glass-card rounded-xl p-4 border border-yellow-500/20">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-lg font-bold">
-            ${u.full_name?.charAt(0) || 'U'}
+  try {
+    const { data, error } = await G.supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('company_id', G.currentUser?.companyId)
+      .eq('status', 'pending_validation');
+    
+    if (error) throw error;
+    
+    if (!data?.length) {
+      container.innerHTML = '<div class="text-center py-12 text-blue-300/50">Aucun utilisateur en attente</div>';
+      return;
+    }
+    
+    container.innerHTML = data.map(u => `
+      <div class="glass-card rounded-xl p-4 border border-yellow-500/20">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-lg font-bold">
+              ${u.full_name?.charAt(0) || 'U'}
+            </div>
+            <div>
+              <p class="text-white font-medium">${u.full_name || u.email}</p>
+              <p class="text-sm text-blue-300/60">${u.email}</p>
+              <p class="text-xs text-yellow-400/70 mt-1">Inscrit le ${formatDate(u.created_at)}</p>
+            </div>
           </div>
-          <div>
-            <p class="text-white font-medium">${u.full_name || u.email}</p>
-            <p class="text-sm text-blue-300/60">${u.email}</p>
-          </div>
+          <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors">
+            <i class="fas fa-check mr-2"></i>Valider
+          </button>
         </div>
-        <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400">
-          <i class="fas fa-check mr-2"></i>Valider
-        </button>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  } catch (e) {
+    console.error('❌ Erreur chargement utilisateurs en attente:', e);
+    container.innerHTML = '<div class="text-center py-12 text-red-400">Erreur de chargement</div>';
+  }
 }
 
 function updateStorageDisplay() {
@@ -705,42 +989,89 @@ function updateStorageDisplay() {
   const limit = CONFIG.plans[G.currentUser?.plan || 'free'].storage;
   const percent = Math.min(100, Math.round((used / limit) * 100));
   
-  document.getElementById('storagePercent').textContent = `${percent}%`;
-  document.getElementById('storageBar').style.width = `${percent}%`;
-  document.getElementById('storageText').textContent = `${formatBytes(used)} / ${formatBytes(limit)}`;
+  const storagePercent = document.getElementById('storagePercent');
+  const storageBar = document.getElementById('storageBar');
+  const storageText = document.getElementById('storageText');
+  
+  if (storagePercent) storagePercent.textContent = `${percent}%`;
+  if (storageBar) storageBar.style.width = `${percent}%`;
+  if (storageText) storageText.textContent = `${formatBytes(used)} / ${formatBytes(limit)}`;
 }
 
 // ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🚀 SystemesGED v6.2 démarré');
+  console.log('🚀 SystemesGED v7.0 démarré');
   
-  initSupabase();
-  await initializeSystemAdmins();
+  // Initialiser Supabase
+  const initialized = initSupabase();
+  if (!initialized) {
+    showToast('Erreur d\'initialisation Supabase', 'error');
+    return;
+  }
   
-  // Vérifier session existante
-  const { data: { session } } = await G.supabaseClient.auth.getSession();
-  if (session?.user) {
-    const { data: profile } = await G.supabaseClient
-      .from('profiles').select('*').eq('id', session.user.id).single();
+  // Initialiser les admins système (en arrière-plan)
+  initializeSystemAdmins().catch(e => console.error('Erreur init admins:', e));
+  
+  // Vérifier s'il existe une session active
+  try {
+    const { data: { session }, error: sessionError } = await G.supabaseClient.auth.getSession();
     
-    if (profile && profile.status !== 'pending_validation') {
-      G.currentUser = {
-        id: session.user.id,
-        email: session.user.email,
-        name: profile.full_name,
-        role: profile.role,
-        companyId: profile.company_id,
-        plan: profile.plan || 'free',
-        status: profile.status,
-        isSystemAdmin: profile.is_company_admin
-      };
-      
-      const { data: company } = await G.supabaseClient
-        .from('companies').select('*').eq('id', profile.company_id).single();
-      
-      if (company) G.currentCompany = company;
-      await initializeApp();
+    if (sessionError) {
+      console.error('❌ Erreur récupération session:', sessionError);
     }
+    
+    if (session?.user) {
+      console.log('🔄 Session existante trouvée:', session.user.email);
+      
+      // Récupérer le profil
+      const { data: profile, error: profileError } = await G.supabaseClient
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+      
+      if (profileError || !profile) {
+        console.error('❌ Profil non trouvé pour la session existante');
+        // Déconnecter si le profil est introuvable
+        await G.supabaseClient.auth.signOut();
+      } else if (profile.status !== 'pending_validation') {
+        // Récupérer l'entreprise
+        let company = null;
+        if (profile.company_id) {
+          const { data: companyData } = await G.supabaseClient
+            .from('companies')
+            .select('*')
+            .eq('id', profile.company_id)
+            .single();
+          company = companyData;
+        }
+        
+        // Restaurer l'état utilisateur
+        G.currentUser = {
+          id: session.user.id,
+          email: session.user.email,
+          name: profile.full_name || session.user.email,
+          role: profile.role || 'viewer',
+          companyId: profile.company_id,
+          plan: profile.plan || company?.plan || 'free',
+          status: profile.status,
+          isSystemAdmin: profile.is_company_admin || profile.role === 'admin' || false,
+          permissions: profile.admin_rights || []
+        };
+        
+        G.currentCompany = company;
+        
+        console.log('✅ Session restaurée pour:', G.currentUser.email);
+        await initializeApp();
+        return;
+      }
+    }
+    
+    // Pas de session - afficher l'écran de login
+    console.log('ℹ️  Aucune session active - affichage login');
+    
+  } catch (err) {
+    console.error('❌ Erreur lors de la vérification de session:', err);
   }
 });
 
@@ -748,5 +1079,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 Object.assign(window, {
   switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, handleLogout,
   switchView, closeMobileSidebar, validateUser,
-  renderDocuments, renderUsers, renderPendingUsers, initializeSystemAdmins
+  renderDocuments, renderUsers, renderPendingUsers, initializeSystemAdmins,
+  G, CONFIG
 });
