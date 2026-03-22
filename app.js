@@ -8,9 +8,10 @@ const CONFIG = {
   supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDQwMDAwMDAsImV4cCI6MjAxOTU3NjAwMH0.demo_key',
   
   // Configuration Storage
+   // Configuration Storage
   storageBucket: 'documents',
   
-  maxFileSize: 100 * 1024 * 1024, // 100 MB
+  maxFileSize: 50 * 1024 * 1024, // 50 MB (selon votre config)
   defaultPlan: 'free',
   plans: {
     free: { name: 'Free', price: 0, users: 5, storage: 1024 * 1024 * 1024, features: ['basic'] },
@@ -25,13 +26,13 @@ const CONFIG = {
       email: 'ahouansouange@live.fr',
       companyName: 'live',
       companyId: 'company_live_001',
-      password: 'AdminLive123!'
+      password: 'AdminLive2024!'
     },
     {
       email: 'systemesshop@gmail.com',
       companyName: 'systemesshop',
       companyId: 'company_systemesshop_001',
-      password: 'AdminSystem123!'
+      password: 'AdminSystem2024!'
     }
   ]
 };
@@ -138,6 +139,57 @@ async function initializeSupabase() {
     return false;
   }
 }
+// ─── Fonction de test de connexion ───
+async function testSupabaseConnection() {
+  console.log('🔍 Test de connexion Supabase...');
+  
+  try {
+    // Test 1 : Vérifier l'authentification
+    const { data: { session }, error: authError } = await SB.auth.getSession();
+    if (authError) throw authError;
+    console.log('✅ Authentification OK', session ? 'Session active' : 'Pas de session');
+    
+    // Test 2 : Vérifier les tables
+    const { data: tables, error: tablesError } = await SB
+      .from('companies')
+      .select('count')
+      .limit(1);
+    if (tablesError) throw tablesError;
+    console.log('✅ Connexion base de données OK');
+    
+    // Test 3 : Vérifier le Storage
+    const { data: buckets, error: storageError } = await SB.storage.listBuckets();
+    if (storageError) throw storageError;
+    console.log('✅ Storage OK - Buckets:', buckets.map(b => b.name));
+    
+    // Test 4 : Vérifier les entreprises admin
+    const { data: companies } = await SB
+      .from('companies')
+      .select('*')
+      .in('id', ['company_live_001', 'company_systemesshop_001']);
+    console.log('✅ Entreprises admin:', companies?.map(c => c.name));
+    
+    showToast('Connexion Supabase vérifiée avec succès', 'success');
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Erreur connexion:', error);
+    showToast(`Erreur: ${error.message}`, 'error');
+    return false;
+  }
+}
+
+// Appeler le test au démarrage
+document.addEventListener('DOMContentLoaded', async () => {
+  logInfo('SystemesGED v6.0 démarré - Version Supabase');
+  
+  const initialized = await initializeSupabase();
+  
+  if (initialized) {
+    await testSupabaseConnection();
+    await initializeSystemAdmins();
+  }
+});
 
 function setupNetworkListeners() {
   window.addEventListener('online', () => {
@@ -5326,6 +5378,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const initialized = await initializeSupabase();
   
   if (initialized) {
+  // ⬇️⬇️⬇️ AJOUTER CETTE LIGNE ⬇️⬇️⬇️
+    await testSupabaseConnection();
+    // ⬆️⬆️⬆️ FIN AJOUT ⬆️⬆️⬆️
     // Initialiser les administrateurs système
     await initializeSystemAdmins();
   }
@@ -5369,5 +5424,5 @@ Object.assign(window, {
   switchSecurityTab, loadDeletedDocs, renderAuditLog,
   exportDocumentsCsv, exportAuditLog,
   updatePendingUsersCount, updatePendingUsersBadge, updateValidationMenuVisibility,
-  initializeSystemAdmins, canValidateUsers, canManageSignatures
+  initializeSystemAdmins, canValidateUsers, canManageSignatures,  testSupabaseConnection
 });
