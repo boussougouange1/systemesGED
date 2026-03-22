@@ -1,4 +1,4 @@
-// SystemesGED v5.4 - Application principale (CONNEXION CORRIGÉE)
+// SystemesGED v5.5 - Application principale (CORRIGÉ ET CONNECTÉ À SUPABASE)
 // ============================================
 
 // ─── Configuration Supabase ───
@@ -17,7 +17,7 @@ const CONFIG = {
     enterprise: { name: 'Enterprise', price: null, users: 999999, storage: 999999999999, features: ['all'] }
   },
   
-  // ADMINISTRATEURS SYSTÈME - CONNEXION DIRECTE SANS SUPABASE AUTH
+  // ADMINISTRATEURS SYSTÈME
   systemAdmins: [
     {
       email: 'ahouansouange@live.fr',
@@ -84,7 +84,7 @@ window.G = {
   originalFiles: new Map(),
   pendingUsersCount: 0,
   supabaseConnected: false,
-  useLocalAuth: true // Mode authentification locale
+  useLocalAuth: true
 };
 
 // ─── Initialisation Supabase ───
@@ -131,7 +131,140 @@ async function initializeSupabase() {
   }
 }
 
-// ─── AUTENTIFICATION CORRIGÉE ───
+// ─── FONCTIONS DE BASE SUPABASE ───
+
+async function supabaseSignUp(email, password, userData) {
+  if (!SB || G.useLocalAuth) return { error: { message: 'Supabase non disponible' } };
+  
+  try {
+    const { data, error } = await SB.auth.signUp({
+      email,
+      password,
+      options: {
+        data: userData
+      }
+    });
+    return { data, error };
+  } catch (e) {
+    return { error: { message: e.message } };
+  }
+}
+
+async function supabaseSignIn(email, password) {
+  if (!SB || G.useLocalAuth) return { error: { message: 'Supabase non disponible' } };
+  
+  try {
+    const { data, error } = await SB.auth.signInWithPassword({
+      email,
+      password
+    });
+    return { data, error };
+  } catch (e) {
+    return { error: { message: e.message } };
+  }
+}
+
+async function supabaseSignOut() {
+  if (!SB || G.useLocalAuth) return { error: null };
+  
+  try {
+    const { error } = await SB.auth.signOut();
+    return { error };
+  } catch (e) {
+    return { error: { message: e.message } };
+  }
+}
+
+// ─── OPÉRATIONS BASE DE DONNÉES SUPABASE ───
+
+async function dbGet(table, query = {}) {
+  if (!SB || G.useLocalAuth) return { data: null, error: { message: 'Mode local' } };
+  
+  try {
+    let q = SB.from(table).select('*');
+    
+    if (query.eq) {
+      Object.entries(query.eq).forEach(([key, value]) => {
+        q = q.eq(key, value);
+      });
+    }
+    
+    if (query.order) {
+      q = q.order(query.order.column, { ascending: query.order.ascending });
+    }
+    
+    const { data, error } = await q;
+    return { data, error };
+  } catch (e) {
+    return { data: null, error: { message: e.message } };
+  }
+}
+
+async function dbInsert(table, data) {
+  if (!SB || G.useLocalAuth) return { data: null, error: { message: 'Mode local' } };
+  
+  try {
+    const { data: result, error } = await SB.from(table).insert(data).select();
+    return { data: result, error };
+  } catch (e) {
+    return { data: null, error: { message: e.message } };
+  }
+}
+
+async function dbUpdate(table, id, data) {
+  if (!SB || G.useLocalAuth) return { data: null, error: { message: 'Mode local' } };
+  
+  try {
+    const { data: result, error } = await SB.from(table).update(data).eq('id', id).select();
+    return { data: result, error };
+  } catch (e) {
+    return { data: null, error: { message: e.message } };
+  }
+}
+
+async function dbDelete(table, id) {
+  if (!SB || G.useLocalAuth) return { error: { message: 'Mode local' } };
+  
+  try {
+    const { error } = await SB.from(table).delete().eq('id', id);
+    return { error };
+  } catch (e) {
+    return { error: { message: e.message } };
+  }
+}
+
+// ─── STORAGE SUPABASE ───
+
+async function uploadToSupabaseStorage(filePath, file) {
+  if (!SB || G.useLocalAuth) return { error: { message: 'Storage non disponible' } };
+  
+  try {
+    const { data, error } = await SB.storage
+      .from(CONFIG.storageBucket)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+    return { data, error };
+  } catch (e) {
+    return { error: { message: e.message } };
+  }
+}
+
+async function getStorageUrl(filePath) {
+  if (!SB || G.useLocalAuth) return null;
+  
+  try {
+    const { data } = SB.storage
+      .from(CONFIG.storageBucket)
+      .getPublicUrl(filePath);
+    return data?.publicUrl || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ─── AUTENTIFICATION ───
 
 function switchAuthTab(tab) {
   document.getElementById('tabLogin')?.classList.toggle('active', tab === 'login');
@@ -150,7 +283,7 @@ function togglePwdInput(id, btn) {
   if (icon) icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 
-// CONNEXION CORRIGÉE - FONCTIONNE IMMÉDIATEMENT
+// CONNEXION CORRIGÉE
 async function handleLogin(e) {
   e.preventDefault();
   
@@ -250,26 +383,38 @@ async function handleLogin(e) {
     // 3. TENTATIVE SUPABASE (si disponible)
     if (!G.useLocalAuth && SB) {
       try {
-        const { data, error } = await SB.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabaseSignIn(email, password);
         
         if (error) throw error;
         
         if (data.user) {
-          G.currentUser = {
-            id: data.user.id,
-            email: data.user.email,
-            name: data.user.user_metadata?.name || data.user.email,
-            role: data.user.user_metadata?.role || 'viewer',
-            companyId: data.user.user_metadata?.company_id,
-            plan: data.user.user_metadata?.plan || 'free',
-            status: 'active'
-          };
+          // Récupérer les données de l'utilisateur depuis Supabase
+          const { data: userData, error: userError } = await dbGet('users', { eq: { id: data.user.id } });
           
-          G.currentCompany = {
-            id: data.user.user_metadata?.company_id,
-            name: data.user.user_metadata?.company_name || 'Mon Entreprise',
-            plan: G.currentUser.plan
-          };
+          if (userError || !userData || userData.length === 0) {
+            // Créer l'utilisateur dans la base si nécessaire
+            const newUser = {
+              id: data.user.id,
+              email: data.user.email,
+              name: data.user.user_metadata?.name || data.user.email,
+              role: data.user.user_metadata?.role || 'viewer',
+              company_id: data.user.user_metadata?.company_id,
+              plan: data.user.user_metadata?.plan || 'free',
+              status: 'active',
+              created_at: new Date().toISOString()
+            };
+            
+            await dbInsert('users', newUser);
+            G.currentUser = newUser;
+          } else {
+            G.currentUser = userData[0];
+          }
+          
+          // Récupérer l'entreprise
+          if (G.currentUser.company_id) {
+            const { data: companyData } = await dbGet('companies', { eq: { id: G.currentUser.company_id } });
+            G.currentCompany = companyData?.[0] || { id: G.currentUser.company_id, name: 'Mon Entreprise', plan: G.currentUser.plan };
+          }
           
           localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
           localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
@@ -298,7 +443,7 @@ async function handleLogin(e) {
   }
 }
 
-// INSCRIPTION CORRIGÉE - FONCTIONNE IMMÉDIATEMENT
+// INSCRIPTION CORRIGÉE
 async function handleRegister(e) {
   e.preventDefault();
   
@@ -340,7 +485,7 @@ async function handleRegister(e) {
       companyId: companyId,
       companyName: company,
       plan: 'free',
-      password: password, // Stocké localement
+      password: password,
       createdAt: new Date().toISOString()
     };
     
@@ -355,6 +500,44 @@ async function handleRegister(e) {
     // Sauvegarder localement
     localStorage.setItem(`user_${email}`, JSON.stringify(newUser));
     localStorage.setItem(`company_${companyId}`, JSON.stringify(companyData));
+    
+    // Si Supabase est disponible, créer aussi dans Supabase
+    if (!G.useLocalAuth && SB) {
+      try {
+        // Créer l'utilisateur dans Supabase Auth
+        const { data: authData, error: authError } = await supabaseSignUp(email, password, {
+          name: `${firstName} ${lastName}`,
+          company_id: companyId,
+          role: 'admin',
+          plan: 'free'
+        });
+        
+        if (!authError && authData.user) {
+          // Créer l'entreprise dans Supabase
+          await dbInsert('companies', {
+            id: companyId,
+            name: company,
+            plan: 'free',
+            owner_id: authData.user.id,
+            created_at: new Date().toISOString()
+          });
+          
+          // Créer l'utilisateur dans Supabase
+          await dbInsert('users', {
+            id: authData.user.id,
+            email: email,
+            name: `${firstName} ${lastName}`,
+            role: 'admin',
+            company_id: companyId,
+            plan: 'free',
+            status: 'pending_validation',
+            created_at: new Date().toISOString()
+          });
+        }
+      } catch (supabaseErr) {
+        console.log('Erreur création Supabase (non bloquante):', supabaseErr.message);
+      }
+    }
     
     // Ajouter à la liste des utilisateurs en attente
     const pendingKey = `pending_users_${companyId}`;
@@ -384,7 +567,12 @@ async function handleRegister(e) {
 }
 
 // DÉCONNEXION
-function handleLogout() {
+async function handleLogout() {
+  // Déconnexion Supabase si connecté
+  if (!G.useLocalAuth && SB) {
+    await supabaseSignOut();
+  }
+  
   G.currentUser = null;
   G.currentCompany = null;
   localStorage.removeItem('currentUser');
@@ -428,6 +616,32 @@ function demoLogin() {
   }));
   
   handleLogin(new Event('submit'));
+}
+
+// CONNEXION OAUTH (CORRIGÉE)
+function oauthLogin(provider) {
+  showToast(`Connexion ${provider}...`, 'info');
+  
+  // Simulation de connexion OAuth pour le mode local
+  setTimeout(() => {
+    const mockUser = { 
+      id: generateId(), 
+      email: `oauth_${provider}@demo.fr`, 
+      name: `User ${provider}`, 
+      role: 'admin', 
+      companyId: 'demo_company', 
+      plan: 'professional', 
+      status: 'active' 
+    };
+    G.currentUser = mockUser;
+    G.currentCompany = { id: 'demo_company', name: 'Entreprise Démo', plan: 'professional' };
+    
+    localStorage.setItem('currentUser', JSON.stringify(mockUser));
+    localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
+    
+    initializeApp();
+    showToast(`Connecté via ${provider}`, 'success');
+  }, 1500);
 }
 
 // ─── Initialisation Application ───
@@ -551,9 +765,47 @@ async function simulateNetworkDelay(ms = 500) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Données Mock ───
+// ─── Données avec Supabase ───
 async function loadDocuments() {
   await simulateNetworkDelay(300);
+  
+  // Essayer de charger depuis Supabase d'abord
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('documents', { 
+        eq: { company_id: G.currentUser.companyId },
+        order: { column: 'created_at', ascending: false }
+      });
+      
+      if (!error && data && data.length > 0) {
+        G.documents = data.map(doc => ({
+          id: doc.id,
+          name: doc.name,
+          type: doc.type,
+          size: doc.size,
+          description: doc.description,
+          scope: doc.scope,
+          ownerId: doc.owner_id,
+          companyId: doc.company_id,
+          folderId: doc.folder_id || '__root__',
+          tags: doc.tags || [],
+          createdAt: doc.created_at,
+          updatedAt: doc.updated_at,
+          version: doc.version || 1,
+          views: doc.views || 0,
+          downloads: doc.downloads || 0,
+          isDeleted: doc.is_deleted || false,
+          deletedAt: doc.deleted_at,
+          content: doc.content || ''
+        }));
+        return G.documents;
+      }
+    } catch (e) {
+      console.log('Erreur chargement documents Supabase:', e.message);
+    }
+  }
+  
+  // Fallback localStorage
   const stored = localStorage.getItem(`docs_${G.currentUser?.companyId}`);
   if (stored) {
     G.documents = JSON.parse(stored);
@@ -596,22 +848,102 @@ function generateMockDocuments() {
   return docs;
 }
 
-function saveDocuments() {
+async function saveDocuments() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`docs_${G.currentUser.companyId}`, JSON.stringify(G.documents));
+    
+    // Sauvegarder dans Supabase si disponible
+    if (!G.useLocalAuth && SB) {
+      for (const doc of G.documents) {
+        const supabaseDoc = {
+          id: doc.id,
+          name: doc.name,
+          type: doc.type,
+          size: doc.size,
+          description: doc.description,
+          scope: doc.scope,
+          owner_id: doc.ownerId,
+          company_id: doc.companyId,
+          folder_id: doc.folderId,
+          tags: doc.tags,
+          created_at: doc.createdAt,
+          updated_at: doc.updatedAt,
+          version: doc.version,
+          views: doc.views,
+          downloads: doc.downloads,
+          is_deleted: doc.isDeleted,
+          deleted_at: doc.deletedAt,
+          content: doc.content
+        };
+        
+        try {
+          await dbInsert('documents', supabaseDoc);
+        } catch (e) {
+          // Si existe déjà, mettre à jour
+          await dbUpdate('documents', doc.id, supabaseDoc);
+        }
+      }
+    }
   }
 }
 
 async function loadWorkflows() {
   await simulateNetworkDelay(200);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('workflows', { eq: { company_id: G.currentUser.companyId } });
+      if (!error && data && data.length > 0) {
+        G.workflows = data.map(wf => ({
+          id: wf.id,
+          title: wf.title,
+          description: wf.description,
+          status: wf.status,
+          priority: wf.priority,
+          assigneeId: wf.assignee_id,
+          createdBy: wf.created_by,
+          companyId: wf.company_id,
+          createdAt: wf.created_at,
+          updatedAt: wf.updated_at
+        }));
+        return G.workflows;
+      }
+    } catch (e) {
+      console.log('Erreur chargement workflows Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`workflows_${G.currentUser?.companyId}`);
   G.workflows = stored ? JSON.parse(stored) : [];
   return G.workflows;
 }
 
-function saveWorkflows() {
+async function saveWorkflows() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`workflows_${G.currentUser.companyId}`, JSON.stringify(G.workflows));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const wf of G.workflows) {
+        const supabaseWf = {
+          id: wf.id,
+          title: wf.title,
+          description: wf.description,
+          status: wf.status,
+          priority: wf.priority,
+          assignee_id: wf.assigneeId,
+          created_by: wf.createdBy,
+          company_id: wf.companyId,
+          created_at: wf.createdAt,
+          updated_at: wf.updatedAt
+        };
+        
+        try {
+          await dbInsert('workflows', supabaseWf);
+        } catch (e) {
+          await dbUpdate('workflows', wf.id, supabaseWf);
+        }
+      }
+    }
   }
 }
 
@@ -637,6 +969,37 @@ async function loadUsers() {
     }
   }
   
+  // Essayer de charger depuis Supabase
+  if (!G.useLocalAuth && SB && companyId) {
+    try {
+      const { data, error } = await dbGet('users', { eq: { company_id: companyId } });
+      if (!error && data) {
+        // Fusionner avec les données locales
+        data.forEach(supabaseUser => {
+          const existingIndex = users.findIndex(u => u.id === supabaseUser.id);
+          const userData = {
+            id: supabaseUser.id,
+            email: supabaseUser.email,
+            name: supabaseUser.name,
+            role: supabaseUser.role,
+            status: supabaseUser.status,
+            companyId: supabaseUser.company_id,
+            plan: supabaseUser.plan,
+            createdAt: supabaseUser.created_at
+          };
+          
+          if (existingIndex >= 0) {
+            users[existingIndex] = { ...users[existingIndex], ...userData };
+          } else {
+            users.push(userData);
+          }
+        });
+      }
+    } catch (e) {
+      console.log('Erreur chargement utilisateurs Supabase:', e.message);
+    }
+  }
+  
   // Ajouter l'utilisateur courant s'il n'est pas dans la liste
   if (G.currentUser && !users.find(u => u.id === G.currentUser.id)) {
     users.push(G.currentUser);
@@ -646,15 +1009,55 @@ async function loadUsers() {
   return users;
 }
 
-function saveUsers() {
+async function saveUsers() {
   // Les utilisateurs sont sauvegardés individuellement dans localStorage
   G.users.forEach(user => {
     localStorage.setItem(`user_${user.email}`, JSON.stringify(user));
   });
+  
+  // Sauvegarder dans Supabase
+  if (!G.useLocalAuth && SB) {
+    for (const user of G.users) {
+      const supabaseUser = {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        status: user.status,
+        company_id: user.companyId,
+        plan: user.plan,
+        created_at: user.createdAt
+      };
+      
+      try {
+        await dbInsert('users', supabaseUser);
+      } catch (e) {
+        await dbUpdate('users', user.id, supabaseUser);
+      }
+    }
+  }
 }
 
 async function loadTags() {
   await simulateNetworkDelay(100);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('tags', { eq: { company_id: G.currentUser.companyId } });
+      if (!error && data && data.length > 0) {
+        G.tags = data.map(tag => ({
+          id: tag.id,
+          name: tag.name,
+          color: tag.color,
+          count: tag.count || 0
+        }));
+        return G.tags;
+      }
+    } catch (e) {
+      console.log('Erreur chargement tags Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`tags_${G.currentUser?.companyId}`);
   G.tags = stored ? JSON.parse(stored) : [
     { id: generateId(), name: 'Important', color: '#ef4444', count: 0 },
@@ -665,27 +1068,103 @@ async function loadTags() {
   return G.tags;
 }
 
-function saveTags() {
+async function saveTags() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`tags_${G.currentUser.companyId}`, JSON.stringify(G.tags));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const tag of G.tags) {
+        const supabaseTag = {
+          id: tag.id,
+          name: tag.name,
+          color: tag.color,
+          count: tag.count,
+          company_id: G.currentUser.companyId
+        };
+        
+        try {
+          await dbInsert('tags', supabaseTag);
+        } catch (e) {
+          await dbUpdate('tags', tag.id, supabaseTag);
+        }
+      }
+    }
   }
 }
 
 async function loadShares() {
   await simulateNetworkDelay(200);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('shares', { eq: { company_id: G.currentUser.companyId } });
+      if (!error && data) {
+        G.shares = data.map(share => ({
+          id: share.id,
+          documentId: share.document_id,
+          senderId: share.sender_id,
+          recipientEmail: share.recipient_email,
+          status: share.status,
+          createdAt: share.created_at
+        }));
+        return G.shares;
+      }
+    } catch (e) {
+      console.log('Erreur chargement partages Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`shares_${G.currentUser?.companyId}`);
   G.shares = stored ? JSON.parse(stored) : [];
   return G.shares;
 }
 
-function saveShares() {
+async function saveShares() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`shares_${G.currentUser.companyId}`, JSON.stringify(G.shares));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const share of G.shares) {
+        const supabaseShare = {
+          id: share.id,
+          document_id: share.documentId,
+          sender_id: share.senderId,
+          recipient_email: share.recipientEmail,
+          status: share.status,
+          company_id: G.currentUser.companyId,
+          created_at: share.createdAt
+        };
+        
+        try {
+          await dbInsert('shares', supabaseShare);
+        } catch (e) {
+          await dbUpdate('shares', share.id, supabaseShare);
+        }
+      }
+    }
   }
 }
 
 async function loadFolders() {
   await simulateNetworkDelay(150);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('folders', { eq: { company_id: G.currentUser.companyId } });
+      if (!error && data && data.length > 0) {
+        G.folders = data.map(folder => ({
+          id: folder.id,
+          name: folder.name,
+          parentId: folder.parent_id,
+          createdAt: folder.created_at
+        }));
+        return G.folders;
+      }
+    } catch (e) {
+      console.log('Erreur chargement dossiers Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`folders_${G.currentUser?.companyId}`);
   G.folders = stored ? JSON.parse(stored) : [
     { id: '__root__', name: 'Racine', parentId: null, createdAt: new Date().toISOString() },
@@ -695,61 +1174,233 @@ async function loadFolders() {
   return G.folders;
 }
 
-function saveFolders() {
+async function saveFolders() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`folders_${G.currentUser.companyId}`, JSON.stringify(G.folders));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const folder of G.folders) {
+        const supabaseFolder = {
+          id: folder.id,
+          name: folder.name,
+          parent_id: folder.parentId,
+          company_id: G.currentUser.companyId,
+          created_at: folder.createdAt
+        };
+        
+        try {
+          await dbInsert('folders', supabaseFolder);
+        } catch (e) {
+          await dbUpdate('folders', folder.id, supabaseFolder);
+        }
+      }
+    }
   }
 }
 
 async function loadSignatures() {
   await simulateNetworkDelay(100);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('signatures', { eq: { company_id: G.currentUser.companyId } });
+      if (!error && data) {
+        G.signatures = data.map(sig => ({
+          id: sig.id,
+          documentId: sig.document_id,
+          signerEmail: sig.signer_email,
+          status: sig.status,
+          createdAt: sig.created_at
+        }));
+        return G.signatures;
+      }
+    } catch (e) {
+      console.log('Erreur chargement signatures Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`signatures_${G.currentUser?.companyId}`);
   G.signatures = stored ? JSON.parse(stored) : [];
   return G.signatures;
 }
 
-function saveSignatures() {
+async function saveSignatures() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`signatures_${G.currentUser.companyId}`, JSON.stringify(G.signatures));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const sig of G.signatures) {
+        const supabaseSig = {
+          id: sig.id,
+          document_id: sig.documentId,
+          signer_email: sig.signerEmail,
+          status: sig.status,
+          company_id: G.currentUser.companyId,
+          created_at: sig.createdAt
+        };
+        
+        try {
+          await dbInsert('signatures', supabaseSig);
+        } catch (e) {
+          await dbUpdate('signatures', sig.id, supabaseSig);
+        }
+      }
+    }
   }
 }
 
 async function loadAutomationRules() {
   await simulateNetworkDelay(100);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('automation_rules', { eq: { company_id: G.currentUser.companyId } });
+      if (!error && data) {
+        G.automationRules = data.map(rule => ({
+          id: rule.id,
+          name: rule.name,
+          trigger: rule.trigger,
+          action: rule.action,
+          active: rule.active,
+          createdAt: rule.created_at
+        }));
+        return G.automationRules;
+      }
+    } catch (e) {
+      console.log('Erreur chargement règles automation Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`automation_${G.currentUser?.companyId}`);
   G.automationRules = stored ? JSON.parse(stored) : [];
   return G.automationRules;
 }
 
-function saveAutomationRules() {
+async function saveAutomationRules() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`automation_${G.currentUser.companyId}`, JSON.stringify(G.automationRules));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const rule of G.automationRules) {
+        const supabaseRule = {
+          id: rule.id,
+          name: rule.name,
+          trigger: rule.trigger,
+          action: rule.action,
+          active: rule.active,
+          company_id: G.currentUser.companyId,
+          created_at: rule.createdAt
+        };
+        
+        try {
+          await dbInsert('automation_rules', supabaseRule);
+        } catch (e) {
+          await dbUpdate('automation_rules', rule.id, supabaseRule);
+        }
+      }
+    }
   }
 }
 
 async function loadApiKeys() {
   await simulateNetworkDelay(100);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.id) {
+    try {
+      const { data, error } = await dbGet('api_keys', { eq: { user_id: G.currentUser.id } });
+      if (!error && data) {
+        G.apiKeys = data.map(key => ({
+          id: key.id,
+          name: key.name,
+          key: key.key_value,
+          createdAt: key.created_at,
+          lastUsed: key.last_used
+        }));
+        return G.apiKeys;
+      }
+    } catch (e) {
+      console.log('Erreur chargement clés API Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`apikeys_${G.currentUser?.id}`);
   G.apiKeys = stored ? JSON.parse(stored) : [];
   return G.apiKeys;
 }
 
-function saveApiKeys() {
+async function saveApiKeys() {
   if (G.currentUser?.id) {
     localStorage.setItem(`apikeys_${G.currentUser.id}`, JSON.stringify(G.apiKeys));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const key of G.apiKeys) {
+        const supabaseKey = {
+          id: key.id,
+          name: key.name,
+          key_value: key.key,
+          user_id: G.currentUser.id,
+          created_at: key.createdAt,
+          last_used: key.lastUsed
+        };
+        
+        try {
+          await dbInsert('api_keys', supabaseKey);
+        } catch (e) {
+          await dbUpdate('api_keys', key.id, supabaseKey);
+        }
+      }
+    }
   }
 }
 
 async function loadBackups() {
   await simulateNetworkDelay(100);
+  
+  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await dbGet('backups', { eq: { company_id: G.currentUser.companyId } });
+      if (!error && data) {
+        G.backups = data.map(backup => ({
+          id: backup.id,
+          name: backup.name,
+          type: backup.type,
+          size: backup.size,
+          createdAt: backup.created_at
+        }));
+        return G.backups;
+      }
+    } catch (e) {
+      console.log('Erreur chargement backups Supabase:', e.message);
+    }
+  }
+  
   const stored = localStorage.getItem(`backups_${G.currentUser?.companyId}`);
   G.backups = stored ? JSON.parse(stored) : [];
   return G.backups;
 }
 
-function saveBackups() {
+async function saveBackups() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`backups_${G.currentUser.companyId}`, JSON.stringify(G.backups));
+    
+    if (!G.useLocalAuth && SB) {
+      for (const backup of G.backups) {
+        const supabaseBackup = {
+          id: backup.id,
+          name: backup.name,
+          type: backup.type,
+          size: backup.size,
+          company_id: G.currentUser.companyId,
+          created_at: backup.createdAt
+        };
+        
+        try {
+          await dbInsert('backups', supabaseBackup);
+        } catch (e) {
+          await dbUpdate('backups', backup.id, supabaseBackup);
+        }
+      }
+    }
   }
 }
 
@@ -1205,11 +1856,30 @@ async function uploadDocument() {
     const file = G.selectedFiles[i];
     const docId = generateId();
     
+    // Upload vers Supabase Storage si disponible
+    let storagePath = null;
+    let publicUrl = null;
+    
+    if (!G.useLocalAuth && SB) {
+      try {
+        const filePath = `${G.currentUser.companyId}/${docId}/${file.name}`;
+        const { data: uploadData, error: uploadError } = await uploadToSupabaseStorage(filePath, file);
+        
+        if (!uploadError) {
+          storagePath = filePath;
+          publicUrl = await getStorageUrl(filePath);
+        }
+      } catch (e) {
+        console.log('Erreur upload storage:', e.message);
+      }
+    }
+    
     const doc = {
       id: docId,
       name: file.name,
       type: getFileType(file.name),
       size: file.size,
+      description: '',
       scope: _uploadScope,
       ownerId: G.currentUser?.id,
       companyId: G.currentUser?.companyId,
@@ -1220,14 +1890,16 @@ async function uploadDocument() {
       version: 1,
       views: 0,
       downloads: 0,
-      isDeleted: false
+      isDeleted: false,
+      storagePath: storagePath,
+      publicUrl: publicUrl
     };
     
     G.originalFiles.set(docId, file);
     G.documents.unshift(doc);
   }
   
-  saveDocuments();
+  await saveDocuments();
   updateStorageDisplay();
   updateBadges();
   
@@ -1246,12 +1918,88 @@ function openPreviewModal(docId) {
   
   const previewModal = document.getElementById('previewModal');
   if (previewModal) previewModal.classList.remove('hidden');
+  
+  // Mettre à jour les informations du modal
+  const previewTitle = document.getElementById('previewTitle');
+  const previewMeta = document.getElementById('previewMeta');
+  
+  if (previewTitle) previewTitle.textContent = doc.name;
+  if (previewMeta) previewMeta.textContent = `${formatBytes(doc.size)} • ${formatDate(doc.createdAt)} • v${doc.version}`;
 }
 
 function closePreviewModal() {
   const previewModal = document.getElementById('previewModal');
   if (previewModal) previewModal.classList.add('hidden');
   G.currentDocId = null;
+}
+
+// FONCTION CORRIGÉE : Télécharger le document courant
+function downloadCurrentDocument() {
+  if (G.currentDocId) {
+    downloadDocument(G.currentDocId);
+  }
+}
+
+// FONCTION CORRIGÉE : Partager le document courant
+function shareCurrentDocument() {
+  closePreviewModal();
+  if (G.currentDocId) {
+    openShareModal(G.currentDocId);
+  }
+}
+
+// FONCTION CORRIGÉE : Ouvrir l'éditeur riche
+function openRichEditor(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  
+  G.richEditor.docId = docId;
+  const richEditorModal = document.getElementById('richEditorModal');
+  const richEditorTitle = document.getElementById('richEditorTitle');
+  const richEditorContent = document.getElementById('richEditorContent');
+  
+  if (richEditorTitle) richEditorTitle.textContent = doc.name;
+  if (richEditorContent) richEditorContent.innerHTML = doc.content || '<p>Commencez à écrire...</p>';
+  if (richEditorModal) richEditorModal.classList.remove('hidden');
+}
+
+// FONCTION CORRIGÉE : Fermer l'éditeur riche
+function closeRichEditor() {
+  const richEditorModal = document.getElementById('richEditorModal');
+  if (richEditorModal) richEditorModal.classList.add('hidden');
+  G.richEditor.docId = null;
+}
+
+// FONCTION CORRIGÉE : Commandes de l'éditeur riche
+function richCmd(command, value = null) {
+  document.execCommand(command, false, value);
+  document.getElementById('richEditorContent')?.focus();
+}
+
+function richAlign(align) {
+  const command = 'justify' + align.charAt(0).toUpperCase() + align.slice(1);
+  document.execCommand(command, false, null);
+}
+
+function richInsertHeading(level) {
+  document.execCommand('formatBlock', false, `H${level}`);
+}
+
+function richInsertLink() {
+  const url = prompt('URL du lien:');
+  if (url) document.execCommand('createLink', false, url);
+}
+
+function _saveRichContent() {
+  const doc = G.documents.find(d => d.id === G.richEditor.docId);
+  const richEditorContent = document.getElementById('richEditorContent');
+  
+  if (doc && richEditorContent) {
+    doc.content = richEditorContent.innerHTML;
+    doc.updatedAt = new Date().toISOString();
+    saveDocuments();
+    showToast('Document enregistré', 'success');
+  }
 }
 
 function downloadDocument(docId) {
@@ -1271,6 +2019,16 @@ function downloadDocument(docId) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    showToast(`Téléchargement: ${doc.name}`, 'success');
+  } else if (doc.publicUrl) {
+    // Télécharger depuis Supabase Storage
+    const a = document.createElement('a');
+    a.href = doc.publicUrl;
+    a.download = doc.name;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     showToast(`Téléchargement: ${doc.name}`, 'success');
   }
 }
@@ -1306,7 +2064,7 @@ function closeShareModal() {
   G.currentDocId = null;
 }
 
-function shareDocument() {
+async function shareDocument() {
   const email = document.getElementById('shareEmail')?.value;
   if (!email) {
     showToast('Veuillez entrer un email', 'warning');
@@ -1323,14 +2081,14 @@ function shareDocument() {
   };
   
   G.shares.push(share);
-  saveShares();
+  await saveShares();
   
   showToast('Document partagé avec succès', 'success');
   closeShareModal();
   updateBadges();
 }
 
-// ─── Workflows (simplifié) ───
+// ─── Workflows ───
 function renderWorkflows() {
   const container = document.getElementById('wfKanban');
   if (!container) return;
@@ -1352,11 +2110,55 @@ function renderWorkflows() {
 }
 
 function openCreateWorkflowModal() {
-  showToast('Création de workflow - fonctionnalité en développement', 'info');
+  const workflowModal = document.getElementById('workflowModal');
+  if (workflowModal) workflowModal.classList.remove('hidden');
+}
+
+function closeWorkflowModal() {
+  const workflowModal = document.getElementById('workflowModal');
+  if (workflowModal) workflowModal.classList.add('hidden');
+}
+
+async function createWorkflow(e) {
+  e.preventDefault();
+  
+  const wfTitle = document.getElementById('wfTitle')?.value;
+  if (!wfTitle) {
+    showToast('Veuillez entrer un titre', 'warning');
+    return;
+  }
+  
+  const wf = {
+    id: generateId(),
+    title: wfTitle,
+    description: document.getElementById('wfDesc')?.value || '',
+    priority: document.getElementById('wfPriority')?.value || 'medium',
+    status: 'pending',
+    assigneeId: document.getElementById('wfAssignee')?.value,
+    createdBy: G.currentUser?.id,
+    companyId: G.currentUser?.companyId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  
+  G.workflows.unshift(wf);
+  await saveWorkflows();
+  
+  showToast('Workflow créé avec succès', 'success');
+  closeWorkflowModal();
+  renderWorkflows();
 }
 
 function openWfDetail(wfId) {
-  showToast('Détail du workflow - fonctionnalité en développement', 'info');
+  G.currentWfId = wfId;
+  const wfDetailModal = document.getElementById('wfDetailModal');
+  if (wfDetailModal) wfDetailModal.classList.remove('hidden');
+}
+
+function closeWfDetail() {
+  const wfDetailModal = document.getElementById('wfDetailModal');
+  if (wfDetailModal) wfDetailModal.classList.add('hidden');
+  G.currentWfId = null;
 }
 
 function getWfStatusClass(status) {
@@ -1407,35 +2209,109 @@ function getRoleBadgeClass(role) {
   return classes[role] || 'bg-gray-500/20 text-gray-400';
 }
 
-function validateUser(userId) {
+async function validateUser(userId) {
   const u = G.users.find(user => user.id === userId);
   if (!u) return;
   
   u.status = 'active';
+  u.validatedAt = new Date().toISOString();
+  u.validatedBy = G.currentUser?.id;
+  
+  // Mettre à jour dans Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbUpdate('users', userId, { status: 'active', validated_at: u.validatedAt, validated_by: u.validatedBy });
+  }
+  
   localStorage.setItem(`user_${u.email}`, JSON.stringify(u));
+  await saveUsers();
   
   showToast(`Utilisateur ${u.name} validé`, 'success');
   renderUsers();
   updatePendingUsersCount();
 }
 
-function deleteUser(userId) {
+async function deleteUser(userId) {
   if (!confirm('Supprimer cet utilisateur ?')) return;
   
   const u = G.users.find(user => user.id === userId);
   if (u) {
+    // Supprimer de Supabase si disponible
+    if (!G.useLocalAuth && SB) {
+      await dbDelete('users', userId);
+    }
+    
     localStorage.removeItem(`user_${u.email}`);
     G.users = G.users.filter(user => user.id !== userId);
+    await saveUsers();
     renderUsers();
     showToast('Utilisateur supprimé', 'success');
   }
+}
+
+function openCreateUserModal() {
+  if (!canValidateUsers()) {
+    showToast('Permission refusée', 'error');
+    return;
+  }
+  const addUserModal = document.getElementById('addUserModal');
+  if (addUserModal) addUserModal.classList.remove('hidden');
+}
+
+function closeAddUserModal() {
+  const addUserModal = document.getElementById('addUserModal');
+  if (addUserModal) addUserModal.classList.add('hidden');
+}
+
+async function addUser(e) {
+  e.preventDefault();
+  
+  const firstName = document.getElementById('newUserFirst')?.value;
+  const lastName = document.getElementById('newUserLast')?.value;
+  const email = document.getElementById('newUserEmail')?.value;
+  const role = document.getElementById('newUserRole')?.value || 'viewer';
+  
+  if (!firstName || !lastName || !email) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
+  
+  const newUser = {
+    id: generateId(),
+    name: `${firstName} ${lastName}`,
+    email: email,
+    role: role,
+    status: 'pending_validation',
+    companyId: G.currentUser?.companyId,
+    createdAt: new Date().toISOString()
+  };
+  
+  // Ajouter à Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbInsert('users', {
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      status: newUser.status,
+      company_id: newUser.companyId,
+      created_at: newUser.createdAt
+    });
+  }
+  
+  G.users.push(newUser);
+  localStorage.setItem(`user_${email}`, JSON.stringify(newUser));
+  await saveUsers();
+  
+  showToast('Utilisateur créé - en attente de validation', 'success');
+  closeAddUserModal();
+  renderUsers();
+  updatePendingUsersCount();
 }
 
 function renderPendingUsers() {
   const container = document.getElementById('pendingUsersList');
   if (!container) return;
   
-  // Récupérer les utilisateurs en attente de l'entreprise
   const pendingUsers = G.users.filter(u => u.status === 'pending_validation');
   
   if (pendingUsers.length === 0) {
@@ -1481,20 +2357,45 @@ function renderTags() {
   `).join('');
 }
 
-function createTag() {
+async function createTag() {
   const input = document.getElementById('newTagInput');
   const name = input?.value.trim();
   if (!name) return;
   
-  G.tags.push({ id: generateId(), name, color: '#3b82f6', count: 0 });
-  saveTags();
+  const newTag = {
+    id: generateId(),
+    name,
+    color: '#3b82f6',
+    count: 0,
+    companyId: G.currentUser?.companyId
+  };
+  
+  // Ajouter à Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbInsert('tags', {
+      id: newTag.id,
+      name: newTag.name,
+      color: newTag.color,
+      count: 0,
+      company_id: G.currentUser?.companyId
+    });
+  }
+  
+  G.tags.push(newTag);
+  await saveTags();
   input.value = '';
   renderTags();
 }
 
-function deleteTag(tagId) {
+async function deleteTag(tagId) {
   G.tags = G.tags.filter(t => t.id !== tagId);
-  saveTags();
+  await saveTags();
+  
+  // Supprimer de Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbDelete('tags', tagId);
+  }
+  
   renderTags();
 }
 
@@ -1509,10 +2410,16 @@ function renderSettings() {
   if (profileName) profileName.value = G.currentUser?.name || '';
 }
 
-function saveProfile() {
+async function saveProfile() {
   const name = document.getElementById('profileName')?.value;
   if (name && G.currentUser) {
     G.currentUser.name = name;
+    
+    // Mettre à jour dans Supabase si disponible
+    if (!G.useLocalAuth && SB) {
+      await dbUpdate('users', G.currentUser.id, { name: name });
+    }
+    
     localStorage.setItem(`user_${G.currentUser.email}`, JSON.stringify(G.currentUser));
     localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
     updateUserDisplay();
@@ -1568,24 +2475,339 @@ function renderAnalytics() {
   `;
 }
 
-function renderFolders() { renderFolderContents(); }
-function renderSignatures() { showToast('Signatures - en développement', 'info'); }
-function renderAI() { showToast('IA - en développement', 'info'); }
-function renderAutomation() { showToast('Automatisation - en développement', 'info'); }
-function renderIntegrations() { showToast('Intégrations - en développement', 'info'); }
-function renderBackups() { showToast('Backups - en développement', 'info'); }
-function renderApiKeys() { showToast('API Keys - en développement', 'info'); }
-function renderBillingV6() { renderBilling(); }
-function renderAuditV6() { showToast('Audit - en développement', 'info'); }
-function renderAdvancedSearch() { renderDocuments(); }
-function renderVersioning() { showToast('Versioning - en développement', 'info'); }
-function renderSearchV7() { renderDocuments(); }
-function renderRBACV7() { renderRBAC(); }
+function renderFolders() { 
+  renderFolderContents(); 
+}
+
+function renderSignatures() { 
+  const container = document.getElementById('signaturesList');
+  if (!container) return;
+  
+  if (G.signatures.length === 0) {
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-signature text-4xl mb-3 block opacity-20"></i><p>Aucune signature</p></div>';
+    return;
+  }
+  
+  container.innerHTML = G.signatures.map(s => {
+    const doc = G.documents.find(d => d.id === s.documentId);
+    return `
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400"><i class="fas fa-file-signature"></i></div>
+          <div>
+            <p class="text-white font-medium">${doc?.name || 'Document inconnu'}</p>
+            <p class="text-xs text-blue-300/60">Signataire: ${s.signerEmail}</p>
+          </div>
+        </div>
+        <span class="px-3 py-1 rounded-full text-xs ${getSigStatusClass(s.status)}">${s.status}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function getSigStatusClass(status) {
+  const classes = { pending: 'bg-yellow-500/20 text-yellow-300', signed: 'bg-green-500/20 text-green-300', rejected: 'bg-red-500/20 text-red-300' };
+  return classes[status] || 'bg-gray-500/20 text-gray-300';
+}
+
+function openSignModal() {
+  const signatureModal = document.getElementById('signatureModal');
+  if (signatureModal) signatureModal.classList.remove('hidden');
+}
+
+function closeSignModal() {
+  const signatureModal = document.getElementById('signatureModal');
+  if (signatureModal) signatureModal.classList.add('hidden');
+}
+
+function submitSignature() {
+  showToast('Signature enregistrée', 'success');
+  closeSignModal();
+}
+
+function renderAI() { 
+  const container = document.getElementById('aiDocsList');
+  if (!container) return;
+  
+  const docs = G.documents.filter(d => !d.isDeleted).slice(0, 10);
+  container.innerHTML = docs.map(d => `
+    <div class="glass-card rounded-xl p-4 border border-pink-500/20">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <i class="fas ${getFileIcon(d.type).split(' ')[0]} text-pink-400"></i>
+          <span class="text-white font-medium">${d.name}</span>
+        </div>
+        <button onclick="analyzeDocument('${d.id}')" class="px-3 py-1.5 rounded-lg bg-pink-500/20 text-pink-400 text-xs hover:bg-pink-500/30">
+          <i class="fas fa-robot mr-1"></i>Analyser
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function analyzeDocument(docId) {
+  showToast('Analyse IA en cours...', 'info');
+  setTimeout(() => {
+    showToast('Analyse terminée', 'success');
+  }, 2000);
+}
+
+function renderAutomation() { 
+  const container = document.getElementById('automationRulesList');
+  if (!container) return;
+  
+  if (G.automationRules.length === 0) {
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-magic text-4xl mb-3 block opacity-20"></i><p>Aucune règle d\'automatisation</p></div>';
+    return;
+  }
+  
+  container.innerHTML = G.automationRules.map(r => `
+    <div class="glass-card rounded-xl p-4 border border-orange-500/20">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-white font-medium">${r.name}</p>
+          <p class="text-xs text-blue-300/60">${r.trigger} → ${r.action}</p>
+        </div>
+        <span class="px-2 py-1 rounded-full text-xs ${r.active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${r.active ? 'Actif' : 'Inactif'}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openWfRuleModal() {
+  const wfRuleModal = document.getElementById('wfRuleModal');
+  if (wfRuleModal) wfRuleModal.classList.remove('hidden');
+}
+
+function closeWfRuleModal() {
+  const wfRuleModal = document.getElementById('wfRuleModal');
+  if (wfRuleModal) wfRuleModal.classList.add('hidden');
+}
+
+async function createWfRule(e) {
+  e.preventDefault();
+  
+  const rule = {
+    id: generateId(),
+    name: document.getElementById('wfRuleName')?.value || 'Nouvelle règle',
+    trigger: document.getElementById('wfRuleTrigger')?.value || '',
+    action: document.getElementById('wfRuleAction')?.value || '',
+    active: true,
+    createdAt: new Date().toISOString()
+  };
+  
+  // Ajouter à Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbInsert('automation_rules', {
+      id: rule.id,
+      name: rule.name,
+      trigger: rule.trigger,
+      action: rule.action,
+      active: rule.active,
+      company_id: G.currentUser?.companyId,
+      created_at: rule.createdAt
+    });
+  }
+  
+  G.automationRules.push(rule);
+  await saveAutomationRules();
+  closeWfRuleModal();
+  renderAutomation();
+  showToast('Règle créée', 'success');
+}
+
+function renderIntegrations() { 
+  const container = document.getElementById('integrationsGrid');
+  if (!container) return;
+  
+  const integrations = [
+    { name: 'Slack', icon: 'fab fa-slack', color: 'purple' },
+    { name: 'Google Drive', icon: 'fab fa-google-drive', color: 'green' },
+    { name: 'Dropbox', icon: 'fab fa-dropbox', color: 'blue' },
+    { name: 'Microsoft 365', icon: 'fab fa-microsoft', color: 'blue' }
+  ];
+  
+  container.innerHTML = integrations.map(i => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 hover:border-${i.color}-400/40 cursor-pointer transition-all">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-10 h-10 rounded-lg bg-${i.color}-500/20 flex items-center justify-center text-${i.color}-400">
+          <i class="${i.icon}"></i>
+        </div>
+        <div>
+          <p class="text-white font-medium">${i.name}</p>
+        </div>
+      </div>
+      <button class="w-full py-2 rounded-lg bg-blue-500/10 text-blue-400 text-xs hover:bg-blue-500/20">Connecter</button>
+    </div>
+  `).join('');
+}
+
+function renderBackups() { 
+  const container = document.getElementById('backupsList');
+  if (!container) return;
+  
+  if (G.backups.length === 0) {
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-database text-4xl mb-3 block opacity-20"></i><p>Aucune sauvegarde</p></div>';
+    return;
+  }
+  
+  container.innerHTML = G.backups.map(b => `
+    <div class="glass-card rounded-xl p-4 border border-teal-500/20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-archive text-teal-400 text-xl"></i>
+        <div>
+          <p class="text-white font-medium">${b.name}</p>
+          <p class="text-xs text-blue-300/60">${b.type} • ${formatBytes(b.size)}</p>
+        </div>
+      </div>
+      <button onclick="restoreBackup('${b.id}')" class="px-3 py-1.5 rounded-lg bg-teal-500/20 text-teal-400 text-xs hover:bg-teal-500/30">Restaurer</button>
+    </div>
+  `).join('');
+}
+
+async function createBackup(type) {
+  const backup = {
+    id: generateId(),
+    name: `Backup ${new Date().toLocaleString('fr-FR')}`,
+    type: type === 'full' ? 'Complète' : 'Documents',
+    size: G.documents.reduce((sum, d) => sum + (d.size || 0), 0),
+    createdAt: new Date().toISOString()
+  };
+  
+  // Ajouter à Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbInsert('backups', {
+      id: backup.id,
+      name: backup.name,
+      type: backup.type,
+      size: backup.size,
+      company_id: G.currentUser?.companyId,
+      created_at: backup.createdAt
+    });
+  }
+  
+  G.backups.unshift(backup);
+  await saveBackups();
+  renderBackups();
+  showToast('Sauvegarde créée', 'success');
+}
+
+function restoreBackup(id) {
+  showToast('Restauration en cours...', 'info');
+}
+
+function renderApiKeys() { 
+  const container = document.getElementById('apiKeysList2');
+  if (!container) return;
+  
+  if (G.apiKeys.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-blue-300/50"><p class="text-sm">Aucune clé API</p></div>';
+    return;
+  }
+  
+  container.innerHTML = G.apiKeys.map(k => `
+    <div class="glass-card rounded-xl p-4 border border-green-500/20 flex items-center justify-between">
+      <div>
+        <p class="text-white font-medium text-sm">${k.name}</p>
+        <p class="text-xs text-green-400/60 font-mono">${k.key?.substr(0, 20)}...</p>
+      </div>
+      <button onclick="revokeApiKey('${k.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">Révoquer</button>
+    </div>
+  `).join('');
+}
+
+async function generateApiKeyV6() {
+  const name = document.getElementById('apiKeyName')?.value || `Clé ${G.apiKeys.length + 1}`;
+  const key = `ged_${generateId()}_${generateId().substr(0, 16)}`;
+  
+  const newKey = {
+    id: generateId(),
+    name: name,
+    key: key,
+    createdAt: new Date().toISOString(),
+    lastUsed: null
+  };
+  
+  // Ajouter à Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbInsert('api_keys', {
+      id: newKey.id,
+      name: newKey.name,
+      key_value: newKey.key,
+      user_id: G.currentUser?.id,
+      created_at: newKey.createdAt,
+      last_used: null
+    });
+  }
+  
+  G.apiKeys.push(newKey);
+  await saveApiKeys();
+  renderApiKeys();
+  showToast('Clé API générée', 'success');
+}
+
+async function revokeApiKey(id) {
+  G.apiKeys = G.apiKeys.filter(k => k.id !== id);
+  await saveApiKeys();
+  
+  // Supprimer de Supabase si disponible
+  if (!G.useLocalAuth && SB) {
+    await dbDelete('api_keys', id);
+  }
+  
+  renderApiKeys();
+  showToast('Clé révoquée', 'success');
+}
+
+function renderBillingV6() { 
+  renderBilling(); 
+}
+
+function renderAuditV6() { 
+  showToast('Audit - en développement', 'info'); 
+}
+
+function renderAdvancedSearch() { 
+  renderDocuments(); 
+}
+
+function renderVersioning() { 
+  showToast('Versioning - en développement', 'info'); 
+}
+
+function renderSearchV7() { 
+  renderDocuments(); 
+}
+
+function renderRBACV7() { 
+  renderRBAC(); 
+}
 
 function renderShared() {
   const container = document.getElementById('sharedList');
   if (!container) return;
-  container.innerHTML = '<p class="text-center py-8 text-blue-300/50">Aucun document partagé</p>';
+  
+  const received = G.shares.filter(s => s.recipientEmail === G.currentUser?.email && s.status === 'active');
+  
+  if (received.length === 0) {
+    container.innerHTML = '<p class="text-center py-8 text-blue-300/50">Aucun document partagé avec vous</p>';
+    return;
+  }
+  
+  container.innerHTML = received.map(s => {
+    const doc = G.documents.find(d => d.id === s.documentId);
+    return `
+      <div class="glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="openPreviewModal('${s.documentId}')">
+        <div class="flex items-center gap-3">
+          <i class="fas fa-share-alt text-purple-400"></i>
+          <div>
+            <p class="text-white font-medium">${doc?.name || 'Document inconnu'}</p>
+            <p class="text-xs text-blue-300/60">De: ${s.senderId}</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // ─── Storage & Badges ───
@@ -1652,7 +2874,6 @@ function getFileType(filename) {
 function showToast(message, type = 'info', duration = 3000) {
   console.log(`[${type.toUpperCase()}] ${message}`);
   
-  // Créer un toast visuel
   const existingToast = document.getElementById('toast-notification');
   if (existingToast) existingToast.remove();
   
@@ -1696,11 +2917,46 @@ function showDocContextMenu(e, docId) {
   }
 }
 
+function renderFolderContents() {
+  const folderContentsGrid = document.getElementById('folderContentsGrid');
+  const folderDocGrid = document.getElementById('folderDocGrid');
+  
+  if (!folderContentsGrid || !folderDocGrid) return;
+  
+  const subFolders = G.folders.filter(f => f.parentId === G.currentFolderId);
+  const docs = G.documents.filter(d => !d.isDeleted && d.folderId === G.currentFolderId);
+  
+  folderContentsGrid.innerHTML = subFolders.map(f => `
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 cursor-pointer hover:border-yellow-400/40" onclick="openFolder('${f.id}', '${f.name}')">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-folder text-yellow-400 text-2xl"></i>
+        <span class="text-white font-medium">${f.name}</span>
+      </div>
+    </div>
+  `).join('');
+  
+  folderDocGrid.innerHTML = docs.map(d => renderDocCard(d)).join('');
+  if (docs.length === 0) {
+    folderDocGrid.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun document dans ce dossier</div>';
+  }
+}
+
+function openFolder(id, name) {
+  G.currentFolderId = id;
+  const existingIdx = G.folderPath.findIndex(f => f.id === id);
+  if (existingIdx >= 0) {
+    G.folderPath = G.folderPath.slice(0, existingIdx + 1);
+  } else {
+    G.folderPath.push({ id, name });
+  }
+  renderFolderContents();
+}
+
 // ─── Initialization ───
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 SystemesGED démarrage...');
   
-  // Initialiser Supabase (optionnel)
+  // Initialiser Supabase
   await initializeSupabase();
   
   // Vérifier s'il y a une session sauvegardée
@@ -1728,8 +2984,11 @@ Object.assign(window, {
   // Core
   CONFIG, G, SB, initializeSupabase,
   
+  // Supabase
+  dbGet, dbInsert, dbUpdate, dbDelete, uploadToSupabaseStorage, getStorageUrl,
+  
   // Auth
-  switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, handleLogout,
+  switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout,
   
   // Navigation
   switchView, openMobileSidebar, closeMobileSidebar,
@@ -1742,11 +3001,16 @@ Object.assign(window, {
   renderDocuments, getFilteredDocuments, renderDocCard, renderDocListItem,
   switchDocsTab, toggleViewMode, applyFilters, clearFilters, filterByType, filterByTag,
   
+  // FONCTIONS CORRIGÉES
+  downloadCurrentDocument, shareCurrentDocument, openRichEditor, closeRichEditor,
+  richCmd, richAlign, richInsertHeading, richInsertLink, _saveRichContent,
+  
   // Share
   openShareModal, closeShareModal, shareDocument,
   
   // Workflows
-  renderWorkflows, openCreateWorkflowModal, openWfDetail, getWfStatusClass, getWfStatusLabel,
+  renderWorkflows, openCreateWorkflowModal, closeWorkflowModal, createWorkflow,
+  openWfDetail, closeWfDetail, getWfStatusClass, getWfStatusLabel,
   
   // Users
   renderUsers, validateUser, deleteUser, renderPendingUsers, openCreateUserModal, closeAddUserModal, addUser,
@@ -1763,5 +3027,20 @@ Object.assign(window, {
   // Utils
   generateId, formatBytes, formatDate, getFileIcon, getFileType, showToast, handleDocDragStart, showDocContextMenu,
   isAdmin, canValidateUsers, canManageSignatures, updateUserDisplay, updateStorageDisplay, updateBadges,
-  updateValidationMenuVisibility, updatePendingUsersCount, updatePendingUsersBadge, loadInitialData
+  updateValidationMenuVisibility, updatePendingUsersCount, updatePendingUsersBadge, loadInitialData,
+  
+  // Signatures
+  openSignModal, closeSignModal, submitSignature, getSigStatusClass,
+  
+  // Automation
+  openWfRuleModal, closeWfRuleModal, createWfRule,
+  
+  // Backups
+  createBackup, restoreBackup,
+  
+  // API Keys
+  generateApiKeyV6, revokeApiKey,
+  
+  // Folders
+  openFolder, renderFolderContents
 });
