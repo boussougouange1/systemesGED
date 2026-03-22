@@ -1,12 +1,16 @@
-// SystemesGED v6.0 - Application avec Supabase Auth intégré
+// SystemesGED v6.2 - AVEC CLÉS LEGACY (FONCTIONNEL)
 // ============================================
 
-// ─── Configuration ───
 const CONFIG = {
   supabaseUrl: 'https://spgtflhprppeoidjguhs.supabase.co',
+  
+  // CLÉS LEGACY (commencent par eyJhbGci...)
+  // Remplacez par vos vraies clés depuis Settings → API → "Legacy anon, service_role API keys"
   supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNzM1NjEsImV4cCI6MjA4ODg0OTU2MX0.v4-dTva3Tt85zHeU03eFS9kHuOFbHMMLLT5XdbA3vYY',
-  // IMPORTANT: Remplacez par votre clé service role pour la création d'admins
+  
+  // CLÉ SERVICE ROLE (secret) - MÊME PAGE, section "service_role"
   supabaseServiceKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwZ3RmbGhwcnBwZW9pZGpndWhzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzI3MzU2MSwiZXhwIjoyMDg4ODQ5NTYxfQ.sXmN9lEmJFx58ocxHOt2J2XhYBMn_P603AOqI1a-p4I',
+  
   maxFileSize: 100 * 1024 * 1024,
   defaultPlan: 'free',
   plans: {
@@ -15,7 +19,6 @@ const CONFIG = {
     professional: { name: 'Professional', price: 79, users: 100, storage: 100 * 1024 * 1024 * 1024, features: ['basic', 'versioning', 'rbac', 'audit'] },
     enterprise: { name: 'Enterprise', price: null, users: Infinity, storage: Infinity, features: ['all'] }
   },
-  // Configuration des administrateurs système
   systemAdmins: [
     {
       email: 'ahouansouange@live.fr',
@@ -86,24 +89,24 @@ window.G = {
 // ─── Initialisation Supabase ───
 function initSupabase() {
   try {
-    // Client standard (anon key) pour les opérations utilisateur
+    // Client standard (anon key)
     G.supabaseClient = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
     
-    // Client admin (service role) pour créer des utilisateurs
-    if (CONFIG.supabaseServiceKey && !CONFIG.supabaseServiceKey.includes('service_role_key')) {
+    // Client admin (service_role key)
+    if (CONFIG.supabaseServiceKey && CONFIG.supabaseServiceKey.includes('service_role')) {
       G.supabaseAdmin = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false }
       });
       console.log('✅ Client admin Supabase initialisé');
     } else {
-      console.warn('⚠️  Clé service role non configurée - mode local uniquement');
+      console.warn('⚠️  Clé service_role non configurée');
     }
     
     window.SB = G.supabaseClient;
     return true;
   } catch (e) {
     console.error('❌ Erreur init Supabase:', e);
-    showToast('Erreur de connexion au service', 'error');
+    showToast('Erreur de connexion', 'error');
     return false;
   }
 }
@@ -118,7 +121,7 @@ function getFileType(filename) { const ext = filename.split('.').pop().toLowerCa
 // ─── Notifications ───
 function showToast(message, type = 'info', duration = 3000) {
   const container = document.getElementById('toastContainer');
-  if (!container) return;
+  if (!container) { console.log(`[${type}] ${message}`); return; }
   const toast = document.createElement('div');
   toast.className = 'toast';
   const icons = { success: 'fa-check-circle text-green-400', error: 'fa-times-circle text-red-400', warning: 'fa-exclamation-triangle text-yellow-400', info: 'fa-info-circle text-blue-400' };
@@ -127,46 +130,31 @@ function showToast(message, type = 'info', duration = 3000) {
   setTimeout(() => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); }, duration);
 }
 
-// ─── Logs ───
-function addSysLog(level, message, meta = {}) {
-  const entry = { id: generateId(), timestamp: new Date().toISOString(), level, message, meta };
-  G.sysLogs.unshift(entry);
-  if (G.sysLogs.length > 1000) G.sysLogs.pop();
-  if (level === 'error' || level === 'security') {
-    G.notifications.unshift({ id: generateId(), type: level, message, timestamp: entry.timestamp, read: false });
-    G.unreadCount++;
-    updateNotifBadge();
-  }
-}
-
-function logInfo(msg, meta) { addSysLog('info', msg, meta); }
-function logError(msg, meta) { addSysLog('error', msg, meta); }
-
 // ─── CRÉATION AUTOMATIQUE DES ADMINS ───
 async function initializeSystemAdmins() {
   console.log('🚀 Initialisation des administrateurs système...');
   
   if (!G.supabaseAdmin) {
-    console.warn('⚠️  Client admin non disponible');
-    showToast('Mode sans création automatique - configurez la clé service role', 'warning');
+    console.error('❌ Client admin non disponible - vérifiez la clé service_role');
+    showToast('Erreur: clé service_role manquante', 'error');
     return;
   }
 
   const results = [];
 
   for (const adminConfig of CONFIG.systemAdmins) {
-    console.log(`\n📝 Traitement de: ${adminConfig.email}`);
+    console.log(`\n📝 Traitement: ${adminConfig.email}`);
     
     try {
-      // 1. Vérifier si l'utilisateur existe déjà
-      const { data: existingUsers, error: listError } = await G.supabaseAdmin.auth.admin.listUsers();
+      // 1. Vérifier si l'utilisateur existe
+      const { data: listData, error: listError } = await G.supabaseAdmin.auth.admin.listUsers();
       
       if (listError) {
         console.error(`❌ Erreur listUsers: ${listError.message}`);
         continue;
       }
 
-      const existingUser = existingUsers.users.find(u => u.email === adminConfig.email);
+      const existingUser = listData.users.find(u => u.email === adminConfig.email);
       let userId;
 
       if (existingUser) {
@@ -179,13 +167,11 @@ async function initializeSystemAdmins() {
           { password: adminConfig.password }
         );
         
-        if (updateError) {
-          console.error(`⚠️  Erreur update password: ${updateError.message}`);
-        }
+        if (updateError) console.error(`⚠️  Erreur update: ${updateError.message}`);
       } else {
-        // 2. Créer l'utilisateur dans auth.users
-        console.log(`⏳ Création du compte auth...`);
-        const { data: newUser, error: createError } = await G.supabaseAdmin.auth.admin.createUser({
+        // Créer l'utilisateur
+        console.log(`⏳ Création...`);
+        const { data: newUserData, error: createError } = await G.supabaseAdmin.auth.admin.createUser({
           email: adminConfig.email,
           password: adminConfig.password,
           email_confirm: true,
@@ -201,20 +187,22 @@ async function initializeSystemAdmins() {
           continue;
         }
 
-        userId = newUser.user.id;
+        userId = newUserData.user.id;
         console.log(`✅ Utilisateur créé: ${userId}`);
       }
 
-      // 3. Créer ou récupérer l'entreprise
-      const { data: companies, error: companyError } = await G.supabaseClient
+      // 2. Créer/récupérer l'entreprise
+      const { data: companies } = await G.supabaseClient
         .from('companies')
         .select('id')
         .eq('name', adminConfig.companyName);
 
       let companyId;
-      if (companyError || !companies || companies.length === 0) {
-        // Créer l'entreprise
-        const { data: newCompany, error: createCompanyError } = await G.supabaseClient
+      if (companies && companies.length > 0) {
+        companyId = companies[0].id;
+        console.log(`🏢 Entreprise existante: ${companyId}`);
+      } else {
+        const { data: newCompany, error: compError } = await G.supabaseClient
           .from('companies')
           .insert([{
             name: adminConfig.companyName,
@@ -225,18 +213,15 @@ async function initializeSystemAdmins() {
           .select()
           .single();
 
-        if (createCompanyError) {
-          console.error(`❌ Erreur création entreprise: ${createCompanyError.message}`);
+        if (compError) {
+          console.error(`❌ Erreur entreprise: ${compError.message}`);
           continue;
         }
         companyId = newCompany.id;
         console.log(`🏢 Entreprise créée: ${companyId}`);
-      } else {
-        companyId = companies[0].id;
-        console.log(`🏢 Entreprise existante: ${companyId}`);
       }
 
-      // 4. Créer ou mettre à jour le profil
+      // 3. Créer/mettre à jour le profil
       const { data: existingProfile } = await G.supabaseClient
         .from('profiles')
         .select('id')
@@ -265,55 +250,33 @@ async function initializeSystemAdmins() {
       };
 
       if (existingProfile) {
-        const { error: updateProfileError } = await G.supabaseClient
-          .from('profiles')
-          .update(profileData)
-          .eq('id', userId);
-
-        if (updateProfileError) {
-          console.error(`⚠️  Erreur update profil: ${updateProfileError.message}`);
-        } else {
-          console.log(`👤 Profil mis à jour`);
-        }
+        await G.supabaseClient.from('profiles').update(profileData).eq('id', userId);
+        console.log(`👤 Profil mis à jour`);
       } else {
         profileData.created_at = new Date().toISOString();
-        const { error: insertProfileError } = await G.supabaseClient
-          .from('profiles')
-          .insert([profileData]);
-
-        if (insertProfileError) {
-          console.error(`❌ Erreur création profil: ${insertProfileError.message}`);
-        } else {
-          console.log(`👤 Profil créé`);
-        }
+        await G.supabaseClient.from('profiles').insert([profileData]);
+        console.log(`👤 Profil créé`);
       }
 
-      results.push({
-        email: adminConfig.email,
-        userId: userId,
-        companyId: companyId,
-        success: true
-      });
+      results.push({ email: adminConfig.email, userId, companyId, success: true });
+      console.log(`\n📌 UID pour ${adminConfig.email}: ${userId}`);
 
     } catch (error) {
-      console.error(`❌ Exception pour ${adminConfig.email}:`, error);
-      results.push({
-        email: adminConfig.email,
-        success: false,
-        error: error.message
-      });
+      console.error(`❌ Exception: ${error.message}`);
+      results.push({ email: adminConfig.email, success: false, error: error.message });
     }
   }
 
-  // Afficher le récapitulatif
+  // Récapitulatif
   console.log('\n' + '='.repeat(60));
-  console.log('📋 RÉCAPITULATIF DES ADMINISTRATEURS');
+  console.log('📋 RÉCAPITULATIF');
   console.log('='.repeat(60));
   results.forEach(r => {
     if (r.success) {
       console.log(`✅ ${r.email}`);
       console.log(`   UID: ${r.userId}`);
       console.log(`   Company ID: ${r.companyId}`);
+      console.log(`   SQL: SELECT * FROM auth.users WHERE email = '${r.email}';`);
     } else {
       console.log(`❌ ${r.email}: ${r.error}`);
     }
@@ -321,13 +284,11 @@ async function initializeSystemAdmins() {
   console.log('='.repeat(60));
 
   if (results.some(r => r.success)) {
-    showToast('Administrateurs initialisés - vérifiez la console pour les UID', 'success');
+    showToast('Administrateurs créés - vérifiez la console', 'success');
   }
-
-  return results;
 }
 
-// ─── Authentification ───
+// ─── AUTHENTIFICATION ───
 function switchAuthTab(tab) {
   document.getElementById('tabLogin')?.classList.toggle('active', tab === 'login');
   document.getElementById('tabRegister')?.classList.toggle('active', tab === 'register');
@@ -347,27 +308,32 @@ function togglePwdInput(id, btn) {
 
 async function handleLogin(e) {
   e.preventDefault();
+  
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
+  const email = document.getElementById('loginEmail')?.value?.trim();
+  const password = document.getElementById('loginPassword')?.value;
+
+  if (!email || !password) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
+
   if (btn) btn.disabled = true;
   if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
-  
-  const email = document.getElementById('loginEmail')?.value;
-  const password = document.getElementById('loginPassword')?.value;
-  
+
   try {
-    // 1. Connexion Supabase Auth
     const { data: authData, error: authError } = await G.supabaseClient.auth.signInWithPassword({
       email,
       password
     });
 
-    if (authError) {
-      showToast('Identifiants incorrects', 'error');
+    if (authError || !authData?.user) {
+      showToast('Email ou mot de passe incorrect', 'error');
       return;
     }
 
-    // 2. Récupérer le profil
+    // Récupérer le profil
     const { data: profile, error: profileError } = await G.supabaseClient
       .from('profiles')
       .select('*')
@@ -380,12 +346,11 @@ async function handleLogin(e) {
     }
 
     if (profile.status === 'pending_validation') {
-      showToast('Votre compte est en attente de validation', 'warning');
+      showToast('Compte en attente de validation', 'warning');
       await G.supabaseClient.auth.signOut();
       return;
     }
 
-    // 3. Mettre à jour l'état global
     G.currentUser = {
       id: authData.user.id,
       email: authData.user.email,
@@ -398,23 +363,19 @@ async function handleLogin(e) {
       permissions: profile.admin_rights || []
     };
 
-    // 4. Récupérer l'entreprise
     const { data: company } = await G.supabaseClient
       .from('companies')
       .select('*')
       .eq('id', profile.company_id)
       .single();
 
-    if (company) {
-      G.currentCompany = company;
-    }
+    if (company) G.currentCompany = company;
 
     await initializeApp();
     showToast('Connexion réussie', 'success');
-    addAudit('login', 'user', G.currentUser.id);
 
   } catch (err) {
-    logError('Erreur login', { error: err.message });
+    console.error('Erreur login:', err);
     showToast('Erreur de connexion', 'error');
   } finally {
     if (btn) btn.disabled = false;
@@ -424,16 +385,21 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
   e.preventDefault();
+  
   const data = {
-    firstName: document.getElementById('regFirst')?.value,
-    lastName: document.getElementById('regLast')?.value,
-    company: document.getElementById('regCompany')?.value,
-    email: document.getElementById('regEmail')?.value,
+    firstName: document.getElementById('regFirst')?.value?.trim(),
+    lastName: document.getElementById('regLast')?.value?.trim(),
+    company: document.getElementById('regCompany')?.value?.trim(),
+    email: document.getElementById('regEmail')?.value?.trim(),
     password: document.getElementById('regPassword')?.value
   };
-  
+
+  if (!data.firstName || !data.lastName || !data.company || !data.email || !data.password) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
+
   try {
-    // 1. Créer l'utilisateur dans auth.users
     const { data: authData, error: authError } = await G.supabaseClient.auth.signUp({
       email: data.email,
       password: data.password,
@@ -447,35 +413,24 @@ async function handleRegister(e) {
 
     if (authError) throw authError;
 
-    // 2. Créer l'entreprise
-    const { data: company, error: companyError } = await G.supabaseClient
+    const { data: company, error: compError } = await G.supabaseClient
       .from('companies')
-      .insert([{
-        name: data.company,
-        plan: 'free',
-        status: 'active'
-      }])
+      .insert([{ name: data.company, plan: 'free', status: 'active' }])
       .select()
       .single();
 
-    if (companyError) throw companyError;
+    if (compError) throw compError;
 
-    // 3. Créer le profil en attente
-    const { error: profileError } = await G.supabaseClient
-      .from('profiles')
-      .insert([{
-        id: authData.user.id,
-        email: data.email,
-        full_name: `${data.firstName} ${data.lastName}`,
-        role: 'viewer',
-        status: 'pending_validation',
-        company_id: company.id
-      }]);
-
-    if (profileError) throw profileError;
+    await G.supabaseClient.from('profiles').insert([{
+      id: authData.user.id,
+      email: data.email,
+      full_name: `${data.firstName} ${data.lastName}`,
+      role: 'viewer',
+      status: 'pending_validation',
+      company_id: company.id
+    }]);
 
     showToast('Compte créé - en attente de validation', 'success');
-    addAudit('register_pending', 'user', authData.user.id);
     switchAuthTab('login');
 
   } catch (err) {
@@ -484,34 +439,26 @@ async function handleRegister(e) {
 }
 
 function demoLogin() {
-  const loginEmail = document.getElementById('loginEmail');
-  const loginPassword = document.getElementById('loginPassword');
-  if (loginEmail) loginEmail.value = 'demo@systemesged.fr';
-  if (loginPassword) loginPassword.value = 'Admin123!';
+  document.getElementById('loginEmail').value = 'ahouansouange@live.fr';
+  document.getElementById('loginPassword').value = 'AdminLive2024!';
   handleLogin(new Event('submit'));
 }
 
 async function handleLogout() {
   await G.supabaseClient.auth.signOut();
-  addAudit('logout', 'user', G.currentUser?.id);
   G.currentUser = null;
   G.currentCompany = null;
   localStorage.removeItem('currentUser');
   localStorage.removeItem('currentCompany');
-  const mainApp = document.getElementById('mainApp');
-  const loginScreen = document.getElementById('loginScreen');
-  if (mainApp) mainApp.style.display = 'none';
-  if (loginScreen) loginScreen.style.display = 'block';
+  document.getElementById('mainApp').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'block';
   showToast('Déconnexion réussie', 'info');
 }
 
 // ─── Initialisation Application ───
 async function initializeApp() {
-  const loginScreen = document.getElementById('loginScreen');
-  const mainApp = document.getElementById('mainApp');
-  
-  if (loginScreen) loginScreen.style.display = 'none';
-  if (mainApp) mainApp.style.display = 'block';
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'block';
   
   localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
   localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
@@ -520,11 +467,6 @@ async function initializeApp() {
   await loadInitialData();
   updatePendingUsersCount();
   switchView('dashboard');
-  logInfo('Application initialisée', { user: G.currentUser?.id });
-  
-  if (isAdmin() && G.pendingUsersCount > 0) {
-    showToast(`${G.pendingUsersCount} utilisateur(s) en attente de validation`, 'warning');
-  }
 }
 
 function isAdmin() {
@@ -533,10 +475,6 @@ function isAdmin() {
 
 function canValidateUsers() {
   return G.currentUser?.role === 'admin' || G.currentUser?.permissions?.includes('validate_users');
-}
-
-function canManageSignatures() {
-  return G.currentUser?.role === 'admin' || G.currentUser?.permissions?.includes('signatures');
 }
 
 function updateUserDisplay() {
@@ -562,7 +500,6 @@ function updateUserDisplay() {
   if (els.companyNameLabel) els.companyNameLabel.textContent = G.currentCompany?.name || 'Entreprise';
   if (els.companyPlanLabel) els.companyPlanLabel.textContent = `Plan ${G.currentCompany?.plan || 'free'}`;
   if (els.companyAvatar) els.companyAvatar.textContent = (G.currentCompany?.name || 'E').charAt(0).toUpperCase();
-  
   if (els.planBadge) {
     els.planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan || 'free'}`;
     els.planBadge.textContent = (G.currentUser.plan || 'free').toUpperCase();
@@ -571,34 +508,29 @@ function updateUserDisplay() {
   updateValidationMenuVisibility();
 }
 
-// ─── Gestion des Validations ───
 function updateValidationMenuVisibility() {
-  const validationMenuItems = document.querySelectorAll('[data-view="pending-users"]');
-  const hasAccess = canValidateUsers();
-  validationMenuItems.forEach(item => {
-    item.style.display = hasAccess ? 'flex' : 'none';
-  });
+  const items = document.querySelectorAll('[data-view="pending-users"]');
+  items.forEach(item => item.style.display = canValidateUsers() ? 'flex' : 'none');
   updatePendingUsersBadge();
 }
 
 async function updatePendingUsersCount() {
   if (!G.currentUser?.companyId) return;
   
-  const { data: pendingUsers, error } = await G.supabaseClient
+  const { data, error } = await G.supabaseClient
     .from('profiles')
     .select('id')
     .eq('company_id', G.currentUser.companyId)
     .eq('status', 'pending_validation');
   
-  if (!error && pendingUsers) {
-    G.pendingUsersCount = pendingUsers.length;
+  if (!error && data) {
+    G.pendingUsersCount = data.length;
     updatePendingUsersBadge();
   }
 }
 
 function updatePendingUsersBadge() {
-  const badges = document.querySelectorAll('.pending-users-badge');
-  badges.forEach(badge => {
+  document.querySelectorAll('.pending-users-badge').forEach(badge => {
     if (G.pendingUsersCount > 0 && canValidateUsers()) {
       badge.textContent = G.pendingUsersCount;
       badge.classList.remove('hidden');
@@ -609,183 +541,45 @@ function updatePendingUsersBadge() {
 }
 
 async function loadInitialData() {
-  await Promise.all([
-    loadDocuments(), 
-    loadWorkflows(), 
-    loadUsers(), 
-    loadTags(), 
-    loadShares(), 
-    loadFolders(), 
-    loadSignatures(), 
-    loadAutomationRules(), 
-    loadApiKeys(), 
-    loadBackups()
-  ]);
+  await Promise.all([loadDocuments(), loadWorkflows(), loadUsers()]);
   updateStorageDisplay();
-  updateBadges();
 }
 
-// ─── Chargement des données depuis Supabase ───
 async function loadDocuments() {
-  if (!G.currentUser?.companyId) return;
-  
+  if (!G.currentUser?.companyId) { G.documents = []; return; }
   const { data, error } = await G.supabaseClient
-    .from('documents')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId)
-    .eq('is_deleted', false);
-  
-  if (error) {
-    console.error('Erreur chargement documents:', error);
-    G.documents = [];
-  } else {
-    G.documents = data || [];
-  }
+    .from('documents').select('*').eq('company_id', G.currentUser.companyId).eq('is_deleted', false);
+  G.documents = error ? [] : (data || []);
 }
 
 async function loadWorkflows() {
-  if (!G.currentUser?.companyId) return;
-  
+  if (!G.currentUser?.companyId) { G.workflows = []; return; }
   const { data, error } = await G.supabaseClient
-    .from('workflows')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.workflows = data || [];
+    .from('workflows').select('*').eq('company_id', G.currentUser.companyId);
+  G.workflows = error ? [] : (data || []);
 }
 
 async function loadUsers() {
-  if (!G.currentUser?.companyId) return;
-  
+  if (!G.currentUser?.companyId) { G.users = []; return; }
   const { data, error } = await G.supabaseClient
-    .from('profiles')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.users = data || [];
+    .from('profiles').select('*').eq('company_id', G.currentUser.companyId);
+  G.users = error ? [] : (data || []);
 }
 
-async function loadTags() {
-  if (!G.currentUser?.companyId) return;
-  
-  const { data, error } = await G.supabaseClient
-    .from('tags')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.tags = data || [
-    { id: generateId(), name: 'Important', color: '#ef4444', count: 0 },
-    { id: generateId(), name: 'Urgent', color: '#f97316', count: 0 },
-    { id: generateId(), name: 'Contrat', color: '#3b82f6', count: 0 },
-    { id: generateId(), name: 'Archivé', color: '#6b7280', count: 0 }
-  ];
-}
-
-async function loadShares() {
-  if (!G.currentUser?.companyId) return;
-  
-  const { data, error } = await G.supabaseClient
-    .from('shares')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.shares = data || [];
-}
-
-async function loadFolders() {
-  if (!G.currentUser?.companyId) return;
-  
-  const { data, error } = await G.supabaseClient
-    .from('folders')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.folders = data || [
-    { id: '__root__', name: 'Racine', parent_id: null, created_at: new Date().toISOString() }
-  ];
-}
-
-async function loadSignatures() {
-  if (!G.currentUser?.companyId) return;
-  
-  const { data, error } = await G.supabaseClient
-    .from('signatures')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.signatures = data || [];
-}
-
-async function loadAutomationRules() {
-  if (!G.currentUser?.companyId) return;
-  
-  const { data, error } = await G.supabaseClient
-    .from('automation_rules')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.automationRules = data || [];
-}
-
-async function loadApiKeys() {
-  const { data, error } = await G.supabaseClient
-    .from('api_keys')
-    .select('*')
-    .eq('user_id', G.currentUser?.id);
-  
-  G.apiKeys = data || [];
-}
-
-async function loadBackups() {
-  if (!G.currentUser?.companyId) return;
-  
-  const { data, error } = await G.supabaseClient
-    .from('backups')
-    .select('*')
-    .eq('company_id', G.currentUser.companyId);
-  
-  G.backups = data || [];
-}
-
-// ─── Navigation ───
 function switchView(viewName) {
   document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
-  const target = document.getElementById(`view-${viewName}`);
-  if (target) target.classList.add('active-view');
-  
+  document.getElementById(`view-${viewName}`)?.classList.add('active-view');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll(`[data-view="${viewName}"]`).forEach(el => el.classList.add('active'));
-  
   G.currentView = viewName;
-  closeMobileSidebar();
   
-  // Appeler le renderer approprié
   const renderers = {
     dashboard: renderDashboard,
     documents: renderDocuments,
-    workflows: renderWorkflows,
-    shared: renderShared,
     users: renderUsers,
-    'pending-users': renderPendingUsers,
-    tags: renderTags,
-    billing: renderBilling,
-    settings: renderSettings,
-    security: renderSecurity,
-    logs: renderSysLogs,
-    rbac: renderRBAC,
-    analytics: renderAnalytics,
-    folders: renderFolders,
-    signatures: renderSignatures,
-    ai: renderAI,
-    automation: renderAutomation,
-    integrations: renderIntegrations,
-    backups: renderBackups,
-    apikeys: renderApiKeys
+    'pending-users': renderPendingUsers
   };
-  
   if (renderers[viewName]) renderers[viewName]();
-  
-  addAudit('view_change', 'view', viewName);
 }
 
 function closeMobileSidebar() {
@@ -793,324 +587,141 @@ function closeMobileSidebar() {
   document.getElementById('sidebarOverlay')?.classList.remove('active');
 }
 
-// ─── Dashboard ───
 function renderDashboard() {
-  const totalDocs = G.documents.filter(d => !d.is_deleted).length;
-  const activeWorkflows = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
-  const sharedCount = G.shares.filter(s => s.status === 'active').length;
-  const userCount = G.users.length;
-  
-  const totalDocsEl = document.getElementById('totalDocs');
-  const dashWorkflowCountEl = document.getElementById('dashWorkflowCount');
-  const sharedCountEl = document.getElementById('sharedCount');
-  const dashUserCountEl = document.getElementById('dashUserCount');
-  
-  if (totalDocsEl) totalDocsEl.textContent = totalDocs;
-  if (dashWorkflowCountEl) dashWorkflowCountEl.textContent = activeWorkflows;
-  if (sharedCountEl) sharedCountEl.textContent = sharedCount;
-  if (dashUserCountEl) dashUserCountEl.textContent = userCount;
-  
-  renderActivityList();
+  document.getElementById('totalDocs').textContent = G.documents?.length || 0;
+  document.getElementById('dashWorkflowCount').textContent = 
+    G.workflows?.filter(w => ['pending', 'in_review'].includes(w.status))?.length || 0;
 }
 
-function renderActivityList() {
-  const list = document.getElementById('activityList');
-  if (!list) return;
-  
-  if (G.auditLog.length === 0) {
-    list.innerHTML = '<div class="text-center py-8 text-blue-300/50"><i class="fas fa-folder-open text-2xl mb-2 block"></i>Aucune activité récente</div>';
-    return;
-  }
-  
-  list.innerHTML = G.auditLog.slice(0, 10).map(act => `
-    <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/10">
-      <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs">
-        <i class="fas fa-circle"></i>
-      </div>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm text-white truncate">${act.action} ${act.targetType}</p>
-        <p class="text-xs text-blue-300/60">${formatDate(act.timestamp)}</p>
-      </div>
-    </div>
-  `).join('');
-}
-
-// ─── Documents ───
 function renderDocuments() {
   const grid = document.getElementById('documentGrid');
   if (!grid) return;
   
-  const filtered = getFilteredDocuments();
-  
-  const resultsCountEl = document.getElementById('resultsCount');
-  if (resultsCountEl) resultsCountEl.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
-  
-  if (filtered.length === 0) {
-    grid.innerHTML = `
-      <div class="col-span-full text-center py-12 text-blue-300/50">
-        <i class="fas fa-folder-open text-4xl mb-3 block opacity-30"></i>
-        <p>Aucun document trouvé</p>
-      </div>
-    `;
+  if (!G.documents?.length) {
+    grid.innerHTML = '<div class="text-center py-12 text-blue-300/50">Aucun document</div>';
     return;
   }
   
-  grid.innerHTML = filtered.map(doc => renderDocCard(doc)).join('');
-}
-
-function getFilteredDocuments() {
-  let docs = G.documents.filter(d => !d.is_deleted);
-  
-  if (G.docsTab === 'company') docs = docs.filter(d => d.scope === 'company');
-  else if (G.docsTab === 'personal') docs = docs.filter(d => d.scope === 'personal');
-  
-  return docs;
-}
-
-function renderDocCard(doc) {
-  const iconClass = getFileIcon(doc.type);
-  const size = formatBytes(doc.size);
-  
-  return `
-    <div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer group" 
-         onclick="openPreviewModal('${doc.id}')">
-      <div class="flex items-start justify-between mb-3">
-        <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center ${iconClass.split(' ')[1]} text-2xl">
-          <i class="fas ${iconClass.split(' ')[0]}"></i>
-        </div>
-        <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-          <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger"><i class="fas fa-download"></i></button>
-        </div>
+  grid.innerHTML = G.documents.map(doc => `
+    <div class="glass-card rounded-2xl p-4 border border-blue-500/20">
+      <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-2xl mb-3">
+        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} ${getFileIcon(doc.type).split(' ')[1]}"></i>
       </div>
-      <h4 class="text-white font-semibold text-sm mb-1 truncate" title="${doc.name}">${doc.name}</h4>
-      <p class="text-blue-300/60 text-xs mb-2">${size} • ${formatDate(doc.created_at)}</p>
+      <h4 class="text-white font-semibold text-sm truncate">${doc.name}</h4>
+      <p class="text-blue-300/60 text-xs">${formatBytes(doc.size)} • ${formatDate(doc.created_at)}</p>
     </div>
-  `;
+  `).join('');
 }
 
-// ─── Gestion des utilisateurs ───
 async function renderUsers() {
   const tbody = document.getElementById('usersList');
   if (!tbody) return;
-  
-  // Recharger les utilisateurs
   await loadUsers();
   
-  tbody.innerHTML = G.users.map(u => `
-    <tr class="hover:bg-blue-500/5 ${u.status === 'pending_validation' ? 'bg-yellow-500/5' : ''}">
+  tbody.innerHTML = G.users?.map(u => `
+    <tr class="hover:bg-blue-500/5">
       <td class="p-4">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-full ${u.status === 'pending_validation' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'} flex items-center justify-center text-sm font-bold">${u.full_name?.charAt(0) || 'U'}</div>
+          <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
+            ${u.full_name?.charAt(0) || 'U'}
+          </div>
           <div>
             <p class="text-white text-sm font-medium">${u.full_name || u.email}</p>
             <p class="text-xs text-blue-300/60">${u.email}</p>
           </div>
         </div>
       </td>
-      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
-      <td class="p-4 hidden sm:table-cell">
-        <span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : u.status === 'pending_validation' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'}">
+      <td class="p-4">
+        <span class="px-2 py-1 rounded-full text-xs ${u.role === 'admin' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}">
+          ${G.roles[u.role]?.name || u.role}
+        </span>
+      </td>
+      <td class="p-4">
+        <span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">
           ${u.status === 'pending_validation' ? 'En attente' : u.status}
         </span>
       </td>
       <td class="p-4">
-        <div class="flex gap-2">
-          ${u.status === 'pending_validation' && canValidateUsers() ? 
-            `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30"><i class="fas fa-check"></i></button>` : ''}
-          <button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>
-        </div>
+        ${u.status === 'pending_validation' && canValidateUsers() ? 
+          `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
       </td>
     </tr>
-  `).join('');
-}
-
-function getRoleBadgeClass(role) {
-  const classes = { admin: 'bg-red-500/20 text-red-400', manager: 'bg-orange-500/20 text-orange-400', editor: 'bg-blue-500/20 text-blue-400', viewer: 'bg-gray-500/20 text-gray-400' };
-  return classes[role] || 'bg-gray-500/20 text-gray-400';
+  `).join('') || '<tr><td colspan="4" class="p-4 text-center text-blue-300/50">Aucun utilisateur</td></tr>';
 }
 
 async function validateUser(userId) {
-  if (!canValidateUsers()) {
-    showToast('Permission refusée', 'error');
-    return;
-  }
+  if (!canValidateUsers()) return;
   
   const { error } = await G.supabaseClient
     .from('profiles')
-    .update({ 
-      status: 'active', 
-      validated_at: new Date().toISOString(),
-      validated_by: G.currentUser?.id 
-    })
+    .update({ status: 'active', validated_at: new Date().toISOString(), validated_by: G.currentUser?.id })
     .eq('id', userId);
   
-  if (error) {
-    showToast('Erreur de validation', 'error');
-    return;
+  if (!error) {
+    showToast('Utilisateur validé', 'success');
+    await loadUsers();
+    renderUsers();
+    updatePendingUsersCount();
   }
-  
-  showToast('Utilisateur validé', 'success');
-  addAudit('validate', 'user', userId);
-  await loadUsers();
-  renderUsers();
-  updatePendingUsersCount();
 }
 
 async function renderPendingUsers() {
   const container = document.getElementById('pendingUsersList');
   if (!container) return;
   
-  // Recharger les utilisateurs en attente
-  const { data: pendingUsers, error } = await G.supabaseClient
+  const { data, error } = await G.supabaseClient
     .from('profiles')
     .select('*')
     .eq('company_id', G.currentUser?.companyId)
     .eq('status', 'pending_validation');
   
-  if (error || !pendingUsers || pendingUsers.length === 0) {
-    container.innerHTML = `
-      <div class="text-center py-12 text-blue-300/50">
-        <i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i>
-        <p>Aucun utilisateur en attente de validation</p>
-      </div>
-    `;
+  if (error || !data?.length) {
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50">Aucun utilisateur en attente</div>';
     return;
   }
   
-  container.innerHTML = pendingUsers.map(u => `
+  container.innerHTML = data.map(u => `
     <div class="glass-card rounded-xl p-4 border border-yellow-500/20">
-      <div class="flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-lg font-bold">
-            ${u.full_name?.charAt(0).toUpperCase() || 'U'}
+          <div class="w-12 h-12 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center text-lg font-bold">
+            ${u.full_name?.charAt(0) || 'U'}
           </div>
           <div>
-            <p class="text-white font-medium text-lg">${u.full_name || u.email}</p>
+            <p class="text-white font-medium">${u.full_name || u.email}</p>
             <p class="text-sm text-blue-300/60">${u.email}</p>
-            <p class="text-xs text-yellow-400/60 mt-1">
-              <i class="fas fa-clock mr-1"></i>
-              En attente depuis ${formatDate(u.created_at)}
-            </p>
           </div>
         </div>
-        <div class="flex gap-2">
-          <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30">
-            <i class="fas fa-check mr-2"></i>Valider
-          </button>
-          <button onclick="rejectUser('${u.id}')" class="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30">
-            <i class="fas fa-times mr-2"></i>Rejeter
-          </button>
-        </div>
+        <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400">
+          <i class="fas fa-check mr-2"></i>Valider
+        </button>
       </div>
     </div>
   `).join('');
 }
 
-async function rejectUser(userId) {
-  if (!confirm('Rejeter cet utilisateur ?')) return;
-  
-  const { error } = await G.supabaseClient
-    .from('profiles')
-    .update({ status: 'rejected', rejected_at: new Date().toISOString() })
-    .eq('id', userId);
-  
-  if (!error) {
-    showToast('Utilisateur rejeté', 'info');
-    renderPendingUsers();
-  }
-}
-
-async function deleteUser(userId) {
-  if (!confirm('Supprimer cet utilisateur ?')) return;
-  
-  const { error } = await G.supabaseClient
-    .from('profiles')
-    .delete()
-    .eq('id', userId);
-  
-  if (!error) {
-    showToast('Utilisateur supprimé', 'success');
-    await loadUsers();
-    renderUsers();
-  }
-}
-
-// ─── Autres fonctions (simplifiées) ───
-function renderWorkflows() { /* Implémentation similaire */ }
-function renderShared() { /* Implémentation similaire */ }
-function renderTags() { /* Implémentation similaire */ }
-function renderBilling() { /* Implémentation similaire */ }
-function renderSettings() { /* Implémentation similaire */ }
-function renderSecurity() { /* Implémentation similaire */ }
-function renderSysLogs() { /* Implémentation similaire */ }
-function renderRBAC() { /* Implémentation similaire */ }
-function renderAnalytics() { /* Implémentation similaire */ }
-function renderFolders() { /* Implémentation similaire */ }
-function renderSignatures() { /* Implémentation similaire */ }
-function renderAI() { /* Implémentation similaire */ }
-function renderAutomation() { /* Implémentation similaire */ }
-function renderIntegrations() { /* Implémentation similaire */ }
-function renderBackups() { /* Implémentation similaire */ }
-function renderApiKeys() { /* Implémentation similaire */ }
-
-// ─── Audit Log ───
-function addAudit(action, targetType, targetId, details = {}) {
-  const entry = { 
-    id: generateId(), 
-    userId: G.currentUser?.id, 
-    userEmail: G.currentUser?.email, 
-    action, 
-    targetType, 
-    targetId, 
-    details, 
-    timestamp: new Date().toISOString()
-  };
-  G.auditLog.unshift(entry);
-  if (G.auditLog.length > 5000) G.auditLog.pop();
-}
-
-// ─── Stockage & Badges ───
 function updateStorageDisplay() {
-  const used = G.documents.reduce((sum, d) => sum + (d.size || 0), 0);
+  const used = (G.documents || []).reduce((sum, d) => sum + (d.size || 0), 0);
   const limit = CONFIG.plans[G.currentUser?.plan || 'free'].storage;
   const percent = Math.min(100, Math.round((used / limit) * 100));
   
-  const storagePercent = document.getElementById('storagePercent');
-  const storageBar = document.getElementById('storageBar');
-  const storageText = document.getElementById('storageText');
-  
-  if (storagePercent) storagePercent.textContent = `${percent}%`;
-  if (storageBar) storageBar.style.width = `${percent}%`;
-  if (storageText) storageText.textContent = `${formatBytes(used)} / ${formatBytes(limit)}`;
+  document.getElementById('storagePercent').textContent = `${percent}%`;
+  document.getElementById('storageBar').style.width = `${percent}%`;
+  document.getElementById('storageText').textContent = `${formatBytes(used)} / ${formatBytes(limit)}`;
 }
 
-function updateBadges() {
-  // Mise à jour des badges de notification
-}
-
-function updateNotifBadge() {
-  const notifBadge = document.getElementById('notifBadge');
-  if (notifBadge) notifBadge.classList.toggle('hidden', G.unreadCount === 0);
-}
-
-// ─── Initialisation au chargement ───
+// ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🚀 SystemesGED v6.0 démarré');
+  console.log('🚀 SystemesGED v6.2 démarré');
   
-  // 1. Initialiser Supabase
   initSupabase();
-  
-  // 2. Créer les administrateurs automatiquement
   await initializeSystemAdmins();
   
-  // 3. Vérifier la session existante
+  // Vérifier session existante
   const { data: { session } } = await G.supabaseClient.auth.getSession();
-  if (session) {
+  if (session?.user) {
     const { data: profile } = await G.supabaseClient
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
+      .from('profiles').select('*').eq('id', session.user.id).single();
     
     if (profile && profile.status !== 'pending_validation') {
       G.currentUser = {
@@ -1120,14 +731,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         role: profile.role,
         companyId: profile.company_id,
         plan: profile.plan || 'free',
-        status: profile.status
+        status: profile.status,
+        isSystemAdmin: profile.is_company_admin
       };
       
       const { data: company } = await G.supabaseClient
-        .from('companies')
-        .select('*')
-        .eq('id', profile.company_id)
-        .single();
+        .from('companies').select('*').eq('id', profile.company_id).single();
       
       if (company) G.currentCompany = company;
       await initializeApp();
@@ -1135,11 +744,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// Exposer les fonctions globalement
+// Exposer globalement
 Object.assign(window, {
   switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, handleLogout,
-  switchView, closeMobileSidebar,
-  validateUser, rejectUser, deleteUser,
-  renderDocuments, renderUsers, renderPendingUsers,
-  initializeSystemAdmins
+  switchView, closeMobileSidebar, validateUser,
+  renderDocuments, renderUsers, renderPendingUsers, initializeSystemAdmins
 });
