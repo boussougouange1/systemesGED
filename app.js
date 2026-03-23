@@ -54,7 +54,7 @@ window.G = {
   currentDocId: null,
   currentWfId: null,
   currentFolderId: null,
-  folderPath: [{ id: null, name: 'Racine' }],
+  folderPath: [],
   pendingUsersCount: 0,
   _uploadScope: 'company'
 };
@@ -80,6 +80,8 @@ async function initSupabase() {
 
 async function loadUserFromSupabase(user) {
   if (!user) return false;
+  
+  // Vérifier si c'est un admin système
   const sysAdmin = CONFIG.systemAdmins.find(a => a.email === user.email);
   if (sysAdmin) {
     G.currentUser = {
@@ -97,12 +99,19 @@ async function loadUserFromSupabase(user) {
     await loadAllData();
     return true;
   }
+  
+  // Utilisateur normal : récupérer le profil
   const { data: profile, error } = await G.supabase
     .from('profiles')
     .select('*, companies!company_id(name, plan)')
     .eq('id', user.id)
     .single();
-  if (error) return false;
+  
+  if (error) {
+    console.error('Erreur chargement profil:', error);
+    return false;
+  }
+  
   G.currentUser = {
     id: user.id,
     email: profile.email,
@@ -114,6 +123,7 @@ async function loadUserFromSupabase(user) {
     status: profile.status,
     isSystemAdmin: false
   };
+  
   await loadAllData();
   return true;
 }
@@ -125,81 +135,150 @@ async function ensureCompanyExists(companyId, companyName) {
     .eq('id', companyId)
     .single();
   if (!existing) {
-    await G.supabase.from('companies').insert({ id: companyId, name: companyName, plan: 'enterprise' });
+    await G.supabase.from('companies').insert({ 
+      id: companyId, 
+      name: companyName, 
+      plan: 'enterprise' 
+    });
   }
 }
 
-// ─── Définir le dossier racine ───
+// ─── Gestion du dossier racine ───
 async function setRootFolder() {
   if (!G.currentUser?.companyId) return;
   
-  let rootId = null;
+  // Rechercher le dossier racine de l'entreprise
+  const { data: rootFolder, error } = await G.supabase
+    .from('folders')
+    .select('id')
+    .eq('company_id', G.currentUser.companyId)
+    .eq('name', 'Racine')
+    .maybeSingle();
   
-  // Pour l'entreprise live_company, utiliser '_root_' (ID existant)
-  if (G.currentUser.companyId === 'live_company') {
-    rootId = '_root_';
-  } else {
-    // Pour les autres entreprises, rechercher dans la base
-    const { data: rootFolder, error } = await G.supabase
-      .from('folders')
-      .select('id')
-      .eq('company_id', G.currentUser.companyId)
-      .eq('name', 'Racine')
-      .single();
-    
-    if (rootFolder && !error) {
-      rootId = rootFolder.id;
-    } else {
-      // Créer un dossier racine si non trouvé
-      rootId = `${G.currentUser.companyId}_root`;
-      const { error: insertErr } = await G.supabase
-        .from('folders')
-        .insert({
-          id: rootId,
-          name: 'Racine',
-          parent_id: null,
-          company_id: G.currentUser.companyId,
-          created_at: new Date().toISOString()
-        });
-      if (insertErr) console.error('Erreur création dossier racine:', insertErr);
-    }
+  if (rootFolder && !error) {
+    G.currentFolderId = rootFolder.id;
+    G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
+    console.log('Dossier racine trouvé:', rootFolder.id);
+    return;
   }
   
-  G.currentFolderId = rootId;
-  G.folderPath = [{ id: rootId, name: 'Racine' }];
-  console.log('Dossier racine défini:', rootId);
+  // Créer un dossier racine si non trouvé
+  const newRootId = `${G.currentUser.companyId}_root`;
+  const { error: insertErr } = await G.supabase
+    .from('folders')
+    .insert({
+      id: newRootId,
+      name: 'Racine',
+      parent_id: null,
+      company_id: G.currentUser.companyId,
+      created_at: new Date().toISOString()
+    });
+  
+  if (!insertErr) {
+    G.currentFolderId = newRootId;
+    G.folderPath = [{ id: newRootId, name: 'Racine' }];
+    console.log('Dossier racine créé:', newRootId);
+  } else {
+    console.error('Erreur création dossier racine:', insertErr);
+  }
 }
 
+// ─── Chargement des données ───
 async function loadAllData() {
   if (!G.currentUser?.companyId) return;
   const companyId = G.currentUser.companyId;
 
-  const { data: docs } = await G.supabase.from('documents').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+  // Documents
+  const { data: docs } = await G.supabase
+    .from('documents')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false });
   G.documents = docs || [];
-  const { data: wfs } = await G.supabase.from('workflows').select('*').eq('company_id', companyId);
+
+  // Workflows
+  const { data: wfs } = await G.supabase
+    .from('workflows')
+    .select('*')
+    .eq('company_id', companyId);
   G.workflows = wfs || [];
-  const { data: users } = await G.supabase.from('profiles').select('*').eq('company_id', companyId);
+
+  // Utilisateurs (profiles)
+  const { data: users } = await G.supabase
+    .from('profiles')
+    .select('*')
+    .eq('company_id', companyId);
   G.users = users || [];
-  const { data: tags } = await G.supabase.from('tags').select('*').eq('company_id', companyId);
+
+  // Tags
+  const { data: tags } = await G.supabase
+    .from('tags')
+    .select('*')
+    .eq('company_id', companyId);
   G.tags = tags || [];
-  const { data: shares } = await G.supabase.from('shares').select('*, documents!document_id(name)').eq('sender_id', G.currentUser.id);
+
+  // Partages
+  const { data: shares } = await G.supabase
+    .from('shares')
+    .select('*, documents!document_id(name)')
+    .eq('sender_id', G.currentUser.id);
   G.shares = shares || [];
-  const { data: folders } = await G.supabase.from('folders').select('*').eq('company_id', companyId);
+
+  // Dossiers
+  const { data: folders } = await G.supabase
+    .from('folders')
+    .select('*')
+    .eq('company_id', companyId);
   G.folders = folders || [];
-  const { data: signatures } = await G.supabase.from('signatures').select('*').eq('signer_id', G.currentUser.id);
+
+  // Signatures
+  const { data: signatures } = await G.supabase
+    .from('signatures')
+    .select('*')
+    .eq('signer_id', G.currentUser.id);
   G.signatures = signatures || [];
-  const { data: rules } = await G.supabase.from('automation_rules').select('*').eq('company_id', companyId);
+
+  // Règles d'automatisation
+  const { data: rules } = await G.supabase
+    .from('automation_rules')
+    .select('*')
+    .eq('company_id', companyId);
   G.automationRules = rules || [];
-  const { data: keys } = await G.supabase.from('api_keys').select('*').eq('user_id', G.currentUser.id);
+
+  // Clés API
+  const { data: keys } = await G.supabase
+    .from('api_keys')
+    .select('*')
+    .eq('user_id', G.currentUser.id);
   G.apiKeys = keys || [];
-  const { data: backups } = await G.supabase.from('backups').select('*').eq('company_id', companyId);
+
+  // Sauvegardes
+  const { data: backups } = await G.supabase
+    .from('backups')
+    .select('*')
+    .eq('company_id', companyId);
   G.backups = backups || [];
-  const { data: audit } = await G.supabase.from('audit_logs').select('*').eq('user_id', G.currentUser.id).order('created_at', { ascending: false }).limit(50);
+
+  // Logs d'audit
+  const { data: audit } = await G.supabase
+    .from('audit_logs')
+    .select('*')
+    .eq('user_id', G.currentUser.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
   G.auditLogs = audit || [];
-  const { data: syslogs } = await G.supabase.from('system_logs').select('*').order('created_at', { ascending: false }).limit(50);
+
+  // Logs système
+  const { data: syslogs } = await G.supabase
+    .from('system_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
   G.systemLogs = syslogs || [];
   
+  // Définir le dossier racine
   await setRootFolder();
+  
   updateUI();
 }
 
@@ -213,26 +292,30 @@ function updateUI() {
 
 function updateUserDisplay() {
   if (!G.currentUser) return;
-  const userNameDisplay = document.getElementById('userNameDisplay');
-  const userRoleDisplay = document.getElementById('userRoleDisplay');
-  const userAvatarInitial = document.getElementById('userAvatarInitial');
-  const dropdownUserName = document.getElementById('dropdownUserName');
-  const dropdownUserEmail = document.getElementById('dropdownUserEmail');
-  const companyNameLabel = document.getElementById('companyNameLabel');
-  const companyPlanLabel = document.getElementById('companyPlanLabel');
-  const companyAvatar = document.getElementById('companyAvatar');
-  const planBadge = document.getElementById('planBadge');
-  if (userNameDisplay) userNameDisplay.textContent = G.currentUser.name;
-  if (userRoleDisplay) userRoleDisplay.textContent = G.roles[G.currentUser.role]?.name || G.currentUser.role;
-  if (userAvatarInitial) userAvatarInitial.textContent = G.currentUser.name.charAt(0).toUpperCase();
-  if (dropdownUserName) dropdownUserName.textContent = G.currentUser.name;
-  if (dropdownUserEmail) dropdownUserEmail.textContent = G.currentUser.email;
-  if (companyNameLabel) companyNameLabel.textContent = G.currentUser.companyName || 'Entreprise';
-  if (companyPlanLabel) companyPlanLabel.textContent = `Plan ${G.currentUser.plan}`;
-  if (companyAvatar) companyAvatar.textContent = (G.currentUser.companyName || 'E').charAt(0).toUpperCase();
-  if (planBadge) {
-    planBadge.textContent = G.currentUser.plan.toUpperCase();
-    planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan}`;
+  
+  const elements = {
+    userNameDisplay: document.getElementById('userNameDisplay'),
+    userRoleDisplay: document.getElementById('userRoleDisplay'),
+    userAvatarInitial: document.getElementById('userAvatarInitial'),
+    dropdownUserName: document.getElementById('dropdownUserName'),
+    dropdownUserEmail: document.getElementById('dropdownUserEmail'),
+    companyNameLabel: document.getElementById('companyNameLabel'),
+    companyPlanLabel: document.getElementById('companyPlanLabel'),
+    companyAvatar: document.getElementById('companyAvatar'),
+    planBadge: document.getElementById('planBadge')
+  };
+
+  if (elements.userNameDisplay) elements.userNameDisplay.textContent = G.currentUser.name;
+  if (elements.userRoleDisplay) elements.userRoleDisplay.textContent = G.roles[G.currentUser.role]?.name || G.currentUser.role;
+  if (elements.userAvatarInitial) elements.userAvatarInitial.textContent = G.currentUser.name.charAt(0).toUpperCase();
+  if (elements.dropdownUserName) elements.dropdownUserName.textContent = G.currentUser.name;
+  if (elements.dropdownUserEmail) elements.dropdownUserEmail.textContent = G.currentUser.email;
+  if (elements.companyNameLabel) elements.companyNameLabel.textContent = G.currentUser.companyName || 'Entreprise';
+  if (elements.companyPlanLabel) elements.companyPlanLabel.textContent = `Plan ${G.currentUser.plan}`;
+  if (elements.companyAvatar) elements.companyAvatar.textContent = (G.currentUser.companyName || 'E').charAt(0).toUpperCase();
+  if (elements.planBadge) {
+    elements.planBadge.textContent = G.currentUser.plan.toUpperCase();
+    elements.planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan}`;
   }
 }
 
@@ -243,6 +326,7 @@ function updateBadges() {
     docBadge.textContent = docCount;
     docBadge.classList.toggle('hidden', docCount === 0);
   }
+  
   const wfCount = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
   const wfBadge = document.getElementById('d-wfBadge');
   if (wfBadge) {
@@ -255,9 +339,11 @@ function updateStorageDisplay() {
   const used = G.documents.reduce((sum, d) => sum + (d.size || 0), 0);
   const limit = CONFIG.plans[G.currentUser.plan].storage;
   const percent = Math.min(100, Math.round((used / limit) * 100));
+  
   const storagePercent = document.getElementById('storagePercent');
   const storageBar = document.getElementById('storageBar');
   const storageText = document.getElementById('storageText');
+  
   if (storagePercent) storagePercent.textContent = `${percent}%`;
   if (storageBar) storageBar.style.width = `${percent}%`;
   if (storageText) storageText.textContent = `${formatBytes(used)} / ${formatBytes(limit)}`;
@@ -268,10 +354,12 @@ async function handleLogin(e) {
   e.preventDefault();
   const email = document.getElementById('loginEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('loginPassword')?.value;
+  
   if (!email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
+  
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
   if (btn) btn.disabled = true;
@@ -280,6 +368,7 @@ async function handleLogin(e) {
   try {
     const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    
     if (data.user) {
       await loadUserFromSupabase(data.user);
       showToast(`Bienvenue ${G.currentUser.name}`, 'success');
@@ -296,19 +385,23 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
   e.preventDefault();
+  
   const firstName = document.getElementById('regFirst')?.value.trim();
   const lastName = document.getElementById('regLast')?.value.trim();
-  const company = document.getElementById('regCompany')?.value.trim();
+  const companyName = document.getElementById('regCompany')?.value.trim();
   const email = document.getElementById('regEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('regPassword')?.value;
-  if (!firstName || !lastName || !company || !email || !password) {
+  
+  if (!firstName || !lastName || !companyName || !email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
+  
   if (CONFIG.systemAdmins.some(a => a.email === email)) {
     showToast('Cet email est réservé', 'error');
     return;
   }
+  
   const btn = document.getElementById('registerBtn');
   if (btn) {
     btn.disabled = true;
@@ -316,32 +409,59 @@ async function handleRegister(e) {
   }
 
   try {
+    // 1. Créer l'entreprise
     const companyId = `comp_${Date.now()}`;
-    const { error: compErr } = await G.supabase.from('companies').insert({ id: companyId, name: company, plan: 'free' });
+    const { error: compErr } = await G.supabase
+      .from('companies')
+      .insert({ id: companyId, name: companyName, plan: 'free' });
     if (compErr) throw compErr;
 
+    // 2. Créer l'utilisateur dans Auth
     const { data, error } = await G.supabase.auth.signUp({
       email,
       password,
-      options: { data: { name: `${firstName} ${lastName}`, company_id: companyId } }
+      options: { 
+        data: { 
+          name: `${firstName} ${lastName}`, 
+          company_id: companyId 
+        } 
+      }
     });
     if (error) throw error;
 
-    const { error: profErr } = await G.supabase.from('profiles').insert({
-      id: data.user.id,
-      email,
-      name: `${firstName} ${lastName}`,
-      role: 'admin',
-      status: 'pending_validation',
-      company_id: companyId,
-      plan: 'free'
-    });
+    // 3. Créer le profil
+    const { error: profErr } = await G.supabase
+      .from('profiles')
+      .insert({
+        id: data.user.id,
+        email,
+        name: `${firstName} ${lastName}`,
+        role: 'admin',
+        status: 'pending_validation',
+        company_id: companyId,
+        plan: 'free'
+      });
     if (profErr) throw profErr;
+
+    // 4. Créer le dossier racine de l'entreprise
+    const rootFolderId = `${companyId}_root`;
+    const { error: folderErr } = await G.supabase
+      .from('folders')
+      .insert({
+        id: rootFolderId,
+        name: 'Racine',
+        parent_id: null,
+        company_id: companyId,
+        created_at: new Date().toISOString()
+      });
+    if (folderErr) console.warn('Erreur création dossier racine:', folderErr);
 
     showToast('Compte créé ! En attente de validation.', 'success');
     switchAuthTab('login');
+    
     const loginEmail = document.getElementById('loginEmail');
     if (loginEmail) loginEmail.value = email;
+    
   } catch (err) {
     console.error(err);
     showToast('Erreur inscription: ' + err.message, 'error');
@@ -356,28 +476,34 @@ async function handleRegister(e) {
 async function handleLogout() {
   await G.supabase.auth.signOut();
   G.currentUser = null;
+  
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
+  
   if (loginScreen) loginScreen.style.display = 'block';
   if (mainApp) mainApp.style.display = 'none';
+  
   showToast('Déconnexion réussie', 'info');
 }
 
 function switchToMainApp() {
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
+  
   if (loginScreen) loginScreen.style.display = 'none';
   if (mainApp) mainApp.style.display = 'block';
+  
   switchView('dashboard');
 }
 
 function switchAuthTab(tab) {
   const loginTab = document.getElementById('tabLogin');
   const regTab = document.getElementById('tabRegister');
-  if (loginTab) loginTab.classList.toggle('active', tab === 'login');
-  if (regTab) regTab.classList.toggle('active', tab === 'register');
   const loginWrapper = document.getElementById('loginFormWrapper');
   const regWrapper = document.getElementById('registerFormWrapper');
+  
+  if (loginTab) loginTab.classList.toggle('active', tab === 'login');
+  if (regTab) regTab.classList.toggle('active', tab === 'register');
   if (loginWrapper) loginWrapper.style.display = tab === 'login' ? 'block' : 'none';
   if (regWrapper) regWrapper.style.display = tab === 'register' ? 'block' : 'none';
 }
@@ -386,6 +512,7 @@ function togglePwdInput(id, btn) {
   const input = document.getElementById(id);
   const icon = btn?.querySelector('i');
   if (!input) return;
+  
   input.type = input.type === 'password' ? 'text' : 'password';
   if (icon) icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
@@ -393,8 +520,10 @@ function togglePwdInput(id, btn) {
 function demoLogin() {
   const loginEmail = document.getElementById('loginEmail');
   const loginPassword = document.getElementById('loginPassword');
+  
   if (loginEmail) loginEmail.value = 'demo@systemesged.fr';
   if (loginPassword) loginPassword.value = 'Demo123!';
+  
   handleLogin(new Event('submit'));
 }
 
@@ -407,36 +536,41 @@ function switchView(viewName) {
   document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
   const target = document.getElementById(`view-${viewName}`);
   if (target) target.classList.add('active-view');
+  
   G.currentView = viewName;
   closeMobileSidebar();
-  switch (viewName) {
-    case 'dashboard': renderDashboard(); break;
-    case 'documents': renderDocuments(); break;
-    case 'workflows': renderWorkflows(); break;
-    case 'shared': renderShared(); break;
-    case 'users': renderUsers(); break;
-    case 'tags': renderTags(); break;
-    case 'billing': renderBilling(); break;
-    case 'settings': renderSettings(); break;
-    case 'security': renderSecurity(); break;
-    case 'logs': renderSysLogs(); break;
-    case 'rbac': renderRBAC(); break;
-    case 'analytics': renderAnalytics(); break;
-    case 'folders': renderFolders(); break;
-    case 'signatures': renderSignatures(); break;
-    case 'ai': renderAI(); break;
-    case 'automation': renderAutomation(); break;
-    case 'integrations': renderIntegrations(); break;
-    case 'backups': renderBackups(); break;
-    case 'apikeys': renderApiKeys(); break;
-    case 'billing2': renderBillingV6(); break;
-    case 'auditv6': renderAuditV6(); break;
-    case 'search-adv': renderAdvancedSearch(); break;
-    case 'versioning': renderVersioning(); break;
-    case 'search': renderSearchV7(); break;
-    case 'rbacv7': renderRBACV7(); break;
-    case 'pending-users': renderPendingUsers(); break;
-  }
+  
+  // Rendu des vues
+  const views = {
+    dashboard: renderDashboard,
+    documents: renderDocuments,
+    workflows: renderWorkflows,
+    shared: renderShared,
+    users: renderUsers,
+    tags: renderTags,
+    billing: renderBilling,
+    settings: renderSettings,
+    security: renderSecurity,
+    logs: renderSysLogs,
+    rbac: renderRBAC,
+    analytics: renderAnalytics,
+    folders: renderFolders,
+    signatures: renderSignatures,
+    ai: renderAI,
+    automation: renderAutomation,
+    integrations: renderIntegrations,
+    backups: renderBackups,
+    apikeys: renderApiKeys,
+    billing2: renderBillingV6,
+    auditv6: renderAuditV6,
+    'search-adv': renderAdvancedSearch,
+    versioning: renderVersioning,
+    search: renderSearchV7,
+    rbacv7: renderRBACV7,
+    'pending-users': renderPendingUsers
+  };
+  
+  if (views[viewName]) views[viewName]();
 }
 
 function openMobileSidebar() {
@@ -459,25 +593,18 @@ function renderDashboard() {
   const activeWorkflows = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
   const sharedCount = G.shares.filter(s => s.status === 'active').length;
   const userCount = G.users.length;
+  
   const totalDocsEl = document.getElementById('totalDocs');
   const dashWorkflowCountEl = document.getElementById('dashWorkflowCount');
   const sharedCountEl = document.getElementById('sharedCount');
   const dashUserCountEl = document.getElementById('dashUserCount');
+  
   if (totalDocsEl) totalDocsEl.textContent = totalDocs;
   if (dashWorkflowCountEl) dashWorkflowCountEl.textContent = activeWorkflows;
   if (sharedCountEl) sharedCountEl.textContent = sharedCount;
   if (dashUserCountEl) dashUserCountEl.textContent = userCount;
-
-  const used = G.documents.reduce((sum, d) => sum + (d.size || 0), 0);
-  const limit = CONFIG.plans[G.currentUser.plan].storage;
-  const percent = Math.min(100, Math.round((used / limit) * 100));
-  const storagePercent = document.getElementById('storagePercent');
-  const storageBar = document.getElementById('storageBar');
-  const storageText = document.getElementById('storageText');
-  if (storagePercent) storagePercent.textContent = `${percent}%`;
-  if (storageBar) storageBar.style.width = `${percent}%`;
-  if (storageText) storageText.textContent = `${formatBytes(used)} / ${formatBytes(limit)}`;
-
+  
+  updateStorageDisplay();
   renderActivityList();
   renderQuickAccess();
   renderPopularTags();
@@ -488,11 +615,13 @@ function renderDashboard() {
 function renderActivityList() {
   const list = document.getElementById('activityList');
   if (!list) return;
+  
   const activities = G.auditLogs.slice(0, 10);
   if (activities.length === 0) {
     list.innerHTML = '<div class="text-center py-8 text-blue-300/50"><i class="fas fa-folder-open text-2xl mb-2 block"></i>Aucune activité récente</div>';
     return;
   }
+  
   list.innerHTML = activities.map(act => `
     <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/10">
       <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
@@ -507,15 +636,28 @@ function renderActivityList() {
 }
 
 function getActionIcon(action) {
-  const icons = { login: 'fa-sign-in-alt', logout: 'fa-sign-out-alt', upload: 'fa-upload', download: 'fa-download', share: 'fa-share', delete: 'fa-trash', restore: 'fa-undo', view_change: 'fa-eye', validate: 'fa-check', reject: 'fa-times' };
+  const icons = { 
+    login: 'fa-sign-in-alt', 
+    logout: 'fa-sign-out-alt', 
+    upload: 'fa-upload', 
+    download: 'fa-download', 
+    share: 'fa-share', 
+    delete: 'fa-trash', 
+    restore: 'fa-undo', 
+    view_change: 'fa-eye', 
+    validate: 'fa-check', 
+    reject: 'fa-times' 
+  };
   return icons[action] || 'fa-circle';
 }
 
 function renderQuickAccess() {
   const pdfCount = G.documents.filter(d => !d.is_deleted && d.type === 'pdf').length;
   const docCount = G.documents.filter(d => !d.is_deleted && d.type === 'doc').length;
+  
   const quickPdfCount = document.getElementById('quickPdfCount');
   const quickDocCount = document.getElementById('quickDocCount');
+  
   if (quickPdfCount) quickPdfCount.textContent = `${pdfCount} fichier(s)`;
   if (quickDocCount) quickDocCount.textContent = `${docCount} fichier(s)`;
 }
@@ -523,11 +665,13 @@ function renderQuickAccess() {
 function renderPopularTags() {
   const container = document.getElementById('popularTags');
   if (!container) return;
+  
   const sorted = [...G.tags].sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 8);
   if (sorted.length === 0) {
     container.innerHTML = '<span class="text-blue-300/50 text-sm">Aucun tag</span>';
     return;
   }
+  
   container.innerHTML = sorted.map(t => `
     <span class="tag" style="background:${t.color}20;border-color:${t.color}40;color:${t.color}" onclick="filterByTag('${t.name}')">
       ${t.name}
@@ -538,11 +682,13 @@ function renderPopularTags() {
 function renderTeamDocs() {
   const list = document.getElementById('teamDocsList');
   if (!list) return;
+  
   const docs = G.documents.filter(d => !d.is_deleted && d.scope === 'company').slice(0, 5);
   if (docs.length === 0) {
     list.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-3">Aucun document</p>';
     return;
   }
+  
   list.innerHTML = docs.map(doc => `
     <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-blue-500/10 cursor-pointer" onclick="openPreviewModal('${doc.id}')">
       <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]}">
@@ -560,7 +706,9 @@ function renderMyWorkflows() {
   const list = document.getElementById('myWorkflowsList');
   const badge = document.getElementById('myWorkflowsBadge');
   if (!list) return;
+  
   const myWfs = G.workflows.filter(w => w.assignee_id === G.currentUser.id || w.created_by === G.currentUser.id).slice(0, 5);
+  
   if (badge) {
     if (myWfs.length > 0) {
       badge.textContent = myWfs.length;
@@ -569,10 +717,12 @@ function renderMyWorkflows() {
       badge.classList.add('hidden');
     }
   }
+  
   if (myWfs.length === 0) {
     list.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-3">Aucun workflow assigné</p>';
     return;
   }
+  
   list.innerHTML = myWfs.map(wf => `
     <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-orange-500/10 cursor-pointer" onclick="openWfDetail('${wf.id}')">
       <div class="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400">
@@ -590,22 +740,36 @@ function renderMyWorkflows() {
 function renderDocuments() {
   const grid = document.getElementById('documentGrid');
   if (!grid) return;
+  
   let filtered = G.documents.filter(d => !d.is_deleted);
-  if (G.docsTab === 'company') filtered = filtered.filter(d => d.scope === 'company');
-  else if (G.docsTab === 'personal') filtered = filtered.filter(d => d.scope === 'personal');
-  else if (G.docsTab === 'mine') filtered = filtered.filter(d => d.owner_id === G.currentUser.id);
-  else if (G.docsTab === 'shared') {
-    const sharedIds = G.shares.filter(s => s.recipient_email === G.currentUser.email && s.status === 'active').map(s => s.document_id);
+  
+  if (G.docsTab === 'company') {
+    filtered = filtered.filter(d => d.scope === 'company');
+  } else if (G.docsTab === 'personal') {
+    filtered = filtered.filter(d => d.scope === 'personal');
+  } else if (G.docsTab === 'mine') {
+    filtered = filtered.filter(d => d.owner_id === G.currentUser.id);
+  } else if (G.docsTab === 'shared') {
+    const sharedIds = G.shares
+      .filter(s => s.recipient_email === G.currentUser.email && s.status === 'active')
+      .map(s => s.document_id);
     filtered = filtered.filter(d => sharedIds.includes(d.id));
   }
+  
   const typeFilter = document.getElementById('filterType')?.value;
   if (typeFilter) filtered = filtered.filter(d => d.type === typeFilter);
+  
   const resultsCount = document.getElementById('resultsCount');
   if (resultsCount) resultsCount.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
+  
   if (filtered.length === 0) {
-    grid.innerHTML = `<div class="col-span-full text-center py-12 text-blue-300/50"><i class="fas fa-folder-open text-4xl mb-3 block opacity-30"></i><p>Aucun document trouvé</p></div>`;
+    grid.innerHTML = `<div class="col-span-full text-center py-12 text-blue-300/50">
+      <i class="fas fa-folder-open text-4xl mb-3 block opacity-30"></i>
+      <p>Aucun document trouvé</p>
+    </div>`;
     return;
   }
+  
   grid.className = G.viewMode === 'grid' ? 'doc-grid' : 'space-y-2';
   grid.innerHTML = filtered.map(doc => G.viewMode === 'grid' ? renderDocCard(doc) : renderDocListItem(doc)).join('');
 }
@@ -697,6 +861,7 @@ function openUploadModal() {
   G.selectedFiles = [];
   G.uploadTags = [];
   renderUploadTags();
+  renderSelectedFiles();
 }
 
 function closeUploadModal() {
@@ -757,10 +922,12 @@ function addFilesToSelection(files) {
 function renderSelectedFiles() {
   const list = document.getElementById('selectedFilesList');
   if (!list) return;
+  
   if (G.selectedFiles.length === 0) {
     list.innerHTML = '';
     return;
   }
+  
   list.innerHTML = G.selectedFiles.map((file, idx) => `
     <div class="flex items-center justify-between p-2 rounded-lg bg-blue-900/30 border border-blue-500/20">
       <div class="flex items-center gap-2 min-w-0">
@@ -791,6 +958,7 @@ function addUploadTag() {
 function renderUploadTags() {
   const container = document.getElementById('uploadTagsContainer');
   if (!container) return;
+  
   container.innerHTML = G.uploadTags.map((t, i) => `
     <span class="tag">
       ${t}
@@ -810,8 +978,13 @@ async function uploadDocument() {
     return;
   }
   
-  // S'assurer que folder_id est défini
-  const folderId = G.currentFolderId || `${G.currentUser.companyId}_root`;
+  // Vérifier que le dossier racine est défini
+  if (!G.currentFolderId) {
+    showToast('Erreur: dossier racine non trouvé', 'error');
+    return;
+  }
+  
+  const folderId = G.currentFolderId;
   
   for (const file of G.selectedFiles) {
     const docId = generateId();
@@ -820,7 +993,7 @@ async function uploadDocument() {
     
     try {
       // Upload vers Storage
-      const { data: uploadData, error: uploadErr } = await G.supabase.storage
+      const { error: uploadErr } = await G.supabase.storage
         .from(CONFIG.storageBucket)
         .upload(storagePath, file);
       
@@ -864,6 +1037,7 @@ async function uploadDocument() {
       showToast(`Erreur: ${err.message}`, 'error');
     }
   }
+  
   closeUploadModal();
   renderDocuments();
   updateBadges();
@@ -874,6 +1048,7 @@ function setDocScope(scope) {
   G._uploadScope = scope;
   const scopeCompany = document.getElementById('scopeCompany');
   const scopePersonal = document.getElementById('scopePersonal');
+  
   if (scopeCompany && scopePersonal) {
     if (scope === 'company') {
       scopeCompany.classList.add('bg-blue-500/15', 'border-blue-500/40', 'text-blue-300');
@@ -887,6 +1062,7 @@ function setDocScope(scope) {
   }
 }
 
+// ─── Preview et téléchargement ───
 function openPreviewModal(docId) {
   G.currentDocId = docId;
   const modal = document.getElementById('previewModal');
@@ -902,15 +1078,24 @@ function closePreviewModal() {
 async function downloadDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
-  await G.supabase.from('documents').update({ downloads: (doc.downloads || 0) + 1 }).eq('id', docId);
+  
+  await G.supabase
+    .from('documents')
+    .update({ downloads: (doc.downloads || 0) + 1 })
+    .eq('id', docId);
   doc.downloads = (doc.downloads || 0) + 1;
-  const { data } = G.supabase.storage.from(CONFIG.storageBucket).getPublicUrl(doc.storage_path);
+  
+  const { data } = G.supabase.storage
+    .from(CONFIG.storageBucket)
+    .getPublicUrl(doc.storage_path);
+  
   const link = document.createElement('a');
   link.href = data.publicUrl;
   link.download = doc.name;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  
   showToast(`Téléchargement: ${doc.name}`, 'success');
 }
 
@@ -925,15 +1110,22 @@ function shareCurrentDocument() {
 async function deleteDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
+  
   if (doc.owner_id !== G.currentUser.id && G.currentUser.role !== 'admin') {
     showToast('Permission refusée', 'error');
     return;
   }
-  const { error } = await G.supabase.from('documents').update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq('id', docId);
+  
+  const { error } = await G.supabase
+    .from('documents')
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq('id', docId);
+  
   if (error) {
     showToast('Erreur suppression', 'error');
     return;
   }
+  
   doc.is_deleted = true;
   doc.deleted_at = new Date().toISOString();
   renderDocuments();
@@ -941,6 +1133,7 @@ async function deleteDocument(docId) {
   showToast('Document déplacé vers la corbeille', 'success');
 }
 
+// ─── Partages ───
 function openShareModal(docId) {
   G.currentDocId = docId;
   const modal = document.getElementById('shareModal');
@@ -959,6 +1152,7 @@ async function shareDocument() {
     showToast('Veuillez entrer un email', 'warning');
     return;
   }
+  
   const share = {
     id: generateId(),
     document_id: G.currentDocId,
@@ -969,11 +1163,13 @@ async function shareDocument() {
     status: 'active',
     created_at: new Date().toISOString()
   };
+  
   const { error } = await G.supabase.from('shares').insert(share);
   if (error) {
     showToast('Erreur partage', 'error');
     return;
   }
+  
   G.shares.push(share);
   showToast('Document partagé avec succès', 'success');
   closeShareModal();
@@ -986,6 +1182,7 @@ function switchSharedTab(tab) {
   const sentPanel = document.getElementById('shared-sent');
   const tabReceived = document.getElementById('tab-received');
   const tabSent = document.getElementById('tab-sent');
+  
   if (receivedPanel && sentPanel) {
     if (tab === 'received') {
       receivedPanel.classList.remove('hidden');
@@ -1005,13 +1202,16 @@ function switchSharedTab(tab) {
 function renderShared() {
   const receivedContainer = document.getElementById('sharedList');
   const sentContainer = document.getElementById('sentSharesList');
+  
   if (G.sharedTab === 'received') {
     if (!receivedContainer) return;
     const received = G.shares.filter(s => s.recipient_email === G.currentUser.email && s.status === 'active');
+    
     if (received.length === 0) {
       receivedContainer.innerHTML = '<p class="text-center py-8 text-blue-300/50">Aucun document partagé avec vous</p>';
       return;
     }
+    
     receivedContainer.innerHTML = received.map(s => `
       <div class="glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="openPreviewModal('${s.document_id}')">
         <div class="flex items-center gap-3">
@@ -1023,10 +1223,12 @@ function renderShared() {
   } else {
     if (!sentContainer) return;
     const sent = G.shares.filter(s => s.sender_id === G.currentUser.id);
+    
     if (sent.length === 0) {
       sentContainer.innerHTML = '<p class="text-center py-8 text-blue-300/50">Aucun partage envoyé</p>';
       return;
     }
+    
     sentContainer.innerHTML = sent.map(s => `
       <div class="glass-card rounded-xl p-4 border border-blue-500/20">
         <div class="flex items-center justify-between">
@@ -1042,6 +1244,7 @@ function renderShared() {
 function renderWorkflows() {
   const container = document.getElementById('wfKanban');
   if (!container) return;
+  
   const statuses = ['pending', 'in_review', 'approved', 'rejected'];
   container.innerHTML = statuses.map(status => `
     <div class="glass-card rounded-xl p-4 border border-blue-500/20">
@@ -1059,17 +1262,32 @@ function renderWorkflows() {
 }
 
 function getWfStatusClass(status) {
-  const classes = { pending: 'bg-orange-500/20 text-orange-300', in_review: 'bg-blue-500/20 text-blue-300', approved: 'bg-green-500/20 text-green-300', rejected: 'bg-red-500/20 text-red-300' };
+  const classes = { 
+    pending: 'bg-orange-500/20 text-orange-300', 
+    in_review: 'bg-blue-500/20 text-blue-300', 
+    approved: 'bg-green-500/20 text-green-300', 
+    rejected: 'bg-red-500/20 text-red-300' 
+  };
   return classes[status] || 'bg-gray-500/20 text-gray-300';
 }
 
 function getWfStatusLabel(status) {
-  const labels = { pending: 'En attente', in_review: 'En révision', approved: 'Approuvé', rejected: 'Rejeté' };
+  const labels = { 
+    pending: 'En attente', 
+    in_review: 'En révision', 
+    approved: 'Approuvé', 
+    rejected: 'Rejeté' 
+  };
   return labels[status] || status;
 }
 
 function getWfStatusColor(status) {
-  const colors = { pending: 'text-orange-400', in_review: 'text-blue-400', approved: 'text-green-400', rejected: 'text-red-400' };
+  const colors = { 
+    pending: 'text-orange-400', 
+    in_review: 'text-blue-400', 
+    approved: 'text-green-400', 
+    rejected: 'text-red-400' 
+  };
   return colors[status] || 'text-gray-400';
 }
 
@@ -1090,6 +1308,7 @@ async function createWorkflow(e) {
     showToast('Veuillez entrer un titre', 'warning');
     return;
   }
+  
   const newWf = {
     id: generateId(),
     title,
@@ -1102,11 +1321,13 @@ async function createWorkflow(e) {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
+  
   const { error } = await G.supabase.from('workflows').insert(newWf);
   if (error) {
     showToast('Erreur création workflow', 'error');
     return;
   }
+  
   G.workflows.unshift(newWf);
   showToast('Workflow créé', 'success');
   closeWorkflowModal();
@@ -1144,8 +1365,10 @@ function searchWorkflows(query) {
     renderWorkflows();
     return;
   }
+  
   const filtered = G.workflows.filter(w => w.title.toLowerCase().includes(query.toLowerCase()));
   const container = document.getElementById('wfKanban');
+  
   if (container) {
     container.innerHTML = filtered.map(wf => `
       <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
@@ -1162,6 +1385,7 @@ function setWfView(view) {
   const listView = document.getElementById('wfListView');
   const btnKanban = document.getElementById('wfViewKanban');
   const btnList = document.getElementById('wfViewList');
+  
   if (view === 'kanban') {
     if (kanban) kanban.classList.remove('hidden');
     if (listView) listView.classList.add('hidden');
@@ -1180,8 +1404,10 @@ function setWfView(view) {
 function renderWorkflowsList() {
   const container = document.getElementById('wfListView');
   if (!container) return;
+  
   let filtered = G.workflows;
   if (G.wfFilter) filtered = filtered.filter(w => w.status === G.wfFilter);
+  
   container.innerHTML = filtered.map(wf => `
     <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
       <div class="flex items-center justify-between">
@@ -1196,6 +1422,7 @@ function renderWorkflowsList() {
 function renderUsers() {
   const tbody = document.getElementById('usersList');
   if (!tbody) return;
+  
   tbody.innerHTML = G.users.map(u => `
     <tr class="hover:bg-blue-500/5">
       <td class="p-4">
@@ -1203,14 +1430,14 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-        </td>
+      </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
       <td class="p-4 hidden md:table-cell">-</td>
       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
       <td class="p-4">
         <div class="flex gap-2">
           ${u.status === 'pending_validation' && canValidateUsers() ? `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
-          <button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>
+          ${canValidateUsers() ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
         </div>
       </td>
     </tr>
@@ -1218,7 +1445,12 @@ function renderUsers() {
 }
 
 function getRoleBadgeClass(role) {
-  const classes = { admin: 'bg-red-500/20 text-red-400', manager: 'bg-orange-500/20 text-orange-400', editor: 'bg-blue-500/20 text-blue-400', viewer: 'bg-gray-500/20 text-gray-400' };
+  const classes = { 
+    admin: 'bg-red-500/20 text-red-400', 
+    manager: 'bg-orange-500/20 text-orange-400', 
+    editor: 'bg-blue-500/20 text-blue-400', 
+    viewer: 'bg-gray-500/20 text-gray-400' 
+  };
   return classes[role] || 'bg-gray-500/20 text-gray-400';
 }
 
@@ -1238,45 +1470,76 @@ function closeAddUserModal() {
 
 async function addUser(e) {
   e.preventDefault();
+  
   const firstName = document.getElementById('newUserFirst')?.value;
   const lastName = document.getElementById('newUserLast')?.value;
   const email = document.getElementById('newUserEmail')?.value;
   const role = document.getElementById('newUserRole')?.value || 'viewer';
+  
   if (!firstName || !lastName || !email) {
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
+  
+  // Générer un mot de passe temporaire
+  const tempPassword = generatePassword();
   const userId = generateId();
-  const newUser = {
-    id: userId,
-    name: `${firstName} ${lastName}`,
-    email: email,
-    role: role,
-    status: 'pending_validation',
-    company_id: G.currentUser.companyId,
-    plan: 'free',
-    created_at: new Date().toISOString()
-  };
-  const { error } = await G.supabase.from('profiles').insert(newUser);
-  if (error) {
-    showToast('Erreur création utilisateur: ' + error.message, 'error');
-    return;
+  
+  try {
+    // 1. Créer l'utilisateur dans Auth
+    const { data: authData, error: authError } = await G.supabase.auth.admin.createUser({
+      email: email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { 
+        name: `${firstName} ${lastName}`,
+        role: role 
+      }
+    });
+    
+    if (authError) throw authError;
+    
+    // 2. Créer le profil
+    const newUser = {
+      id: authData.user.id,
+      name: `${firstName} ${lastName}`,
+      email: email,
+      role: role,
+      status: 'pending_validation',
+      company_id: G.currentUser.companyId,
+      plan: 'free',
+      created_at: new Date().toISOString()
+    };
+    
+    const { error: profError } = await G.supabase.from('profiles').insert(newUser);
+    if (profError) throw profError;
+    
+    G.users.push(newUser);
+    showToast(`Utilisateur créé. Mot de passe temporaire: ${tempPassword}`, 'success');
+    closeAddUserModal();
+    renderUsers();
+    updatePendingUsersCount();
+    
+  } catch (err) {
+    console.error('Erreur création utilisateur:', err);
+    showToast('Erreur: ' + err.message, 'error');
   }
-  G.users.push(newUser);
-  showToast('Utilisateur créé - en attente de validation', 'success');
-  closeAddUserModal();
-  renderUsers();
-  updatePendingUsersCount();
 }
 
 async function validateUser(userId) {
   const user = G.users.find(u => u.id === userId);
   if (!user) return;
-  const { error } = await G.supabase.from('profiles').update({ status: 'active', validated_at: new Date().toISOString() }).eq('id', userId);
+  
+  const { error } = await G.supabase
+    .from('profiles')
+    .update({ status: 'active', validated_at: new Date().toISOString() })
+    .eq('id', userId);
+  
   if (error) {
     showToast('Erreur validation', 'error');
     return;
   }
+  
   user.status = 'active';
   renderUsers();
   updatePendingUsersCount();
@@ -1285,11 +1548,13 @@ async function validateUser(userId) {
 
 async function deleteUser(userId) {
   if (!confirm('Supprimer cet utilisateur ?')) return;
+  
   const { error } = await G.supabase.from('profiles').delete().eq('id', userId);
   if (error) {
     showToast('Erreur suppression', 'error');
     return;
   }
+  
   G.users = G.users.filter(u => u.id !== userId);
   renderUsers();
   updatePendingUsersCount();
@@ -1299,11 +1564,14 @@ async function deleteUser(userId) {
 function renderPendingUsers() {
   const container = document.getElementById('pendingUsersList');
   if (!container) return;
+  
   const pending = G.users.filter(u => u.status === 'pending_validation');
+  
   if (pending.length === 0) {
     container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i><p>Aucun utilisateur en attente</p></div>';
     return;
   }
+  
   container.innerHTML = pending.map(u => `
     <div class="glass-card rounded-xl p-4 border border-yellow-500/20 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -1326,6 +1594,7 @@ function canValidateUsers() {
 function updatePendingUsersCount() {
   const count = G.users.filter(u => u.status === 'pending_validation').length;
   G.pendingUsersCount = count;
+  
   const badges = document.querySelectorAll('.pending-users-badge, #d-pendingBadge, #m-pendingBadge');
   badges.forEach(b => {
     if (count > 0 && canValidateUsers()) {
@@ -1337,14 +1606,25 @@ function updatePendingUsersCount() {
   });
 }
 
+function generatePassword() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
 // ─── Tags ───
 function renderTags() {
   const container = document.getElementById('tagsList');
   if (!container) return;
+  
   if (G.tags.length === 0) {
     container.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucun tag</p>';
     return;
   }
+  
   container.innerHTML = G.tags.map(t => `
     <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 border border-blue-500/10">
       <span class="w-3 h-3 rounded-full" style="background:${t.color}"></span>
@@ -1358,6 +1638,7 @@ async function createTag() {
   const input = document.getElementById('newTagInput');
   const name = input?.value.trim();
   if (!name) return;
+  
   const newTag = {
     id: generateId(),
     name,
@@ -1366,11 +1647,13 @@ async function createTag() {
     company_id: G.currentUser.companyId,
     created_at: new Date().toISOString()
   };
+  
   const { error } = await G.supabase.from('tags').insert(newTag);
   if (error) {
     showToast('Erreur création tag: ' + error.message, 'error');
     return;
   }
+  
   G.tags.push(newTag);
   if (input) input.value = '';
   renderTags();
@@ -1382,14 +1665,103 @@ async function deleteTag(tagId) {
     showToast('Erreur suppression tag', 'error');
     return;
   }
+  
   G.tags = G.tags.filter(t => t.id !== tagId);
   renderTags();
+}
+
+// ─── Dossiers ───
+function renderFolders() {
+  renderFolderContents();
+}
+
+function renderFolderContents() {
+  const folderContents = document.getElementById('folderContentsGrid');
+  const folderDocGrid = document.getElementById('folderDocGrid');
+  if (!folderContents || !folderDocGrid) return;
+  
+  const subFolders = G.folders.filter(f => f.parent_id === G.currentFolderId);
+  const docs = G.documents.filter(d => !d.is_deleted && d.folder_id === G.currentFolderId);
+  
+  folderContents.innerHTML = subFolders.map(f => `
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 cursor-pointer hover:border-yellow-400/40" onclick="openFolder('${f.id}', '${f.name}')">
+      <div class="flex items-center gap-3"><i class="fas fa-folder text-yellow-400 text-2xl"></i><span class="text-white font-medium">${f.name}</span></div>
+    </div>
+  `).join('');
+  
+  if (docs.length === 0) {
+    folderDocGrid.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun document dans ce dossier</div>';
+  } else {
+    folderDocGrid.className = 'doc-grid';
+    folderDocGrid.innerHTML = docs.map(doc => renderDocCard(doc)).join('');
+  }
+}
+
+function openFolder(id, name) {
+  G.currentFolderId = id;
+  const existingIdx = G.folderPath.findIndex(f => f.id === id);
+  
+  if (existingIdx >= 0) {
+    G.folderPath = G.folderPath.slice(0, existingIdx + 1);
+  } else {
+    G.folderPath.push({ id, name });
+  }
+  
+  renderFolderContents();
+  updateFolderBreadcrumb();
+}
+
+function updateFolderBreadcrumb() {
+  const breadcrumb = document.getElementById('folderBreadcrumb');
+  if (!breadcrumb) return;
+  
+  breadcrumb.innerHTML = G.folderPath.map((f, idx) => `
+    <span class="flex items-center">
+      ${idx > 0 ? '<i class="fas fa-chevron-right text-blue-400/40 text-xs mx-1"></i>' : ''}
+      <button onclick="openFolder('${f.id}', '${f.name}')" class="text-sm ${idx === G.folderPath.length - 1 ? 'text-white font-semibold' : 'text-blue-400 hover:text-blue-300'}">${f.name}</button>
+    </span>
+  `).join('');
+}
+
+function openFolderModal() {
+  const modal = document.getElementById('folderModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeFolderModal() {
+  const modal = document.getElementById('folderModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function createFolder() {
+  const name = document.getElementById('newFolderName')?.value.trim();
+  if (!name) return;
+  
+  const newFolder = {
+    id: generateId(),
+    name: name,
+    parent_id: G.currentFolderId,
+    company_id: G.currentUser.companyId,
+    created_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('folders').insert(newFolder);
+  if (error) {
+    showToast('Erreur création dossier: ' + error.message, 'error');
+    return;
+  }
+  
+  G.folders.push(newFolder);
+  closeFolderModal();
+  renderFolders();
+  showToast('Dossier créé', 'success');
 }
 
 // ─── Settings ───
 function renderSettings() {
   const profileName = document.getElementById('profileName');
   const profileEmail = document.getElementById('profileEmail');
+  
   if (profileName) profileName.value = G.currentUser?.name || '';
   if (profileEmail) profileEmail.value = G.currentUser?.email || '';
 }
@@ -1397,14 +1769,17 @@ function renderSettings() {
 async function saveProfile() {
   const name = document.getElementById('profileName')?.value;
   if (!name || !G.currentUser) return;
+  
   const { error } = await G.supabase
     .from('profiles')
     .update({ name: name })
     .eq('id', G.currentUser.id);
+  
   if (error) {
     showToast('Erreur mise à jour profil', 'error');
     return;
   }
+  
   G.currentUser.name = name;
   updateUserDisplay();
   showToast('Profil mis à jour', 'success');
@@ -1421,6 +1796,7 @@ function renderBilling() {
   const currentPlanBadge = document.getElementById('currentPlanBadgeEl');
   const currentPlanDesc = document.getElementById('currentPlanDesc');
   const currentPlanPrice = document.getElementById('currentPlanPrice');
+  
   if (currentPlanName) currentPlanName.textContent = plan.name;
   if (currentPlanBadge) {
     currentPlanBadge.textContent = plan.name.toUpperCase();
@@ -1454,6 +1830,7 @@ function renderSecurity() {
   const secScanBlocked = document.getElementById('secScanBlocked');
   const secApiKeys = document.getElementById('secApiKeys');
   const secAuditCount = document.getElementById('secAuditCount');
+  
   if (secScanOk) secScanOk.textContent = G.documents.filter(d => !d.is_deleted).length;
   if (secScanBlocked) secScanBlocked.textContent = '0';
   if (secApiKeys) secApiKeys.textContent = G.apiKeys.length;
@@ -1517,6 +1894,7 @@ function switchSecurityTab(tab) {
   const trashPanel = document.getElementById('secPanel-trash');
   const auditBtn = document.getElementById('secTab-audit');
   const trashBtn = document.getElementById('secTab-trash');
+  
   if (tab === 'audit') {
     if (auditPanel) auditPanel.classList.remove('hidden');
     if (trashPanel) trashPanel.classList.add('hidden');
@@ -1534,11 +1912,13 @@ function switchSecurityTab(tab) {
 function loadDeletedDocs() {
   const container = document.getElementById('trashList');
   if (!container) return;
+  
   const deleted = G.documents.filter(d => d.is_deleted);
   if (deleted.length === 0) {
     container.innerHTML = '<div class="text-center py-6 text-blue-300/40 text-sm"><i class="fas fa-trash text-2xl mb-2 block opacity-20"></i>Aucun document supprimé</div>';
     return;
   }
+  
   container.innerHTML = deleted.map(doc => `
     <div class="flex items-center justify-between p-3 rounded-lg bg-slate-900/30 border border-red-500/20">
       <div><p class="text-white text-sm">${doc.name}</p><p class="text-xs text-blue-300/60">Supprimé le ${formatDate(doc.deleted_at)}</p></div>
@@ -1552,15 +1932,18 @@ async function restoreDocument(docId) {
     .from('documents')
     .update({ is_deleted: false, deleted_at: null })
     .eq('id', docId);
+  
   if (error) {
     showToast('Erreur restauration', 'error');
     return;
   }
+  
   const doc = G.documents.find(d => d.id === docId);
   if (doc) {
     doc.is_deleted = false;
     doc.deleted_at = null;
   }
+  
   showToast('Document restauré', 'success');
   renderDocuments();
   updateBadges();
@@ -1586,12 +1969,15 @@ function generateApiKey() {
 function renderSysLogs() {
   const container = document.getElementById('sysLogConsole');
   if (!container) return;
+  
   let logs = G.systemLogs;
   if (G.logFilter !== 'all') logs = logs.filter(l => l.level === G.logFilter);
+  
   if (logs.length === 0) {
     container.innerHTML = '<div class="text-center py-6 text-blue-300/40 text-sm">Aucun log</div>';
     return;
   }
+  
   container.innerHTML = logs.map(l => `
     <div class="py-1 px-2 text-xs">
       <span class="text-blue-300/40">[${new Date(l.created_at).toLocaleTimeString('fr-FR')}]</span>
@@ -1602,7 +1988,12 @@ function renderSysLogs() {
 }
 
 function getLogLevelColor(level) {
-  const colors = { info: 'text-blue-400', warn: 'text-yellow-400', error: 'text-red-400', security: 'text-orange-400' };
+  const colors = { 
+    info: 'text-blue-400', 
+    warn: 'text-yellow-400', 
+    error: 'text-red-400', 
+    security: 'text-orange-400' 
+  };
   return colors[level] || 'text-gray-400';
 }
 
@@ -1644,6 +2035,7 @@ function exportSysLogs() {
 function renderRBAC() {
   const container = document.getElementById('rbacCards');
   if (!container) return;
+  
   container.innerHTML = Object.entries(G.roles).map(([key, role]) => `
     <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openRoleModal('${key}')">
       <h4 class="text-white font-semibold">${role.name}</h4>
@@ -1655,6 +2047,7 @@ function renderRBAC() {
 function openRoleModal(roleKey) {
   const modal = document.getElementById('roleModal');
   if (!modal) return;
+  
   const role = G.roles[roleKey];
   if (role) {
     document.getElementById('roleModalTitle').textContent = `Modifier le rôle: ${role.name}`;
@@ -1679,6 +2072,7 @@ function saveRole() {
   const roleKey = document.getElementById('roleModalKey')?.value;
   const roleName = document.getElementById('roleModalName')?.value;
   if (!roleKey || !roleName) return;
+  
   const perms = [];
   if (document.getElementById('perm_read')?.checked) perms.push('read');
   if (document.getElementById('perm_write')?.checked) perms.push('write');
@@ -1686,6 +2080,7 @@ function saveRole() {
   if (document.getElementById('perm_users')?.checked) perms.push('users');
   if (document.getElementById('perm_logs')?.checked) perms.push('logs');
   if (document.getElementById('perm_api')?.checked) perms.push('api');
+  
   G.roles[roleKey] = { name: roleName, perms: perms };
   showToast(`Rôle ${roleName} mis à jour`, 'success');
   closeRoleModal();
@@ -1700,11 +2095,13 @@ function createRoleV7() {
   const input = document.getElementById('newRoleName');
   const name = input?.value.trim();
   if (!name) return;
+  
   const roleKey = name.toLowerCase().replace(/\s/g, '_');
   if (G.roles[roleKey]) {
     showToast('Ce rôle existe déjà', 'warning');
     return;
   }
+  
   G.roles[roleKey] = { name: name, perms: [] };
   if (input) input.value = '';
   renderRBAC();
@@ -1720,6 +2117,7 @@ function renderAnalytics() {
       <div class="glass-card rounded-xl p-4 border border-green-500/20"><p class="text-2xl font-bold text-white">${G.documents.reduce((sum, d) => sum + (d.downloads || 0), 0)}</p><p class="text-xs text-blue-300/60">Téléchargements</p></div>
     `;
   }
+  
   const topDocsContainer = document.getElementById('analyticsTopDocs');
   if (topDocsContainer) {
     const topDocs = [...G.documents].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
@@ -1736,92 +2134,16 @@ function refreshAnalytics() {
   showToast('Analytics actualisés', 'success');
 }
 
-// ─── Folders ───
-function renderFolders() {
-  renderFolderContents();
-}
-
-function renderFolderContents() {
-  const folderContents = document.getElementById('folderContentsGrid');
-  const folderDocGrid = document.getElementById('folderDocGrid');
-  if (!folderContents || !folderDocGrid) return;
-  const subFolders = G.folders.filter(f => f.parent_id === G.currentFolderId);
-  const docs = G.documents.filter(d => !d.is_deleted && d.folder_id === G.currentFolderId);
-  folderContents.innerHTML = subFolders.map(f => `
-    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 cursor-pointer hover:border-yellow-400/40" onclick="openFolder('${f.id}', '${f.name}')">
-      <div class="flex items-center gap-3"><i class="fas fa-folder text-yellow-400 text-2xl"></i><span class="text-white font-medium">${f.name}</span></div>
-    </div>
-  `).join('');
-  if (docs.length === 0) {
-    folderDocGrid.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun document dans ce dossier</div>';
-  } else {
-    folderDocGrid.className = 'doc-grid';
-    folderDocGrid.innerHTML = docs.map(doc => renderDocCard(doc)).join('');
-  }
-}
-
-function openFolder(id, name) {
-  G.currentFolderId = id;
-  const existingIdx = G.folderPath.findIndex(f => f.id === id);
-  if (existingIdx >= 0) {
-    G.folderPath = G.folderPath.slice(0, existingIdx + 1);
-  } else {
-    G.folderPath.push({ id, name });
-  }
-  renderFolderContents();
-  updateFolderBreadcrumb();
-}
-
-function updateFolderBreadcrumb() {
-  const breadcrumb = document.getElementById('folderBreadcrumb');
-  if (!breadcrumb) return;
-  breadcrumb.innerHTML = G.folderPath.map((f, idx) => `
-    <span class="flex items-center">
-      ${idx > 0 ? '<i class="fas fa-chevron-right text-blue-400/40 text-xs mx-1"></i>' : ''}
-      <button onclick="openFolder('${f.id}', '${f.name}')" class="text-sm ${idx === G.folderPath.length - 1 ? 'text-white font-semibold' : 'text-blue-400 hover:text-blue-300'}">${f.name}</button>
-    </span>
-  `).join('');
-}
-
-function openFolderModal() {
-  const modal = document.getElementById('folderModal');
-  if (modal) modal.classList.remove('hidden');
-}
-
-function closeFolderModal() {
-  const modal = document.getElementById('folderModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-async function createFolder() {
-  const name = document.getElementById('newFolderName')?.value.trim();
-  if (!name) return;
-  const newFolder = {
-    id: generateId(),
-    name: name,
-    parent_id: G.currentFolderId,
-    company_id: G.currentUser.companyId,
-    created_at: new Date().toISOString()
-  };
-  const { error } = await G.supabase.from('folders').insert(newFolder);
-  if (error) {
-    showToast('Erreur création dossier: ' + error.message, 'error');
-    return;
-  }
-  G.folders.push(newFolder);
-  closeFolderModal();
-  renderFolders();
-  showToast('Dossier créé', 'success');
-}
-
 // ─── Signatures ───
 function renderSignatures() {
   const container = document.getElementById('signaturesList');
   if (!container) return;
+  
   if (G.signatures.length === 0) {
     container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-signature text-4xl mb-3 block opacity-20"></i><p>Aucune signature</p></div>';
     return;
   }
+  
   container.innerHTML = G.signatures.map(s => {
     const doc = G.documents.find(d => d.id === s.document_id);
     return `
@@ -1834,7 +2156,11 @@ function renderSignatures() {
 }
 
 function getSigStatusClass(status) {
-  const classes = { pending: 'bg-yellow-500/20 text-yellow-300', signed: 'bg-green-500/20 text-green-300', rejected: 'bg-red-500/20 text-red-300' };
+  const classes = { 
+    pending: 'bg-yellow-500/20 text-yellow-300', 
+    signed: 'bg-green-500/20 text-green-300', 
+    rejected: 'bg-red-500/20 text-red-300' 
+  };
   return classes[status] || 'bg-gray-500/20 text-gray-300';
 }
 
@@ -1860,7 +2186,7 @@ function clearSignature() {
 async function submitSignature() {
   const canvas = document.getElementById('signatureCanvas');
   if (!canvas) return;
-  const signatureData = canvas.toDataURL('image/png');
+  
   if (G.currentDocId) {
     const newSig = {
       id: generateId(),
@@ -1871,11 +2197,13 @@ async function submitSignature() {
       signed_at: new Date().toISOString(),
       created_at: new Date().toISOString()
     };
+    
     const { error } = await G.supabase.from('signatures').insert(newSig);
     if (error) {
       showToast('Erreur signature', 'error');
       return;
     }
+    
     G.signatures.push(newSig);
     showToast('Signature enregistrée', 'success');
   }
@@ -1886,6 +2214,7 @@ async function submitSignature() {
 function renderAI() {
   const container = document.getElementById('aiDocsList');
   if (!container) return;
+  
   const docs = G.documents.filter(d => !d.is_deleted).slice(0, 10);
   container.innerHTML = docs.map(d => `
     <div class="glass-card rounded-xl p-4 border border-pink-500/20">
@@ -1911,10 +2240,12 @@ function analyzeAllDocuments() {
 function renderAutomation() {
   const container = document.getElementById('automationRulesList');
   if (!container) return;
+  
   if (G.automationRules.length === 0) {
     container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-magic text-4xl mb-3 block opacity-20"></i><p>Aucune règle d\'automatisation</p></div>';
     return;
   }
+  
   container.innerHTML = G.automationRules.map(r => `
     <div class="glass-card rounded-xl p-4 border border-orange-500/20">
       <div class="flex items-center justify-between">
@@ -1937,6 +2268,7 @@ function closeWfRuleModal() {
 
 async function createWfRule(e) {
   e.preventDefault();
+  
   const rule = {
     id: generateId(),
     name: document.getElementById('wfRuleName')?.value || 'Nouvelle règle',
@@ -1947,11 +2279,13 @@ async function createWfRule(e) {
     company_id: G.currentUser.companyId,
     created_at: new Date().toISOString()
   };
+  
   const { error } = await G.supabase.from('automation_rules').insert(rule);
   if (error) {
     showToast('Erreur création règle', 'error');
     return;
   }
+  
   G.automationRules.push(rule);
   closeWfRuleModal();
   renderAutomation();
@@ -1962,12 +2296,14 @@ async function createWfRule(e) {
 function renderIntegrations() {
   const container = document.getElementById('integrationsGrid');
   if (!container) return;
+  
   const integrations = [
     { name: 'Slack', icon: 'fab fa-slack', color: 'purple' },
     { name: 'Google Drive', icon: 'fab fa-google-drive', color: 'green' },
     { name: 'Dropbox', icon: 'fab fa-dropbox', color: 'blue' },
     { name: 'Microsoft 365', icon: 'fab fa-microsoft', color: 'blue' }
   ];
+  
   container.innerHTML = integrations.map(i => `
     <div class="glass-card rounded-xl p-4 border border-blue-500/20 hover:border-${i.color}-400/40 cursor-pointer transition-all">
       <div class="flex items-center gap-3 mb-3">
@@ -1983,10 +2319,12 @@ function renderIntegrations() {
 function renderBackups() {
   const container = document.getElementById('backupsList');
   if (!container) return;
+  
   if (G.backups.length === 0) {
     container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-database text-4xl mb-3 block opacity-20"></i><p>Aucune sauvegarde</p></div>';
     return;
   }
+  
   container.innerHTML = G.backups.map(b => `
     <div class="glass-card rounded-xl p-4 border border-teal-500/20 flex items-center justify-between">
       <div class="flex items-center gap-3"><i class="fas fa-archive text-teal-400 text-xl"></i><div><p class="text-white font-medium">${b.name}</p><p class="text-xs text-blue-300/60">${b.type} • ${formatBytes(b.size)}</p></div></div>
@@ -2005,11 +2343,13 @@ async function createBackup(type) {
     company_id: G.currentUser.companyId,
     created_at: new Date().toISOString()
   };
+  
   const { error } = await G.supabase.from('backups').insert(backup);
   if (error) {
     showToast('Erreur création backup', 'error');
     return;
   }
+  
   G.backups.unshift(backup);
   renderBackups();
   showToast('Sauvegarde créée', 'success');
@@ -2024,10 +2364,12 @@ function restoreBackup(id) {
 function renderApiKeys() {
   const container = document.getElementById('apiKeysList2');
   if (!container) return;
+  
   if (G.apiKeys.length === 0) {
     container.innerHTML = '<div class="text-center py-8 text-blue-300/50"><p class="text-sm">Aucune clé API</p></div>';
     return;
   }
+  
   container.innerHTML = G.apiKeys.map(k => `
     <div class="glass-card rounded-xl p-4 border border-green-500/20 flex items-center justify-between">
       <div><p class="text-white font-medium text-sm">${k.name}</p><p class="text-xs text-green-400/60 font-mono">${k.key?.substr(0, 20)}...</p></div>
@@ -2046,6 +2388,7 @@ async function revokeApiKey(id) {
     showToast('Erreur révocation', 'error');
     return;
   }
+  
   G.apiKeys = G.apiKeys.filter(k => k.id !== id);
   renderApiKeys();
   showToast('Clé révoquée', 'success');
@@ -2055,15 +2398,18 @@ async function revokeApiKey(id) {
 function handleGlobalSearch(query) {
   const dropdown = document.getElementById('searchDropdown');
   if (!dropdown) return;
+  
   if (!query || query.length < 2) {
     dropdown.classList.add('hidden');
     return;
   }
+  
   const results = G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase())).slice(0, 5);
   if (results.length === 0) {
     dropdown.classList.add('hidden');
     return;
   }
+  
   dropdown.classList.remove('hidden');
   dropdown.innerHTML = results.map(doc => `
     <div class="p-2 hover:bg-blue-500/10 cursor-pointer" onclick="openPreviewModal('${doc.id}'); document.getElementById('searchDropdown').classList.add('hidden');">
@@ -2078,18 +2424,32 @@ function runAdvSearch() {
   const type = document.getElementById('advSearchType')?.value;
   const dateFilter = document.getElementById('advSearchDate')?.value;
   const sizeFilter = document.getElementById('advSearchSize')?.value;
+  
   let results = G.documents.filter(d => !d.is_deleted);
   if (query) results = results.filter(d => d.name.toLowerCase().includes(query));
   if (type) results = results.filter(d => d.type === type);
-  if (dateFilter === 'today') results = results.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
-  else if (dateFilter === 'week') results = results.filter(d => (new Date() - new Date(d.created_at)) < 7 * 24 * 60 * 60 * 1000);
-  else if (dateFilter === 'month') results = results.filter(d => (new Date() - new Date(d.created_at)) < 30 * 24 * 60 * 60 * 1000);
-  if (sizeFilter === 'small') results = results.filter(d => d.size < 1024 * 1024);
-  else if (sizeFilter === 'medium') results = results.filter(d => d.size >= 1024 * 1024 && d.size < 10 * 1024 * 1024);
-  else if (sizeFilter === 'large') results = results.filter(d => d.size >= 10 * 1024 * 1024);
+  
+  if (dateFilter === 'today') {
+    results = results.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
+  } else if (dateFilter === 'week') {
+    results = results.filter(d => (new Date() - new Date(d.created_at)) < 7 * 24 * 60 * 60 * 1000);
+  } else if (dateFilter === 'month') {
+    results = results.filter(d => (new Date() - new Date(d.created_at)) < 30 * 24 * 60 * 60 * 1000);
+  }
+  
+  if (sizeFilter === 'small') {
+    results = results.filter(d => d.size < 1024 * 1024);
+  } else if (sizeFilter === 'medium') {
+    results = results.filter(d => d.size >= 1024 * 1024 && d.size < 10 * 1024 * 1024);
+  } else if (sizeFilter === 'large') {
+    results = results.filter(d => d.size >= 10 * 1024 * 1024);
+  }
+  
   const container = document.getElementById('advSearchResults');
   const countSpan = document.getElementById('advSearchCount');
+  
   if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
+  
   if (container) {
     if (results.length === 0) {
       container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat</p></div>';
@@ -2104,6 +2464,7 @@ function clearAdvSearch() {
   const typeSelect = document.getElementById('advSearchType');
   const dateSelect = document.getElementById('advSearchDate');
   const sizeSelect = document.getElementById('advSearchSize');
+  
   if (input) input.value = '';
   if (typeSelect) typeSelect.value = '';
   if (dateSelect) dateSelect.value = '';
@@ -2114,10 +2475,13 @@ function clearAdvSearch() {
 function runFTSearch() {
   const query = document.getElementById('ftsInput')?.value;
   if (!query || query.length < 3) return;
+  
   const results = G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase()));
   const container = document.getElementById('searchV7Results');
   const countSpan = document.getElementById('ftsCount');
+  
   if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
+  
   if (container) {
     if (results.length === 0) {
       container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat</p></div>';
@@ -2134,11 +2498,13 @@ function renderAdvancedSearch() {
 function renderVersioning() {
   const container = document.getElementById('versionDocList');
   if (!container) return;
+  
   const docs = G.documents.filter(d => !d.is_deleted);
   if (docs.length === 0) {
     container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-code-branch text-4xl mb-3 block opacity-20"></i><p>Aucun document</p></div>';
     return;
   }
+  
   container.innerHTML = docs.map(doc => `
     <div class="glass-card rounded-xl p-4 border border-cyan-500/20 flex items-center justify-between">
       <div><p class="text-white font-medium">${doc.name}</p><p class="text-xs text-blue-300/60">Version ${doc.version} • ${formatDate(doc.updated_at)}</p></div>
@@ -2164,6 +2530,7 @@ function renderAuditV6() {
       <div class="glass-card rounded-xl p-3 text-center"><p class="text-2xl font-bold text-white">${G.auditLogs.filter(l => l.action === 'login').length}</p><p class="text-xs text-blue-300/60">Connexions</p></div>
     `;
   }
+  
   const timeline = document.getElementById('auditTimelineList');
   if (timeline) {
     if (G.auditLogs.length === 0) {
@@ -2217,13 +2584,30 @@ function formatDate(dateString) {
 }
 
 function getFileIcon(type) {
-  const icons = { pdf: 'fa-file-pdf text-red-400', doc: 'fa-file-word text-blue-400', xls: 'fa-file-excel text-green-400', img: 'fa-file-image text-purple-400', txt: 'fa-file-alt text-gray-400' };
+  const icons = { 
+    pdf: 'fa-file-pdf text-red-400', 
+    doc: 'fa-file-word text-blue-400', 
+    xls: 'fa-file-excel text-green-400', 
+    img: 'fa-file-image text-purple-400', 
+    txt: 'fa-file-alt text-gray-400' 
+  };
   return icons[type] || 'fa-file text-blue-400';
 }
 
 function getFileType(filename) {
   const ext = filename.split('.').pop().toLowerCase();
-  const types = { pdf: 'pdf', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', png: 'img', jpg: 'img', jpeg: 'img', gif: 'img', txt: 'txt' };
+  const types = { 
+    pdf: 'pdf', 
+    doc: 'doc', 
+    docx: 'doc', 
+    xls: 'xls', 
+    xlsx: 'xls', 
+    png: 'img', 
+    jpg: 'img', 
+    jpeg: 'img', 
+    gif: 'img', 
+    txt: 'txt' 
+  };
   return types[ext] || 'unknown';
 }
 
@@ -2257,6 +2641,7 @@ function showDocContextMenu(e, docId) {
 document.addEventListener('DOMContentLoaded', async () => {
   await initSupabase();
   const { data: { session } } = await G.supabase.auth.getSession();
+  
   if (session) {
     await loadUserFromSupabase(session.user);
     switchToMainApp();
