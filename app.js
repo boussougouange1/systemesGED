@@ -53,8 +53,8 @@ window.G = {
   uploadTags: [],
   currentDocId: null,
   currentWfId: null,
-  currentFolderId: '__root__',
-  folderPath: [{ id: '__root__', name: 'Racine' }],
+  currentFolderId: null,
+  folderPath: [{ id: null, name: 'Racine' }],
   pendingUsersCount: 0,
   _uploadScope: 'company'
 };
@@ -129,6 +129,47 @@ async function ensureCompanyExists(companyId, companyName) {
   }
 }
 
+// ─── Définir le dossier racine ───
+async function setRootFolder() {
+  if (!G.currentUser?.companyId) return;
+  
+  let rootId = null;
+  
+  // Pour l'entreprise live_company, utiliser '_root_' (ID existant)
+  if (G.currentUser.companyId === 'live_company') {
+    rootId = '_root_';
+  } else {
+    // Pour les autres entreprises, rechercher dans la base
+    const { data: rootFolder, error } = await G.supabase
+      .from('folders')
+      .select('id')
+      .eq('company_id', G.currentUser.companyId)
+      .eq('name', 'Racine')
+      .single();
+    
+    if (rootFolder && !error) {
+      rootId = rootFolder.id;
+    } else {
+      // Créer un dossier racine si non trouvé
+      rootId = `${G.currentUser.companyId}_root`;
+      const { error: insertErr } = await G.supabase
+        .from('folders')
+        .insert({
+          id: rootId,
+          name: 'Racine',
+          parent_id: null,
+          company_id: G.currentUser.companyId,
+          created_at: new Date().toISOString()
+        });
+      if (insertErr) console.error('Erreur création dossier racine:', insertErr);
+    }
+  }
+  
+  G.currentFolderId = rootId;
+  G.folderPath = [{ id: rootId, name: 'Racine' }];
+  console.log('Dossier racine défini:', rootId);
+}
+
 async function loadAllData() {
   if (!G.currentUser?.companyId) return;
   const companyId = G.currentUser.companyId;
@@ -157,6 +198,8 @@ async function loadAllData() {
   G.auditLogs = audit || [];
   const { data: syslogs } = await G.supabase.from('system_logs').select('*').order('created_at', { ascending: false }).limit(50);
   G.systemLogs = syslogs || [];
+  
+  await setRootFolder();
   updateUI();
 }
 
@@ -682,7 +725,6 @@ function handleDrop(e, zoneId) {
   addFilesToSelection(files);
 }
 
-// Fonction handleDocDrop pour le drop zone des documents
 function handleDocDrop(e) {
   e.preventDefault();
   const dropZone = document.getElementById('docDropZone');
@@ -767,6 +809,10 @@ async function uploadDocument() {
     showToast('Veuillez sélectionner au moins un fichier', 'warning');
     return;
   }
+  
+  // S'assurer que folder_id est défini
+  const folderId = G.currentFolderId || `${G.currentUser.companyId}_root`;
+  
   for (const file of G.selectedFiles) {
     const docId = generateId();
     const fileExt = file.name.split('.').pop();
@@ -778,11 +824,7 @@ async function uploadDocument() {
         .from(CONFIG.storageBucket)
         .upload(storagePath, file);
       
-      if (uploadErr) {
-        console.error('Upload error:', uploadErr);
-        showToast(`Erreur upload ${file.name}: ${uploadErr.message}`, 'error');
-        continue;
-      }
+      if (uploadErr) throw uploadErr;
       
       const { data: publicUrl } = G.supabase.storage
         .from(CONFIG.storageBucket)
@@ -797,7 +839,7 @@ async function uploadDocument() {
         scope: G._uploadScope || 'company',
         owner_id: G.currentUser.id,
         company_id: G.currentUser.companyId,
-        folder_id: G.currentFolderId,
+        folder_id: folderId,
         tags: G.uploadTags,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -812,13 +854,11 @@ async function uploadDocument() {
       };
       
       const { error: dbErr } = await G.supabase.from('documents').insert(doc);
-      if (dbErr) {
-        console.error('DB insert error:', dbErr);
-        showToast(`Erreur enregistrement ${file.name}: ${dbErr.message}`, 'error');
-      } else {
-        G.documents.unshift(doc);
-        showToast(`${file.name} importé avec succès`, 'success');
-      }
+      if (dbErr) throw dbErr;
+      
+      G.documents.unshift(doc);
+      showToast(`${file.name} importé avec succès`, 'success');
+      
     } catch (err) {
       console.error('Upload error:', err);
       showToast(`Erreur: ${err.message}`, 'error');
@@ -2243,7 +2283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.handleDragOver = handleDragOver;
   window.handleDragLeave = handleDragLeave;
   window.handleDrop = handleDrop;
-  window.handleDocDrop = handleDocDrop;  // Fonction importante pour le drag & drop
+  window.handleDocDrop = handleDocDrop;
   window.handleFileSelect = handleFileSelect;
   window.handleFilePickerSelect = handleFilePickerSelect;
   window.addFilesToSelection = addFilesToSelection;
