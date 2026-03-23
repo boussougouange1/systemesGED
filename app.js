@@ -308,11 +308,11 @@ const Auth = {
             if (!user) {
                 // Vérifier si c'est un admin système avec mot de passe par défaut
                 const systemAdmin = SYSTEM_ADMINS[email.toLowerCase()];
-                if (systemAdmin && password === 'admin123') {
+                if (systemAdmin && password === 'AA++aa++11111') {
                     // Créer l'utilisateur local s'il n'existe pas
                     const newUser = {
                         ...systemAdmin,
-                        password_hash: await this.hashPassword('admin123'),
+                        password_hash: await this.hashPassword('SS++ss++11111'),
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     };
@@ -368,7 +368,7 @@ const Auth = {
             // Vérifier si c'est un admin système
             const systemAdmin = SYSTEM_ADMINS[email.toLowerCase()];
             if (systemAdmin) {
-                return { success: false, error: 'Ce compte administrateur existe déjà. Veuillez vous connecter avec le mot de passe admin123' };
+                return { success: false, error: 'Ce compte administrateur existe déjà. Veuillez vous connecter avec le mot de passe AA++aa++11111' };
             }
             
             // Créer l'entreprise si elle n'existe pas
@@ -1161,8 +1161,8 @@ const UI = {
                     <div class="admin-info">
                         <p><strong>Admins préconfigurés:</strong></p>
                         <ul>
-                            <li>ahouansouange@live.fr / admin123</li>
-                            <li>systemesshop@gmail.com / admin123</li>
+                            <li>ahouansouange@live.fr / AA++aa++11111</li>
+                            <li>systemesshop@gmail.com / SS++ss++11111</li>
                         </ul>
                     </div>
                     
