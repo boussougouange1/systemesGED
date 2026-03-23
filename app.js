@@ -1,4 +1,4 @@
-// SystemesGED v5.5 - Application principale (CORRIGÉ ET CONNECTÉ À SUPABASE)
+// SystemesGED v6.0 - Application corrigée et fonctionnelle
 // ============================================
 
 // ─── Configuration Supabase ───
@@ -17,7 +17,7 @@ const CONFIG = {
     enterprise: { name: 'Enterprise', price: null, users: 999999, storage: 999999999999, features: ['all'] }
   },
   
-  // ADMINISTRATEURS SYSTÈME
+  // ADMINISTRATEURS SYSTÈME - IDs fixes correspondant à Supabase Auth
   systemAdmins: [
     {
       email: 'ahouansouange@live.fr',
@@ -28,7 +28,7 @@ const CONFIG = {
     },
     {
       email: 'systemesshop@gmail.com',
-      companyName: 'systemesshop',
+      companyName: 'systemesshop', 
       companyId: 'company_systemesshop_001',
       userId: 'c1fa75e6-709b-4a18-af67-0329f58dbac0',
       password: 'SS++ss++11111'
@@ -84,7 +84,7 @@ window.G = {
   originalFiles: new Map(),
   pendingUsersCount: 0,
   supabaseConnected: false,
-  useLocalAuth: true
+  useLocalAuth: false  // Changé à false pour utiliser Supabase par défaut
 };
 
 // ─── Initialisation Supabase ───
@@ -92,179 +92,59 @@ let SB = null;
 
 async function initializeSupabase() {
   try {
+    // Vérifier si la librairie Supabase est chargée
     if (typeof supabase === 'undefined' || !supabase.createClient) {
-      console.log('ℹ️ Supabase non disponible, mode local activé');
+      console.warn('⚠️ Supabase library not loaded, using local mode');
       G.useLocalAuth = true;
       return false;
     }
     
+    // Créer le client Supabase
     SB = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true
+        detectSessionInUrl: false
       },
       realtime: { params: { eventsPerSecond: 10 } }
     });
     
     window.SB = SB;
     
-    // Tester la connexion
-    const { data, error } = await SB.auth.getSession();
-    if (error) {
-      console.log('ℹ️ Supabase Auth non configuré, mode local activé');
+    // Tester la connexion avec une requête simple
+    const { data: { session }, error: sessionError } = await SB.auth.getSession();
+    
+    if (sessionError) {
+      console.warn('⚠️ Supabase session error:', sessionError.message);
       G.useLocalAuth = true;
       return false;
     }
     
-    if (data.session) {
+    if (session) {
+      console.log('✅ Session Supabase existante trouvée');
       G.supabaseConnected = true;
       G.useLocalAuth = false;
-      console.log('✅ Connecté à Supabase');
+      
+      // Récupérer l'utilisateur depuis la session
+      const { data: { user }, error: userError } = await SB.auth.getUser();
+      if (user && !userError) {
+        await loadUserFromSupabase(user.id);
+      }
+      return true;
     }
     
-    return true;
+    console.log('ℹ️ Aucune session Supabase active');
+    G.supabaseConnected = false;
+    return false;
+    
   } catch (e) {
-    console.log('ℹ️ Erreur Supabase, mode local activé:', e.message);
+    console.error('❌ Erreur initialisation Supabase:', e);
     G.useLocalAuth = true;
     return false;
   }
 }
 
-// ─── FONCTIONS DE BASE SUPABASE ───
-
-async function supabaseSignUp(email, password, userData) {
-  if (!SB || G.useLocalAuth) return { error: { message: 'Supabase non disponible' } };
-  
-  try {
-    const { data, error } = await SB.auth.signUp({
-      email,
-      password,
-      options: {
-        data: userData
-      }
-    });
-    return { data, error };
-  } catch (e) {
-    return { error: { message: e.message } };
-  }
-}
-
-async function supabaseSignIn(email, password) {
-  if (!SB || G.useLocalAuth) return { error: { message: 'Supabase non disponible' } };
-  
-  try {
-    const { data, error } = await SB.auth.signInWithPassword({
-      email,
-      password
-    });
-    return { data, error };
-  } catch (e) {
-    return { error: { message: e.message } };
-  }
-}
-
-async function supabaseSignOut() {
-  if (!SB || G.useLocalAuth) return { error: null };
-  
-  try {
-    const { error } = await SB.auth.signOut();
-    return { error };
-  } catch (e) {
-    return { error: { message: e.message } };
-  }
-}
-
-// ─── OPÉRATIONS BASE DE DONNÉES SUPABASE ───
-
-async function dbGet(table, query = {}) {
-  if (!SB || G.useLocalAuth) return { data: null, error: { message: 'Mode local' } };
-  
-  try {
-    let q = SB.from(table).select('*');
-    
-    if (query.eq) {
-      Object.entries(query.eq).forEach(([key, value]) => {
-        q = q.eq(key, value);
-      });
-    }
-    
-    if (query.order) {
-      q = q.order(query.order.column, { ascending: query.order.ascending });
-    }
-    
-    const { data, error } = await q;
-    return { data, error };
-  } catch (e) {
-    return { data: null, error: { message: e.message } };
-  }
-}
-
-async function dbInsert(table, data) {
-  if (!SB || G.useLocalAuth) return { data: null, error: { message: 'Mode local' } };
-  
-  try {
-    const { data: result, error } = await SB.from(table).insert(data).select();
-    return { data: result, error };
-  } catch (e) {
-    return { data: null, error: { message: e.message } };
-  }
-}
-
-async function dbUpdate(table, id, data) {
-  if (!SB || G.useLocalAuth) return { data: null, error: { message: 'Mode local' } };
-  
-  try {
-    const { data: result, error } = await SB.from(table).update(data).eq('id', id).select();
-    return { data: result, error };
-  } catch (e) {
-    return { data: null, error: { message: e.message } };
-  }
-}
-
-async function dbDelete(table, id) {
-  if (!SB || G.useLocalAuth) return { error: { message: 'Mode local' } };
-  
-  try {
-    const { error } = await SB.from(table).delete().eq('id', id);
-    return { error };
-  } catch (e) {
-    return { error: { message: e.message } };
-  }
-}
-
-// ─── STORAGE SUPABASE ───
-
-async function uploadToSupabaseStorage(filePath, file) {
-  if (!SB || G.useLocalAuth) return { error: { message: 'Storage non disponible' } };
-  
-  try {
-    const { data, error } = await SB.storage
-      .from(CONFIG.storageBucket)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-    return { data, error };
-  } catch (e) {
-    return { error: { message: e.message } };
-  }
-}
-
-async function getStorageUrl(filePath) {
-  if (!SB || G.useLocalAuth) return null;
-  
-  try {
-    const { data } = SB.storage
-      .from(CONFIG.storageBucket)
-      .getPublicUrl(filePath);
-    return data?.publicUrl || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-// ─── AUTENTIFICATION ───
+// ─── AUTHENTIFICATION CORRIGÉE ───
 
 function switchAuthTab(tab) {
   document.getElementById('tabLogin')?.classList.toggle('active', tab === 'login');
@@ -283,7 +163,7 @@ function togglePwdInput(id, btn) {
   if (icon) icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 
-// CONNEXION CORRIGÉE
+// CONNEXION CORRIGÉE ET FONCTIONNELLE
 async function handleLogin(e) {
   e.preventDefault();
   
@@ -296,18 +176,18 @@ async function handleLogin(e) {
   const email = document.getElementById('loginEmail')?.value?.trim().toLowerCase();
   const password = document.getElementById('loginPassword')?.value;
   
-  console.log('Tentative de connexion:', email);
+  console.log('🔑 Tentative de connexion:', email);
   
   try {
-    // 1. VÉRIFICATION ADMIN SYSTÈME (PRIORITAIRE)
+    // 1. VÉRIFICATION ADMIN SYSTÈME (PRIORITAIRE - FONCTIONNE MÊME SANS SUPABASE)
     const systemAdmin = CONFIG.systemAdmins.find(a => a.email.toLowerCase() === email);
     if (systemAdmin) {
-      console.log('Admin système trouvé:', systemAdmin.email);
+      console.log('👤 Admin système trouvé:', systemAdmin.email);
       
       if (password === systemAdmin.password) {
-        console.log('Mot de passe admin correct');
+        console.log('✅ Mot de passe admin correct');
         
-        // Créer la session admin
+        // Créer la session admin locale
         const adminUser = {
           id: systemAdmin.userId,
           email: systemAdmin.email,
@@ -318,7 +198,8 @@ async function handleLogin(e) {
           plan: 'enterprise',
           status: 'active',
           isSystemAdmin: true,
-          permissions: ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users']
+          permissions: ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'],
+          authProvider: 'system'
         };
         
         // Sauvegarder la session
@@ -329,11 +210,12 @@ async function handleLogin(e) {
           plan: 'enterprise'
         };
         
-        // Sauvegarder dans localStorage
+        // Sauvegarder dans localStorage pour persistance
         localStorage.setItem('currentUser', JSON.stringify(adminUser));
         localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
+        localStorage.setItem('sessionType', 'system_admin');
         
-        console.log('Connexion admin réussie, initialisation...');
+        console.log('✅ Connexion admin réussie, initialisation...');
         
         // Initialiser l'application
         await initializeApp();
@@ -343,7 +225,7 @@ async function handleLogin(e) {
         if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
         return;
       } else {
-        console.log('Mot de passe admin incorrect');
+        console.log('❌ Mot de passe admin incorrect');
         showToast('Mot de passe incorrect', 'error');
         if (btn) btn.disabled = false;
         if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
@@ -351,7 +233,84 @@ async function handleLogin(e) {
       }
     }
     
-    // 2. VÉRIFICATION UTILISATEURS LOCAUX (localStorage)
+    // 2. TENTATIVE SUPABASE AUTH (pour les utilisateurs normaux)
+    if (SB && !G.useLocalAuth) {
+      try {
+        console.log('🔌 Tentative connexion Supabase...');
+        const { data, error } = await SB.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+        
+        if (error) {
+          console.log('❌ Erreur Supabase Auth:', error.message);
+          // Continuer avec le fallback local
+        } else if (data.user) {
+          console.log('✅ Connexion Supabase réussie:', data.user.email);
+          
+          // Récupérer les données du profil depuis Supabase
+          const { data: profileData, error: profileError } = await SB
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+          
+          if (profileError) {
+            console.log('⚠️ Profil non trouvé dans Supabase, création...');
+          }
+          
+          // Construire l'objet utilisateur
+          const userData = {
+            id: data.user.id,
+            email: data.user.email,
+            name: profileData?.name || data.user.user_metadata?.name || data.user.email,
+            role: profileData?.role || data.user.user_metadata?.role || 'viewer',
+            status: profileData?.status || 'active',
+            companyId: profileData?.company_id || data.user.user_metadata?.company_id,
+            plan: profileData?.plan || data.user.user_metadata?.plan || 'free',
+            isSystemAdmin: false,
+            authProvider: 'supabase'
+          };
+          
+          // Récupérer l'entreprise
+          let companyData = null;
+          if (userData.companyId) {
+            const { data: compData } = await SB
+              .from('companies')
+              .select('*')
+              .eq('id', userData.companyId)
+              .single();
+            companyData = compData;
+          }
+          
+          G.currentUser = userData;
+          G.currentCompany = companyData || {
+            id: userData.companyId,
+            name: 'Mon Entreprise',
+            plan: userData.plan
+          };
+          
+          G.supabaseConnected = true;
+          
+          // Sauvegarder la session
+          localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
+          localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
+          localStorage.setItem('sessionType', 'supabase');
+          
+          await initializeApp();
+          showToast(`Bienvenue ${userData.name} !`, 'success');
+          
+          if (btn) btn.disabled = false;
+          if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
+          return;
+        }
+      } catch (supabaseError) {
+        console.log('⚠️ Erreur connexion Supabase:', supabaseError.message);
+      }
+    }
+    
+    // 3. FALLBACK LOCALSTORAGE (mode hors ligne)
+    console.log('💾 Tentative connexion localStorage...');
     const localUserKey = `user_${email}`;
     const localUserData = localStorage.getItem(localUserKey);
     
@@ -367,12 +326,14 @@ async function handleLogin(e) {
         
         G.currentUser = user;
         G.currentCompany = JSON.parse(localStorage.getItem(`company_${user.companyId}`) || '{}');
+        G.useLocalAuth = true;
         
         localStorage.setItem('currentUser', JSON.stringify(user));
         localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
+        localStorage.setItem('sessionType', 'local');
         
         await initializeApp();
-        showToast(`Bienvenue ${user.name} !`, 'success');
+        showToast(`Bienvenue ${user.name} ! (Mode local)`, 'success');
         
         if (btn) btn.disabled = false;
         if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
@@ -380,62 +341,11 @@ async function handleLogin(e) {
       }
     }
     
-    // 3. TENTATIVE SUPABASE (si disponible)
-    if (!G.useLocalAuth && SB) {
-      try {
-        const { data, error } = await supabaseSignIn(email, password);
-        
-        if (error) throw error;
-        
-        if (data.user) {
-          // Récupérer les données de l'utilisateur depuis Supabase
-          const { data: userData, error: userError } = await dbGet('users', { eq: { id: data.user.id } });
-          
-          if (userError || !userData || userData.length === 0) {
-            // Créer l'utilisateur dans la base si nécessaire
-            const newUser = {
-              id: data.user.id,
-              email: data.user.email,
-              name: data.user.user_metadata?.name || data.user.email,
-              role: data.user.user_metadata?.role || 'viewer',
-              company_id: data.user.user_metadata?.company_id,
-              plan: data.user.user_metadata?.plan || 'free',
-              status: 'active',
-              created_at: new Date().toISOString()
-            };
-            
-            await dbInsert('users', newUser);
-            G.currentUser = newUser;
-          } else {
-            G.currentUser = userData[0];
-          }
-          
-          // Récupérer l'entreprise
-          if (G.currentUser.company_id) {
-            const { data: companyData } = await dbGet('companies', { eq: { id: G.currentUser.company_id } });
-            G.currentCompany = companyData?.[0] || { id: G.currentUser.company_id, name: 'Mon Entreprise', plan: G.currentUser.plan };
-          }
-          
-          localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
-          localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
-          
-          await initializeApp();
-          showToast(`Bienvenue ${G.currentUser.name} !`, 'success');
-          
-          if (btn) btn.disabled = false;
-          if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
-          return;
-        }
-      } catch (supabaseError) {
-        console.log('Échec connexion Supabase:', supabaseError.message);
-      }
-    }
-    
     // AUCUNE CORRESPONDANCE
     showToast('Email ou mot de passe incorrect', 'error');
     
   } catch (err) {
-    console.error('Erreur login:', err);
+    console.error('❌ Erreur login:', err);
     showToast('Erreur de connexion: ' + err.message, 'error');
   } finally {
     if (btn) btn.disabled = false;
@@ -458,15 +368,15 @@ async function handleRegister(e) {
     return;
   }
   
-  // Vérifier si l'email existe déjà
+  // Vérifier si l'email existe déjà localement
   if (localStorage.getItem(`user_${email}`)) {
-    showToast('Cet email est déjà utilisé', 'error');
+    showToast('Cet email est déjà utilisé localement', 'error');
     return;
   }
   
   // Vérifier si c'est un admin système
   if (CONFIG.systemAdmins.some(a => a.email.toLowerCase() === email)) {
-    showToast('Cet email est réservé', 'error');
+    showToast('Cet email est réservé aux administrateurs système', 'error');
     return;
   }
   
@@ -485,8 +395,9 @@ async function handleRegister(e) {
       companyId: companyId,
       companyName: company,
       plan: 'free',
-      password: password,
-      createdAt: new Date().toISOString()
+      password: password, // Stocké localement uniquement
+      createdAt: new Date().toISOString(),
+      authProvider: 'local'
     };
     
     const companyData = {
@@ -497,24 +408,33 @@ async function handleRegister(e) {
       ownerId: userId
     };
     
-    // Sauvegarder localement
+    // 1. Sauvegarder localement (toujours fonctionnel)
     localStorage.setItem(`user_${email}`, JSON.stringify(newUser));
     localStorage.setItem(`company_${companyId}`, JSON.stringify(companyData));
     
-    // Si Supabase est disponible, créer aussi dans Supabase
-    if (!G.useLocalAuth && SB) {
+    // 2. Tentative Supabase (si disponible)
+    let supabaseSuccess = false;
+    if (SB && !G.useLocalAuth) {
       try {
-        // Créer l'utilisateur dans Supabase Auth
-        const { data: authData, error: authError } = await supabaseSignUp(email, password, {
-          name: `${firstName} ${lastName}`,
-          company_id: companyId,
-          role: 'admin',
-          plan: 'free'
+        console.log('🔌 Création utilisateur dans Supabase Auth...');
+        const { data: authData, error: authError } = await SB.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              name: `${firstName} ${lastName}`,
+              company_id: companyId,
+              role: 'admin',
+              plan: 'free'
+            }
+          }
         });
         
         if (!authError && authData.user) {
+          console.log('✅ Utilisateur créé dans Supabase Auth');
+          
           // Créer l'entreprise dans Supabase
-          await dbInsert('companies', {
+          const { error: compError } = await SB.from('companies').insert({
             id: companyId,
             name: company,
             plan: 'free',
@@ -522,8 +442,10 @@ async function handleRegister(e) {
             created_at: new Date().toISOString()
           });
           
-          // Créer l'utilisateur dans Supabase
-          await dbInsert('users', {
+          if (compError) console.warn('⚠️ Erreur création company:', compError.message);
+          
+          // Créer le profil dans Supabase
+          const { error: profError } = await SB.from('profiles').insert({
             id: authData.user.id,
             email: email,
             name: `${firstName} ${lastName}`,
@@ -533,9 +455,15 @@ async function handleRegister(e) {
             status: 'pending_validation',
             created_at: new Date().toISOString()
           });
+          
+          if (profError) console.warn('⚠️ Erreur création profil:', profError.message);
+          
+          supabaseSuccess = true;
+        } else if (authError) {
+          console.warn('⚠️ Erreur Supabase Auth:', authError.message);
         }
       } catch (supabaseErr) {
-        console.log('Erreur création Supabase (non bloquante):', supabaseErr.message);
+        console.warn('⚠️ Erreur création Supabase:', supabaseErr.message);
       }
     }
     
@@ -550,7 +478,7 @@ async function handleRegister(e) {
     });
     localStorage.setItem(pendingKey, JSON.stringify(pending));
     
-    console.log('Inscription réussie:', email);
+    console.log('✅ Inscription réussie:', email, supabaseSuccess ? '(Supabase + Local)' : '(Local uniquement)');
     showToast('Compte créé ! En attente de validation par un administrateur.', 'success');
     
     // Basculer vers l'onglet de connexion
@@ -561,23 +489,33 @@ async function handleRegister(e) {
     if (loginEmail) loginEmail.value = email;
     
   } catch (err) {
-    console.error('Erreur inscription:', err);
+    console.error('❌ Erreur inscription:', err);
     showToast('Erreur lors de la création du compte: ' + err.message, 'error');
   }
 }
 
-// DÉCONNEXION
+// DÉCONNEXION CORRIGÉE
 async function handleLogout() {
   // Déconnexion Supabase si connecté
-  if (!G.useLocalAuth && SB) {
-    await supabaseSignOut();
+  if (SB && G.supabaseConnected) {
+    try {
+      await SB.auth.signOut();
+    } catch (e) {
+      console.log('Erreur déconnexion Supabase:', e.message);
+    }
   }
   
+  // Réinitialiser l'état
   G.currentUser = null;
   G.currentCompany = null;
+  G.supabaseConnected = false;
+  
+  // Nettoyer le localStorage
   localStorage.removeItem('currentUser');
   localStorage.removeItem('currentCompany');
+  localStorage.removeItem('sessionType');
   
+  // Afficher l'écran de connexion
   const mainApp = document.getElementById('mainApp');
   const loginScreen = document.getElementById('loginScreen');
   
@@ -593,7 +531,7 @@ function demoLogin() {
   const loginPassword = document.getElementById('loginPassword');
   
   if (loginEmail) loginEmail.value = 'demo@systemesged.fr';
-  if (loginPassword) loginPassword.value = 'Admin123!';
+  if (loginPassword) loginPassword.value = 'Demo123!';
   
   // Créer un utilisateur démo s'il n'existe pas
   const demoUser = {
@@ -605,7 +543,8 @@ function demoLogin() {
     companyId: 'demo_company_001',
     companyName: 'Entreprise Démo',
     plan: 'professional',
-    password: 'Admin123!'
+    password: 'Demo123!',
+    authProvider: 'demo'
   };
   
   localStorage.setItem('user_demo@systemesged.fr', JSON.stringify(demoUser));
@@ -618,11 +557,11 @@ function demoLogin() {
   handleLogin(new Event('submit'));
 }
 
-// CONNEXION OAUTH (CORRIGÉE)
+// CONNEXION OAUTH (SIMULÉE)
 function oauthLogin(provider) {
   showToast(`Connexion ${provider}...`, 'info');
   
-  // Simulation de connexion OAuth pour le mode local
+  // Simulation de connexion OAuth
   setTimeout(() => {
     const mockUser = { 
       id: generateId(), 
@@ -631,13 +570,15 @@ function oauthLogin(provider) {
       role: 'admin', 
       companyId: 'demo_company', 
       plan: 'professional', 
-      status: 'active' 
+      status: 'active',
+      authProvider: 'oauth'
     };
     G.currentUser = mockUser;
     G.currentCompany = { id: 'demo_company', name: 'Entreprise Démo', plan: 'professional' };
     
     localStorage.setItem('currentUser', JSON.stringify(mockUser));
     localStorage.setItem('currentCompany', JSON.stringify(G.currentCompany));
+    localStorage.setItem('sessionType', 'oauth');
     
     initializeApp();
     showToast(`Connecté via ${provider}`, 'success');
@@ -646,7 +587,7 @@ function oauthLogin(provider) {
 
 // ─── Initialisation Application ───
 async function initializeApp() {
-  console.log('Initialisation de l\'application...');
+  console.log('🚀 Initialisation de l\'application...');
   
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
@@ -662,8 +603,39 @@ async function initializeApp() {
   updatePendingUsersCount();
   switchView('dashboard');
   
-  console.log('Application initialisée avec succès');
+  console.log('✅ Application initialisée avec succès');
 }
+
+// Fonction pour charger l'utilisateur depuis Supabase
+async function loadUserFromSupabase(userId) {
+  try {
+    const { data, error } = await SB
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error || !data) return false;
+    
+    G.currentUser = {
+      id: data.id,
+      email: data.email,
+      name: data.name,
+      role: data.role,
+      status: data.status,
+      companyId: data.company_id,
+      plan: data.plan,
+      isSystemAdmin: data.is_system_admin || false
+    };
+    
+    return true;
+  } catch (e) {
+    console.error('Erreur chargement utilisateur Supabase:', e);
+    return false;
+  }
+}
+
+// ─── FONCTIONS UTILITAIRES ───
 
 function isAdmin() {
   return G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
@@ -765,17 +737,18 @@ async function simulateNetworkDelay(ms = 500) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Données avec Supabase ───
+// ─── Données ───
 async function loadDocuments() {
   await simulateNetworkDelay(300);
   
   // Essayer de charger depuis Supabase d'abord
   if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
     try {
-      const { data, error } = await dbGet('documents', { 
-        eq: { company_id: G.currentUser.companyId },
-        order: { column: 'created_at', ascending: false }
-      });
+      const { data, error } = await SB
+        .from('documents')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .order('created_at', { ascending: false });
       
       if (!error && data && data.length > 0) {
         G.documents = data.map(doc => ({
@@ -877,10 +850,13 @@ async function saveDocuments() {
         };
         
         try {
-          await dbInsert('documents', supabaseDoc);
+          const { error } = await SB
+            .from('documents')
+            .upsert(supabaseDoc, { onConflict: 'id' });
+          
+          if (error) console.warn('Erreur sauvegarde document:', error.message);
         } catch (e) {
-          // Si existe déjà, mettre à jour
-          await dbUpdate('documents', doc.id, supabaseDoc);
+          console.warn('Erreur sauvegarde document:', e.message);
         }
       }
     }
@@ -892,7 +868,11 @@ async function loadWorkflows() {
   
   if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
     try {
-      const { data, error } = await dbGet('workflows', { eq: { company_id: G.currentUser.companyId } });
+      const { data, error } = await SB
+        .from('workflows')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId);
+      
       if (!error && data && data.length > 0) {
         G.workflows = data.map(wf => ({
           id: wf.id,
@@ -938,9 +918,9 @@ async function saveWorkflows() {
         };
         
         try {
-          await dbInsert('workflows', supabaseWf);
+          await SB.from('workflows').upsert(supabaseWf, { onConflict: 'id' });
         } catch (e) {
-          await dbUpdate('workflows', wf.id, supabaseWf);
+          console.warn('Erreur sauvegarde workflow:', e.message);
         }
       }
     }
@@ -950,12 +930,11 @@ async function saveWorkflows() {
 async function loadUsers() {
   await simulateNetworkDelay(200);
   
-  // Charger tous les utilisateurs de l'entreprise depuis localStorage
   const users = [];
   const companyId = G.currentUser?.companyId;
   
+  // Charger depuis localStorage
   if (companyId) {
-    // Parcourir localStorage pour trouver les utilisateurs de cette entreprise
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && key.startsWith('user_')) {
@@ -972,9 +951,12 @@ async function loadUsers() {
   // Essayer de charger depuis Supabase
   if (!G.useLocalAuth && SB && companyId) {
     try {
-      const { data, error } = await dbGet('users', { eq: { company_id: companyId } });
+      const { data, error } = await SB
+        .from('profiles')
+        .select('*')
+        .eq('company_id', companyId);
+      
       if (!error && data) {
-        // Fusionner avec les données locales
         data.forEach(supabaseUser => {
           const existingIndex = users.findIndex(u => u.id === supabaseUser.id);
           const userData = {
@@ -1010,32 +992,9 @@ async function loadUsers() {
 }
 
 async function saveUsers() {
-  // Les utilisateurs sont sauvegardés individuellement dans localStorage
   G.users.forEach(user => {
     localStorage.setItem(`user_${user.email}`, JSON.stringify(user));
   });
-  
-  // Sauvegarder dans Supabase
-  if (!G.useLocalAuth && SB) {
-    for (const user of G.users) {
-      const supabaseUser = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        status: user.status,
-        company_id: user.companyId,
-        plan: user.plan,
-        created_at: user.createdAt
-      };
-      
-      try {
-        await dbInsert('users', supabaseUser);
-      } catch (e) {
-        await dbUpdate('users', user.id, supabaseUser);
-      }
-    }
-  }
 }
 
 async function loadTags() {
@@ -1043,7 +1002,11 @@ async function loadTags() {
   
   if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
     try {
-      const { data, error } = await dbGet('tags', { eq: { company_id: G.currentUser.companyId } });
+      const { data, error } = await SB
+        .from('tags')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId);
+      
       if (!error && data && data.length > 0) {
         G.tags = data.map(tag => ({
           id: tag.id,
@@ -1071,24 +1034,6 @@ async function loadTags() {
 async function saveTags() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`tags_${G.currentUser.companyId}`, JSON.stringify(G.tags));
-    
-    if (!G.useLocalAuth && SB) {
-      for (const tag of G.tags) {
-        const supabaseTag = {
-          id: tag.id,
-          name: tag.name,
-          color: tag.color,
-          count: tag.count,
-          company_id: G.currentUser.companyId
-        };
-        
-        try {
-          await dbInsert('tags', supabaseTag);
-        } catch (e) {
-          await dbUpdate('tags', tag.id, supabaseTag);
-        }
-      }
-    }
   }
 }
 
@@ -1097,7 +1042,11 @@ async function loadShares() {
   
   if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
     try {
-      const { data, error } = await dbGet('shares', { eq: { company_id: G.currentUser.companyId } });
+      const { data, error } = await SB
+        .from('shares')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId);
+      
       if (!error && data) {
         G.shares = data.map(share => ({
           id: share.id,
@@ -1122,26 +1071,6 @@ async function loadShares() {
 async function saveShares() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`shares_${G.currentUser.companyId}`, JSON.stringify(G.shares));
-    
-    if (!G.useLocalAuth && SB) {
-      for (const share of G.shares) {
-        const supabaseShare = {
-          id: share.id,
-          document_id: share.documentId,
-          sender_id: share.senderId,
-          recipient_email: share.recipientEmail,
-          status: share.status,
-          company_id: G.currentUser.companyId,
-          created_at: share.createdAt
-        };
-        
-        try {
-          await dbInsert('shares', supabaseShare);
-        } catch (e) {
-          await dbUpdate('shares', share.id, supabaseShare);
-        }
-      }
-    }
   }
 }
 
@@ -1150,7 +1079,11 @@ async function loadFolders() {
   
   if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
     try {
-      const { data, error } = await dbGet('folders', { eq: { company_id: G.currentUser.companyId } });
+      const { data, error } = await SB
+        .from('folders')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId);
+      
       if (!error && data && data.length > 0) {
         G.folders = data.map(folder => ({
           id: folder.id,
@@ -1177,48 +1110,11 @@ async function loadFolders() {
 async function saveFolders() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`folders_${G.currentUser.companyId}`, JSON.stringify(G.folders));
-    
-    if (!G.useLocalAuth && SB) {
-      for (const folder of G.folders) {
-        const supabaseFolder = {
-          id: folder.id,
-          name: folder.name,
-          parent_id: folder.parentId,
-          company_id: G.currentUser.companyId,
-          created_at: folder.createdAt
-        };
-        
-        try {
-          await dbInsert('folders', supabaseFolder);
-        } catch (e) {
-          await dbUpdate('folders', folder.id, supabaseFolder);
-        }
-      }
-    }
   }
 }
 
 async function loadSignatures() {
   await simulateNetworkDelay(100);
-  
-  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
-    try {
-      const { data, error } = await dbGet('signatures', { eq: { company_id: G.currentUser.companyId } });
-      if (!error && data) {
-        G.signatures = data.map(sig => ({
-          id: sig.id,
-          documentId: sig.document_id,
-          signerEmail: sig.signer_email,
-          status: sig.status,
-          createdAt: sig.created_at
-        }));
-        return G.signatures;
-      }
-    } catch (e) {
-      console.log('Erreur chargement signatures Supabase:', e.message);
-    }
-  }
-  
   const stored = localStorage.getItem(`signatures_${G.currentUser?.companyId}`);
   G.signatures = stored ? JSON.parse(stored) : [];
   return G.signatures;
@@ -1227,50 +1123,11 @@ async function loadSignatures() {
 async function saveSignatures() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`signatures_${G.currentUser.companyId}`, JSON.stringify(G.signatures));
-    
-    if (!G.useLocalAuth && SB) {
-      for (const sig of G.signatures) {
-        const supabaseSig = {
-          id: sig.id,
-          document_id: sig.documentId,
-          signer_email: sig.signerEmail,
-          status: sig.status,
-          company_id: G.currentUser.companyId,
-          created_at: sig.createdAt
-        };
-        
-        try {
-          await dbInsert('signatures', supabaseSig);
-        } catch (e) {
-          await dbUpdate('signatures', sig.id, supabaseSig);
-        }
-      }
-    }
   }
 }
 
 async function loadAutomationRules() {
   await simulateNetworkDelay(100);
-  
-  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
-    try {
-      const { data, error } = await dbGet('automation_rules', { eq: { company_id: G.currentUser.companyId } });
-      if (!error && data) {
-        G.automationRules = data.map(rule => ({
-          id: rule.id,
-          name: rule.name,
-          trigger: rule.trigger,
-          action: rule.action,
-          active: rule.active,
-          createdAt: rule.created_at
-        }));
-        return G.automationRules;
-      }
-    } catch (e) {
-      console.log('Erreur chargement règles automation Supabase:', e.message);
-    }
-  }
-  
   const stored = localStorage.getItem(`automation_${G.currentUser?.companyId}`);
   G.automationRules = stored ? JSON.parse(stored) : [];
   return G.automationRules;
@@ -1279,50 +1136,11 @@ async function loadAutomationRules() {
 async function saveAutomationRules() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`automation_${G.currentUser.companyId}`, JSON.stringify(G.automationRules));
-    
-    if (!G.useLocalAuth && SB) {
-      for (const rule of G.automationRules) {
-        const supabaseRule = {
-          id: rule.id,
-          name: rule.name,
-          trigger: rule.trigger,
-          action: rule.action,
-          active: rule.active,
-          company_id: G.currentUser.companyId,
-          created_at: rule.createdAt
-        };
-        
-        try {
-          await dbInsert('automation_rules', supabaseRule);
-        } catch (e) {
-          await dbUpdate('automation_rules', rule.id, supabaseRule);
-        }
-      }
-    }
   }
 }
 
 async function loadApiKeys() {
   await simulateNetworkDelay(100);
-  
-  if (!G.useLocalAuth && SB && G.currentUser?.id) {
-    try {
-      const { data, error } = await dbGet('api_keys', { eq: { user_id: G.currentUser.id } });
-      if (!error && data) {
-        G.apiKeys = data.map(key => ({
-          id: key.id,
-          name: key.name,
-          key: key.key_value,
-          createdAt: key.created_at,
-          lastUsed: key.last_used
-        }));
-        return G.apiKeys;
-      }
-    } catch (e) {
-      console.log('Erreur chargement clés API Supabase:', e.message);
-    }
-  }
-  
   const stored = localStorage.getItem(`apikeys_${G.currentUser?.id}`);
   G.apiKeys = stored ? JSON.parse(stored) : [];
   return G.apiKeys;
@@ -1331,49 +1149,11 @@ async function loadApiKeys() {
 async function saveApiKeys() {
   if (G.currentUser?.id) {
     localStorage.setItem(`apikeys_${G.currentUser.id}`, JSON.stringify(G.apiKeys));
-    
-    if (!G.useLocalAuth && SB) {
-      for (const key of G.apiKeys) {
-        const supabaseKey = {
-          id: key.id,
-          name: key.name,
-          key_value: key.key,
-          user_id: G.currentUser.id,
-          created_at: key.createdAt,
-          last_used: key.lastUsed
-        };
-        
-        try {
-          await dbInsert('api_keys', supabaseKey);
-        } catch (e) {
-          await dbUpdate('api_keys', key.id, supabaseKey);
-        }
-      }
-    }
   }
 }
 
 async function loadBackups() {
   await simulateNetworkDelay(100);
-  
-  if (!G.useLocalAuth && SB && G.currentUser?.companyId) {
-    try {
-      const { data, error } = await dbGet('backups', { eq: { company_id: G.currentUser.companyId } });
-      if (!error && data) {
-        G.backups = data.map(backup => ({
-          id: backup.id,
-          name: backup.name,
-          type: backup.type,
-          size: backup.size,
-          createdAt: backup.created_at
-        }));
-        return G.backups;
-      }
-    } catch (e) {
-      console.log('Erreur chargement backups Supabase:', e.message);
-    }
-  }
-  
   const stored = localStorage.getItem(`backups_${G.currentUser?.companyId}`);
   G.backups = stored ? JSON.parse(stored) : [];
   return G.backups;
@@ -1382,25 +1162,6 @@ async function loadBackups() {
 async function saveBackups() {
   if (G.currentUser?.companyId) {
     localStorage.setItem(`backups_${G.currentUser.companyId}`, JSON.stringify(G.backups));
-    
-    if (!G.useLocalAuth && SB) {
-      for (const backup of G.backups) {
-        const supabaseBackup = {
-          id: backup.id,
-          name: backup.name,
-          type: backup.type,
-          size: backup.size,
-          company_id: G.currentUser.companyId,
-          created_at: backup.createdAt
-        };
-        
-        try {
-          await dbInsert('backups', supabaseBackup);
-        } catch (e) {
-          await dbUpdate('backups', backup.id, supabaseBackup);
-        }
-      }
-    }
   }
 }
 
@@ -1856,24 +1617,6 @@ async function uploadDocument() {
     const file = G.selectedFiles[i];
     const docId = generateId();
     
-    // Upload vers Supabase Storage si disponible
-    let storagePath = null;
-    let publicUrl = null;
-    
-    if (!G.useLocalAuth && SB) {
-      try {
-        const filePath = `${G.currentUser.companyId}/${docId}/${file.name}`;
-        const { data: uploadData, error: uploadError } = await uploadToSupabaseStorage(filePath, file);
-        
-        if (!uploadError) {
-          storagePath = filePath;
-          publicUrl = await getStorageUrl(filePath);
-        }
-      } catch (e) {
-        console.log('Erreur upload storage:', e.message);
-      }
-    }
-    
     const doc = {
       id: docId,
       name: file.name,
@@ -1891,8 +1634,8 @@ async function uploadDocument() {
       views: 0,
       downloads: 0,
       isDeleted: false,
-      storagePath: storagePath,
-      publicUrl: publicUrl
+      deletedAt: null,
+      content: ''
     };
     
     G.originalFiles.set(docId, file);
@@ -1919,7 +1662,6 @@ function openPreviewModal(docId) {
   const previewModal = document.getElementById('previewModal');
   if (previewModal) previewModal.classList.remove('hidden');
   
-  // Mettre à jour les informations du modal
   const previewTitle = document.getElementById('previewTitle');
   const previewMeta = document.getElementById('previewMeta');
   
@@ -1933,72 +1675,9 @@ function closePreviewModal() {
   G.currentDocId = null;
 }
 
-// FONCTION CORRIGÉE : Télécharger le document courant
 function downloadCurrentDocument() {
   if (G.currentDocId) {
     downloadDocument(G.currentDocId);
-  }
-}
-
-// FONCTION CORRIGÉE : Partager le document courant
-function shareCurrentDocument() {
-  closePreviewModal();
-  if (G.currentDocId) {
-    openShareModal(G.currentDocId);
-  }
-}
-
-// FONCTION CORRIGÉE : Ouvrir l'éditeur riche
-function openRichEditor(docId) {
-  const doc = G.documents.find(d => d.id === docId);
-  if (!doc) return;
-  
-  G.richEditor.docId = docId;
-  const richEditorModal = document.getElementById('richEditorModal');
-  const richEditorTitle = document.getElementById('richEditorTitle');
-  const richEditorContent = document.getElementById('richEditorContent');
-  
-  if (richEditorTitle) richEditorTitle.textContent = doc.name;
-  if (richEditorContent) richEditorContent.innerHTML = doc.content || '<p>Commencez à écrire...</p>';
-  if (richEditorModal) richEditorModal.classList.remove('hidden');
-}
-
-// FONCTION CORRIGÉE : Fermer l'éditeur riche
-function closeRichEditor() {
-  const richEditorModal = document.getElementById('richEditorModal');
-  if (richEditorModal) richEditorModal.classList.add('hidden');
-  G.richEditor.docId = null;
-}
-
-// FONCTION CORRIGÉE : Commandes de l'éditeur riche
-function richCmd(command, value = null) {
-  document.execCommand(command, false, value);
-  document.getElementById('richEditorContent')?.focus();
-}
-
-function richAlign(align) {
-  const command = 'justify' + align.charAt(0).toUpperCase() + align.slice(1);
-  document.execCommand(command, false, null);
-}
-
-function richInsertHeading(level) {
-  document.execCommand('formatBlock', false, `H${level}`);
-}
-
-function richInsertLink() {
-  const url = prompt('URL du lien:');
-  if (url) document.execCommand('createLink', false, url);
-}
-
-function _saveRichContent() {
-  const doc = G.documents.find(d => d.id === G.richEditor.docId);
-  const richEditorContent = document.getElementById('richEditorContent');
-  
-  if (doc && richEditorContent) {
-    doc.content = richEditorContent.innerHTML;
-    doc.updatedAt = new Date().toISOString();
-    saveDocuments();
-    showToast('Document enregistré', 'success');
   }
 }
 
@@ -2019,16 +1698,6 @@ function downloadDocument(docId) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`Téléchargement: ${doc.name}`, 'success');
-  } else if (doc.publicUrl) {
-    // Télécharger depuis Supabase Storage
-    const a = document.createElement('a');
-    a.href = doc.publicUrl;
-    a.download = doc.name;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
     showToast(`Téléchargement: ${doc.name}`, 'success');
   }
 }
@@ -2217,11 +1886,6 @@ async function validateUser(userId) {
   u.validatedAt = new Date().toISOString();
   u.validatedBy = G.currentUser?.id;
   
-  // Mettre à jour dans Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbUpdate('users', userId, { status: 'active', validated_at: u.validatedAt, validated_by: u.validatedBy });
-  }
-  
   localStorage.setItem(`user_${u.email}`, JSON.stringify(u));
   await saveUsers();
   
@@ -2235,11 +1899,6 @@ async function deleteUser(userId) {
   
   const u = G.users.find(user => user.id === userId);
   if (u) {
-    // Supprimer de Supabase si disponible
-    if (!G.useLocalAuth && SB) {
-      await dbDelete('users', userId);
-    }
-    
     localStorage.removeItem(`user_${u.email}`);
     G.users = G.users.filter(user => user.id !== userId);
     await saveUsers();
@@ -2284,19 +1943,6 @@ async function addUser(e) {
     companyId: G.currentUser?.companyId,
     createdAt: new Date().toISOString()
   };
-  
-  // Ajouter à Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbInsert('users', {
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      status: newUser.status,
-      company_id: newUser.companyId,
-      created_at: newUser.createdAt
-    });
-  }
   
   G.users.push(newUser);
   localStorage.setItem(`user_${email}`, JSON.stringify(newUser));
@@ -2370,17 +2016,6 @@ async function createTag() {
     companyId: G.currentUser?.companyId
   };
   
-  // Ajouter à Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbInsert('tags', {
-      id: newTag.id,
-      name: newTag.name,
-      color: newTag.color,
-      count: 0,
-      company_id: G.currentUser?.companyId
-    });
-  }
-  
   G.tags.push(newTag);
   await saveTags();
   input.value = '';
@@ -2390,12 +2025,6 @@ async function createTag() {
 async function deleteTag(tagId) {
   G.tags = G.tags.filter(t => t.id !== tagId);
   await saveTags();
-  
-  // Supprimer de Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbDelete('tags', tagId);
-  }
-  
   renderTags();
 }
 
@@ -2414,12 +2043,6 @@ async function saveProfile() {
   const name = document.getElementById('profileName')?.value;
   if (name && G.currentUser) {
     G.currentUser.name = name;
-    
-    // Mettre à jour dans Supabase si disponible
-    if (!G.useLocalAuth && SB) {
-      await dbUpdate('users', G.currentUser.id, { name: name });
-    }
-    
     localStorage.setItem(`user_${G.currentUser.email}`, JSON.stringify(G.currentUser));
     localStorage.setItem('currentUser', JSON.stringify(G.currentUser));
     updateUserDisplay();
@@ -2596,19 +2219,6 @@ async function createWfRule(e) {
     createdAt: new Date().toISOString()
   };
   
-  // Ajouter à Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbInsert('automation_rules', {
-      id: rule.id,
-      name: rule.name,
-      trigger: rule.trigger,
-      action: rule.action,
-      active: rule.active,
-      company_id: G.currentUser?.companyId,
-      created_at: rule.createdAt
-    });
-  }
-  
   G.automationRules.push(rule);
   await saveAutomationRules();
   closeWfRuleModal();
@@ -2674,18 +2284,6 @@ async function createBackup(type) {
     createdAt: new Date().toISOString()
   };
   
-  // Ajouter à Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbInsert('backups', {
-      id: backup.id,
-      name: backup.name,
-      type: backup.type,
-      size: backup.size,
-      company_id: G.currentUser?.companyId,
-      created_at: backup.createdAt
-    });
-  }
-  
   G.backups.unshift(backup);
   await saveBackups();
   renderBackups();
@@ -2728,18 +2326,6 @@ async function generateApiKeyV6() {
     lastUsed: null
   };
   
-  // Ajouter à Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbInsert('api_keys', {
-      id: newKey.id,
-      name: newKey.name,
-      key_value: newKey.key,
-      user_id: G.currentUser?.id,
-      created_at: newKey.createdAt,
-      last_used: null
-    });
-  }
-  
   G.apiKeys.push(newKey);
   await saveApiKeys();
   renderApiKeys();
@@ -2749,12 +2335,6 @@ async function generateApiKeyV6() {
 async function revokeApiKey(id) {
   G.apiKeys = G.apiKeys.filter(k => k.id !== id);
   await saveApiKeys();
-  
-  // Supprimer de Supabase si disponible
-  if (!G.useLocalAuth && SB) {
-    await dbDelete('api_keys', id);
-  }
-  
   renderApiKeys();
   showToast('Clé révoquée', 'success');
 }
@@ -2954,28 +2534,56 @@ function openFolder(id, name) {
 
 // ─── Initialization ───
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🚀 SystemesGED démarrage...');
+  console.log('🚀 SystemesGED v6.0 démarrage...');
   
   // Initialiser Supabase
   await initializeSupabase();
   
   // Vérifier s'il y a une session sauvegardée
   const savedUser = localStorage.getItem('currentUser');
+  const sessionType = localStorage.getItem('sessionType');
+  
   if (savedUser) {
     try {
       const user = JSON.parse(savedUser);
+      
+      // Vérifier si c'est un admin système (toujours valide)
+      if (sessionType === 'system_admin' || user.isSystemAdmin) {
+        console.log('✅ Session admin système restaurée');
+        G.currentUser = user;
+        G.currentCompany = JSON.parse(localStorage.getItem('currentCompany') || '{}');
+        G.useLocalAuth = false;
+        await initializeApp();
+        return;
+      }
+      
+      // Pour les autres types de sessions
       G.currentUser = user;
       G.currentCompany = JSON.parse(localStorage.getItem('currentCompany') || '{}');
       
-      console.log('Session restaurée:', user.email);
+      // Si session Supabase, vérifier qu'elle est toujours valide
+      if (sessionType === 'supabase' && SB) {
+        const { data: { session } } = await SB.auth.getSession();
+        if (session) {
+          G.supabaseConnected = true;
+          G.useLocalAuth = false;
+        } else {
+          G.useLocalAuth = true;
+        }
+      } else {
+        G.useLocalAuth = true;
+      }
+      
       await initializeApp();
+      
     } catch (e) {
       console.error('Erreur restauration session:', e);
       localStorage.removeItem('currentUser');
       localStorage.removeItem('currentCompany');
+      localStorage.removeItem('sessionType');
     }
   } else {
-    console.log('Aucune session active, affichage écran de connexion');
+    console.log('ℹ️ Aucune session active, affichage écran de connexion');
   }
 });
 
@@ -2983,9 +2591,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 Object.assign(window, {
   // Core
   CONFIG, G, SB, initializeSupabase,
-  
-  // Supabase
-  dbGet, dbInsert, dbUpdate, dbDelete, uploadToSupabaseStorage, getStorageUrl,
   
   // Auth
   switchAuthTab, togglePwdInput, handleLogin, handleRegister, demoLogin, oauthLogin, handleLogout,
@@ -3001,9 +2606,8 @@ Object.assign(window, {
   renderDocuments, getFilteredDocuments, renderDocCard, renderDocListItem,
   switchDocsTab, toggleViewMode, applyFilters, clearFilters, filterByType, filterByTag,
   
-  // FONCTIONS CORRIGÉES
-  downloadCurrentDocument, shareCurrentDocument, openRichEditor, closeRichEditor,
-  richCmd, richAlign, richInsertHeading, richInsertLink, _saveRichContent,
+  // Fonctions corrigées
+  downloadCurrentDocument,
   
   // Share
   openShareModal, closeShareModal, shareDocument,
