@@ -143,9 +143,14 @@ async function ensureCompanyExists(companyId, companyName) {
   }
 }
 
-// ─── Gestion du dossier racine ───
+// ─── Gestion du dossier racine (CORRIGÉE) ───
 async function setRootFolder() {
-  if (!G.currentUser?.companyId) return;
+  if (!G.currentUser?.companyId) {
+    console.error('setRootFolder: companyId manquant');
+    return;
+  }
+  
+  console.log('setRootFolder: recherche dossier racine pour', G.currentUser.companyId);
   
   // Rechercher le dossier racine de l'entreprise
   const { data: rootFolder, error } = await G.supabase
@@ -164,6 +169,8 @@ async function setRootFolder() {
   
   // Créer un dossier racine si non trouvé
   const newRootId = `${G.currentUser.companyId}_root`;
+  console.log('Création dossier racine:', newRootId);
+  
   const { error: insertErr } = await G.supabase
     .from('folders')
     .insert({
@@ -177,9 +184,10 @@ async function setRootFolder() {
   if (!insertErr) {
     G.currentFolderId = newRootId;
     G.folderPath = [{ id: newRootId, name: 'Racine' }];
-    console.log('Dossier racine créé:', newRootId);
+    console.log('Dossier racine créé avec succès:', newRootId);
   } else {
     console.error('Erreur création dossier racine:', insertErr);
+    showToast('Erreur création dossier racine', 'error');
   }
 }
 
@@ -854,7 +862,7 @@ function filterByTag(tagName) {
   showToast(`Filtre par tag: ${tagName}`, 'info');
 }
 
-// ─── Upload ───
+// ─── Upload (CORRIGÉ) ───
 function openUploadModal() {
   const modal = document.getElementById('uploadModal');
   if (modal) modal.classList.remove('hidden');
@@ -980,11 +988,13 @@ async function uploadDocument() {
   
   // Vérifier que le dossier racine est défini
   if (!G.currentFolderId) {
-    showToast('Erreur: dossier racine non trouvé', 'error');
+    showToast('Erreur: dossier racine non trouvé. Veuillez réessayer.', 'error');
+    console.error('uploadDocument: currentFolderId est null');
     return;
   }
   
   const folderId = G.currentFolderId;
+  console.log('uploadDocument: folderId =', folderId);
   
   for (const file of G.selectedFiles) {
     const docId = generateId();
@@ -1418,7 +1428,7 @@ function renderWorkflowsList() {
   `).join('');
 }
 
-// ─── Users ───
+// ─── Users (CORRIGÉ) ───
 function renderUsers() {
   const tbody = document.getElementById('usersList');
   if (!tbody) return;
@@ -1430,7 +1440,7 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-      </td>
+       </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
       <td class="p-4 hidden md:table-cell">-</td>
       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
@@ -1481,27 +1491,19 @@ async function addUser(e) {
     return;
   }
   
-  // Générer un mot de passe temporaire
-  const tempPassword = generatePassword();
+  // Vérifier que l'utilisateur a une entreprise
+  if (!G.currentUser?.companyId) {
+    showToast('Erreur: entreprise non trouvée', 'error');
+    return;
+  }
+  
   const userId = generateId();
+  const tempPassword = generatePassword();
   
   try {
-    // 1. Créer l'utilisateur dans Auth
-    const { data: authData, error: authError } = await G.supabase.auth.admin.createUser({
-      email: email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: { 
-        name: `${firstName} ${lastName}`,
-        role: role 
-      }
-    });
-    
-    if (authError) throw authError;
-    
-    // 2. Créer le profil
+    // 1. Créer l'utilisateur dans la table profiles
     const newUser = {
-      id: authData.user.id,
+      id: userId,
       name: `${firstName} ${lastName}`,
       email: email,
       role: role,
