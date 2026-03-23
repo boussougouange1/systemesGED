@@ -1,5 +1,5 @@
 // ============================================
-// SystemesGED v7.0 – Application complète avec Supabase
+// SystemesGED v7.0 – Application complète corrigée
 // ============================================
 
 // ─── Configuration Supabase ───
@@ -55,10 +55,11 @@ window.G = {
   currentWfId: null,
   currentFolderId: '__root__',
   folderPath: [{ id: '__root__', name: 'Racine' }],
-  pendingUsersCount: 0
+  pendingUsersCount: 0,
+  _uploadScope: 'company'
 };
 
-// ─── Initialisation ───
+// ─── Initialisation Supabase ───
 async function initSupabase() {
   try {
     if (typeof supabase === 'undefined') throw new Error('Supabase library not loaded');
@@ -190,10 +191,6 @@ function updateUserDisplay() {
     planBadge.textContent = G.currentUser.plan.toUpperCase();
     planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan}`;
   }
-  const isAdmin = G.currentUser.role === 'admin' || G.currentUser.isSystemAdmin;
-  document.querySelectorAll('[data-admin-only]').forEach(el => {
-    el.style.display = isAdmin ? 'flex' : 'none';
-  });
 }
 
 function updateBadges() {
@@ -316,27 +313,11 @@ async function handleRegister(e) {
 async function handleLogout() {
   await G.supabase.auth.signOut();
   G.currentUser = null;
-  resetData();
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
   if (loginScreen) loginScreen.style.display = 'block';
   if (mainApp) mainApp.style.display = 'none';
   showToast('Déconnexion réussie', 'info');
-}
-
-function resetData() {
-  G.documents = [];
-  G.workflows = [];
-  G.users = [];
-  G.tags = [];
-  G.shares = [];
-  G.folders = [];
-  G.signatures = [];
-  G.automationRules = [];
-  G.apiKeys = [];
-  G.backups = [];
-  G.auditLogs = [];
-  G.systemLogs = [];
 }
 
 function switchToMainApp() {
@@ -667,8 +648,6 @@ function filterByTag(tagName) {
 }
 
 // ─── Upload ───
-let _uploadScope = 'company';
-
 function openUploadModal() {
   const modal = document.getElementById('uploadModal');
   if (modal) modal.classList.remove('hidden');
@@ -699,6 +678,15 @@ function handleDrop(e, zoneId) {
   e.preventDefault();
   const zone = document.getElementById(zoneId);
   if (zone) zone.classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files);
+  addFilesToSelection(files);
+}
+
+// Fonction handleDocDrop pour le drop zone des documents
+function handleDocDrop(e) {
+  e.preventDefault();
+  const dropZone = document.getElementById('docDropZone');
+  if (dropZone) dropZone.classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files);
   addFilesToSelection(files);
 }
@@ -783,48 +771,59 @@ async function uploadDocument() {
     const docId = generateId();
     const fileExt = file.name.split('.').pop();
     const storagePath = `${G.currentUser.companyId}/${docId}.${fileExt}`;
-    const { data: uploadData, error: uploadErr } = await G.supabase.storage
-      .from(CONFIG.storageBucket)
-      .upload(storagePath, file);
-    if (uploadErr) {
-      console.error(uploadErr);
-      showToast(`Erreur upload ${file.name}: ${uploadErr.message}`, 'error');
-      continue;
-    }
-    const { data: publicUrl } = G.supabase.storage
-      .from(CONFIG.storageBucket)
-      .getPublicUrl(storagePath);
-    const doc = {
-      id: docId,
-      name: file.name,
-      type: getFileType(file.name),
-      size: file.size,
-      description: '',
-      scope: _uploadScope,
-      owner_id: G.currentUser.id,
-      company_id: G.currentUser.companyId,
-      folder_id: G.currentFolderId,
-      tags: G.uploadTags,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      version: 1,
-      views: 0,
-      downloads: 0,
-      is_deleted: false,
-      deleted_at: null,
-      content: '',
-      storage_path: storagePath,
-      file_url: publicUrl.publicUrl
-    };
-    const { error: dbErr } = await G.supabase.from('documents').insert(doc);
-    if (dbErr) {
-      console.error(dbErr);
-      showToast(`Erreur enregistrement ${file.name}`, 'error');
-    } else {
-      G.documents.unshift(doc);
+    
+    try {
+      // Upload vers Storage
+      const { data: uploadData, error: uploadErr } = await G.supabase.storage
+        .from(CONFIG.storageBucket)
+        .upload(storagePath, file);
+      
+      if (uploadErr) {
+        console.error('Upload error:', uploadErr);
+        showToast(`Erreur upload ${file.name}: ${uploadErr.message}`, 'error');
+        continue;
+      }
+      
+      const { data: publicUrl } = G.supabase.storage
+        .from(CONFIG.storageBucket)
+        .getPublicUrl(storagePath);
+      
+      const doc = {
+        id: docId,
+        name: file.name,
+        type: getFileType(file.name),
+        size: file.size,
+        description: '',
+        scope: G._uploadScope || 'company',
+        owner_id: G.currentUser.id,
+        company_id: G.currentUser.companyId,
+        folder_id: G.currentFolderId,
+        tags: G.uploadTags,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        version: 1,
+        views: 0,
+        downloads: 0,
+        is_deleted: false,
+        deleted_at: null,
+        content: '',
+        storage_path: storagePath,
+        file_url: publicUrl.publicUrl
+      };
+      
+      const { error: dbErr } = await G.supabase.from('documents').insert(doc);
+      if (dbErr) {
+        console.error('DB insert error:', dbErr);
+        showToast(`Erreur enregistrement ${file.name}: ${dbErr.message}`, 'error');
+      } else {
+        G.documents.unshift(doc);
+        showToast(`${file.name} importé avec succès`, 'success');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      showToast(`Erreur: ${err.message}`, 'error');
     }
   }
-  showToast(`${G.selectedFiles.length} document(s) importé(s)`, 'success');
   closeUploadModal();
   renderDocuments();
   updateBadges();
@@ -832,7 +831,7 @@ async function uploadDocument() {
 }
 
 function setDocScope(scope) {
-  _uploadScope = scope;
+  G._uploadScope = scope;
   const scopeCompany = document.getElementById('scopeCompany');
   const scopePersonal = document.getElementById('scopePersonal');
   if (scopeCompany && scopePersonal) {
@@ -875,6 +874,14 @@ async function downloadDocument(docId) {
   showToast(`Téléchargement: ${doc.name}`, 'success');
 }
 
+function downloadCurrentDocument() {
+  if (G.currentDocId) downloadDocument(G.currentDocId);
+}
+
+function shareCurrentDocument() {
+  if (G.currentDocId) openShareModal(G.currentDocId);
+}
+
 async function deleteDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
@@ -892,14 +899,6 @@ async function deleteDocument(docId) {
   renderDocuments();
   updateBadges();
   showToast('Document déplacé vers la corbeille', 'success');
-}
-
-function downloadCurrentDocument() {
-  if (G.currentDocId) downloadDocument(G.currentDocId);
-}
-
-function shareCurrentDocument() {
-  if (G.currentDocId) openShareModal(G.currentDocId);
 }
 
 function openShareModal(docId) {
@@ -1164,17 +1163,17 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-       </td>
-       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
-       <td class="p-4 hidden md:table-cell">-</td>
-       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
-       <td class="p-4">
+        </td>
+      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
+      <td class="p-4 hidden md:table-cell">-</td>
+      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
+      <td class="p-4">
         <div class="flex gap-2">
           ${u.status === 'pending_validation' && canValidateUsers() ? `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
           <button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>
         </div>
-       </td>
-     </tr>
+      </td>
+    </tr>
   `).join('');
 }
 
@@ -1220,7 +1219,7 @@ async function addUser(e) {
   };
   const { error } = await G.supabase.from('profiles').insert(newUser);
   if (error) {
-    showToast('Erreur création utilisateur', 'error');
+    showToast('Erreur création utilisateur: ' + error.message, 'error');
     return;
   }
   G.users.push(newUser);
@@ -1329,7 +1328,7 @@ async function createTag() {
   };
   const { error } = await G.supabase.from('tags').insert(newTag);
   if (error) {
-    showToast('Erreur création tag', 'error');
+    showToast('Erreur création tag: ' + error.message, 'error');
     return;
   }
   G.tags.push(newTag);
@@ -1766,7 +1765,7 @@ async function createFolder() {
   };
   const { error } = await G.supabase.from('folders').insert(newFolder);
   if (error) {
-    showToast('Erreur création dossier', 'error');
+    showToast('Erreur création dossier: ' + error.message, 'error');
     return;
   }
   G.folders.push(newFolder);
@@ -2227,6 +2226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (loginScreen) loginScreen.style.display = 'block';
     if (mainApp) mainApp.style.display = 'none';
   }
+  
   // Exposer toutes les fonctions globalement
   window.handleLogin = handleLogin;
   window.handleRegister = handleRegister;
@@ -2243,6 +2243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.handleDragOver = handleDragOver;
   window.handleDragLeave = handleDragLeave;
   window.handleDrop = handleDrop;
+  window.handleDocDrop = handleDocDrop;  // Fonction importante pour le drag & drop
   window.handleFileSelect = handleFileSelect;
   window.handleFilePickerSelect = handleFilePickerSelect;
   window.addFilesToSelection = addFilesToSelection;
