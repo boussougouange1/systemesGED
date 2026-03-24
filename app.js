@@ -1,5 +1,5 @@
 // ============================================
-// SystemesGED v7.0 – Application complète
+// SystemesGED v7.0 – Application complète sécurisée
 // ============================================
 
 // ─── Configuration Supabase ───
@@ -60,12 +60,45 @@ window.G = {
   _uploadScope: 'company'
 };
 
+// ─── Protection anti-copie et sécurité ───
+(function protectApplication() {
+  // Bloquer les outils de développement (optionnel, dissuasion)
+  document.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    return false;
+  });
+  
+  // Bloquer les raccourcis clavier courants (F12, Ctrl+Shift+I, Ctrl+U)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) ||
+        (e.ctrlKey && (e.key === 'u' || e.key === 'U'))) {
+      e.preventDefault();
+      return false;
+    }
+  });
+  
+  // Détection des outils de développement (via debugger)
+  setInterval(() => {
+    const before = new Date();
+    debugger;
+    const after = new Date();
+    if (after - before > 100) {
+      console.clear();
+    }
+  }, 1000);
+})();
+
 // ─── Initialisation Supabase ───
 async function initSupabase() {
   try {
     if (typeof supabase === 'undefined') throw new Error('Supabase library not loaded');
     G.supabase = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
-      auth: { autoRefreshToken: true, persistSession: true }
+      auth: { 
+        autoRefreshToken: true, 
+        persistSession: true,
+        detectSessionInUrl: true
+      }
     });
     const { data: { session } } = await G.supabase.auth.getSession();
     if (session) {
@@ -1503,7 +1536,6 @@ async function loadWorkflowHistory(wfId) {
   }
 }
 
-// NOUVELLE FONCTION : ajouter un commentaire
 async function addWfComment() {
   const comment = document.getElementById('wfCommentInput')?.value;
   if (!comment || !G.currentWfId) return;
@@ -1620,7 +1652,7 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-         </td>
+          </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
       <td class="p-4 hidden md:table-cell">-</td>
       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
@@ -1720,6 +1752,35 @@ async function resetUserPassword(email) {
     showToast('Erreur envoi de l\'email: ' + error.message, 'error');
   } else {
     showToast(`Un email de réinitialisation a été envoyé à ${email}`, 'success');
+  }
+}
+
+// Fonctions pour le modal de réinitialisation
+function openResetModal() {
+  document.getElementById('resetPasswordModal').classList.remove('hidden');
+  document.getElementById('resetEmail').value = '';
+  document.getElementById('resetMessage').innerHTML = '';
+}
+
+function closeResetModal() {
+  document.getElementById('resetPasswordModal').classList.add('hidden');
+}
+
+async function sendResetEmail() {
+  const email = document.getElementById('resetEmail').value.trim();
+  if (!email) {
+    showToast('Veuillez saisir votre email', 'warning');
+    return;
+  }
+  const { error } = await G.supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/update-password.html`,
+  });
+  const msgDiv = document.getElementById('resetMessage');
+  if (error) {
+    msgDiv.innerHTML = `<span class="text-red-400">Erreur : ${error.message}</span>`;
+  } else {
+    msgDiv.innerHTML = `<span class="text-green-400">✅ Un email de réinitialisation vous a été envoyé.</span>`;
+    setTimeout(() => closeResetModal(), 3000);
   }
 }
 
@@ -3001,4 +3062,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.formatDate = formatDate;
   window.getFileIcon = getFileIcon;
   window.showToast = showToast;
+  window.openResetModal = openResetModal;
+  window.closeResetModal = closeResetModal;
+  window.sendResetEmail = sendResetEmail;
 });
