@@ -273,7 +273,7 @@ function updateUI() {
   updateUserDisplay();
   updateBadges();
   updateStorageDisplay();
-  updateMenuVisibility(); // Nouvelle fonction
+  updateMenuVisibility();
   if (canValidateUsers()) updatePendingUsersCount();
 }
 
@@ -384,6 +384,14 @@ async function handleLogin(e) {
 
 async function handleRegister(e) {
   e.preventDefault();
+  
+  // Limiter les tentatives d'inscription
+  const lastAttempt = localStorage.getItem('lastRegisterAttempt');
+  if (lastAttempt && Date.now() - parseInt(lastAttempt) < 60000) {
+    showToast('Veuillez attendre une minute avant de réessayer', 'warning');
+    return;
+  }
+  localStorage.setItem('lastRegisterAttempt', Date.now().toString());
   
   const firstName = document.getElementById('regFirst')?.value.trim();
   const lastName = document.getElementById('regLast')?.value.trim();
@@ -1495,6 +1503,28 @@ async function loadWorkflowHistory(wfId) {
   }
 }
 
+// NOUVELLE FONCTION : ajouter un commentaire
+async function addWfComment() {
+  const comment = document.getElementById('wfCommentInput')?.value;
+  if (!comment || !G.currentWfId) return;
+  
+  const actionRecord = {
+    id: generateId(),
+    workflow_id: G.currentWfId,
+    user_id: G.currentUser.id,
+    action: 'comment',
+    comment: comment,
+    created_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('workflow_actions').insert(actionRecord);
+  if (!error) {
+    document.getElementById('wfCommentInput').value = '';
+    loadWorkflowHistory(G.currentWfId);
+    showToast('Commentaire ajouté', 'success');
+  }
+}
+
 function getActionLabel(action) {
   const labels = { approve: 'approuvé', reject: 'rejeté', request_changes: 'demandé des modifications', comment: 'commenté' };
   return labels[action] || action;
@@ -1590,7 +1620,7 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-        </td>
+         </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
       <td class="p-4 hidden md:table-cell">-</td>
       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
@@ -1600,8 +1630,8 @@ function renderUsers() {
           ${canValidateUsers() ? `<button onclick="resetUserPassword('${u.email}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Réinitialiser mot de passe"><i class="fas fa-key"></i></button>` : ''}
           ${canValidateUsers() ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
         </div>
-       </td>
-     </tr>
+      </td>
+    </tr>
   `).join('');
 }
 
@@ -2883,6 +2913,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.closeWorkflowModal = closeWorkflowModal;
   window.createWorkflow = createWorkflow;
   window.actOnWorkflow = actOnWorkflow;
+  window.addWfComment = addWfComment;
   window.openWfDetail = openWfDetail;
   window.closeWfDetail = closeWfDetail;
   window.filterWorkflows = filterWorkflows;
