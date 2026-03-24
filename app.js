@@ -1,5 +1,5 @@
 // ============================================
-// SystemesGED v7.0 – Application complète corrigée
+// SystemesGED v7.0 – Application complète
 // ============================================
 
 // ─── Configuration Supabase ───
@@ -8,6 +8,7 @@ const CONFIG = {
   supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indoa3Z0cHFlc3FpYWlsd2pnb2FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTU1ODIsImV4cCI6MjA4OTc3MTU4Mn0.oIEDNRvSAEsVTarXnIl1cMTLoqS1nsHo8dPnjdW0ng8',
   storageBucket: 'documents',
   maxFileSize: 50 * 1024 * 1024,
+  edgeFunctionUrl: 'https://whkvtpqesqiailwjgoaq.supabase.co/functions/v1/create-user',
   plans: {
     free: { name: 'Free', price: 0, users: 5, storage: 1073741824 },
     starter: { name: 'Starter', price: 29, users: 20, storage: 10737418240 },
@@ -81,7 +82,6 @@ async function initSupabase() {
 async function loadUserFromSupabase(user) {
   if (!user) return false;
   
-  // Vérifier si c'est un admin système
   const sysAdmin = CONFIG.systemAdmins.find(a => a.email === user.email);
   if (sysAdmin) {
     G.currentUser = {
@@ -100,7 +100,6 @@ async function loadUserFromSupabase(user) {
     return true;
   }
   
-  // Utilisateur normal : récupérer le profil
   const { data: profile, error } = await G.supabase
     .from('profiles')
     .select('*, companies!company_id(name, plan)')
@@ -143,16 +142,13 @@ async function ensureCompanyExists(companyId, companyName) {
   }
 }
 
-// ─── Gestion du dossier racine (CORRIGÉE) ───
+// ─── Gestion du dossier racine ───
 async function setRootFolder() {
   if (!G.currentUser?.companyId) {
     console.error('setRootFolder: companyId manquant');
     return;
   }
   
-  console.log('setRootFolder: recherche dossier racine pour', G.currentUser.companyId);
-  
-  // Rechercher le dossier racine de l'entreprise
   const { data: rootFolder, error } = await G.supabase
     .from('folders')
     .select('id')
@@ -167,10 +163,7 @@ async function setRootFolder() {
     return;
   }
   
-  // Créer un dossier racine si non trouvé
   const newRootId = `${G.currentUser.companyId}_root`;
-  console.log('Création dossier racine:', newRootId);
-  
   const { error: insertErr } = await G.supabase
     .from('folders')
     .insert({
@@ -184,10 +177,9 @@ async function setRootFolder() {
   if (!insertErr) {
     G.currentFolderId = newRootId;
     G.folderPath = [{ id: newRootId, name: 'Racine' }];
-    console.log('Dossier racine créé avec succès:', newRootId);
+    console.log('Dossier racine créé:', newRootId);
   } else {
     console.error('Erreur création dossier racine:', insertErr);
-    showToast('Erreur création dossier racine', 'error');
   }
 }
 
@@ -196,7 +188,6 @@ async function loadAllData() {
   if (!G.currentUser?.companyId) return;
   const companyId = G.currentUser.companyId;
 
-  // Documents
   const { data: docs } = await G.supabase
     .from('documents')
     .select('*')
@@ -204,70 +195,60 @@ async function loadAllData() {
     .order('created_at', { ascending: false });
   G.documents = docs || [];
 
-  // Workflows
   const { data: wfs } = await G.supabase
     .from('workflows')
     .select('*')
     .eq('company_id', companyId);
   G.workflows = wfs || [];
 
-  // Utilisateurs (profiles)
   const { data: users } = await G.supabase
     .from('profiles')
     .select('*')
     .eq('company_id', companyId);
   G.users = users || [];
 
-  // Tags
   const { data: tags } = await G.supabase
     .from('tags')
     .select('*')
     .eq('company_id', companyId);
   G.tags = tags || [];
 
-  // Partages
   const { data: shares } = await G.supabase
     .from('shares')
     .select('*, documents!document_id(name)')
     .eq('sender_id', G.currentUser.id);
   G.shares = shares || [];
 
-  // Dossiers
   const { data: folders } = await G.supabase
     .from('folders')
     .select('*')
     .eq('company_id', companyId);
   G.folders = folders || [];
 
-  // Signatures
   const { data: signatures } = await G.supabase
     .from('signatures')
     .select('*')
     .eq('signer_id', G.currentUser.id);
   G.signatures = signatures || [];
 
-  // Règles d'automatisation
   const { data: rules } = await G.supabase
     .from('automation_rules')
     .select('*')
     .eq('company_id', companyId);
   G.automationRules = rules || [];
 
-  // Clés API
   const { data: keys } = await G.supabase
     .from('api_keys')
     .select('*')
     .eq('user_id', G.currentUser.id);
   G.apiKeys = keys || [];
 
-  // Sauvegardes
   const { data: backups } = await G.supabase
     .from('backups')
     .select('*')
     .eq('company_id', companyId);
   G.backups = backups || [];
 
-  // Logs d'audit
   const { data: audit } = await G.supabase
     .from('audit_logs')
     .select('*')
@@ -276,7 +257,6 @@ async function loadAllData() {
     .limit(50);
   G.auditLogs = audit || [];
 
-  // Logs système
   const { data: syslogs } = await G.supabase
     .from('system_logs')
     .select('*')
@@ -284,9 +264,7 @@ async function loadAllData() {
     .limit(50);
   G.systemLogs = syslogs || [];
   
-  // Définir le dossier racine
   await setRootFolder();
-  
   updateUI();
 }
 
@@ -295,6 +273,7 @@ function updateUI() {
   updateUserDisplay();
   updateBadges();
   updateStorageDisplay();
+  updateMenuVisibility(); // Nouvelle fonction
   if (canValidateUsers()) updatePendingUsersCount();
 }
 
@@ -325,6 +304,18 @@ function updateUserDisplay() {
     elements.planBadge.textContent = G.currentUser.plan.toUpperCase();
     elements.planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan}`;
   }
+}
+
+function updateMenuVisibility() {
+  const isAdmin = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
+  const isManager = G.currentUser?.role === 'manager' || isAdmin;
+  
+  document.querySelectorAll('[data-role="admin-only"]').forEach(el => {
+    el.style.display = isAdmin ? 'flex' : 'none';
+  });
+  document.querySelectorAll('[data-role="manager-only"]').forEach(el => {
+    el.style.display = isManager ? 'flex' : 'none';
+  });
 }
 
 function updateBadges() {
@@ -417,14 +408,12 @@ async function handleRegister(e) {
   }
 
   try {
-    // 1. Créer l'entreprise
     const companyId = `comp_${Date.now()}`;
     const { error: compErr } = await G.supabase
       .from('companies')
       .insert({ id: companyId, name: companyName, plan: 'free' });
     if (compErr) throw compErr;
 
-    // 2. Créer l'utilisateur dans Auth
     const { data, error } = await G.supabase.auth.signUp({
       email,
       password,
@@ -437,7 +426,6 @@ async function handleRegister(e) {
     });
     if (error) throw error;
 
-    // 3. Créer le profil
     const { error: profErr } = await G.supabase
       .from('profiles')
       .insert({
@@ -451,7 +439,6 @@ async function handleRegister(e) {
       });
     if (profErr) throw profErr;
 
-    // 4. Créer le dossier racine de l'entreprise
     const rootFolderId = `${companyId}_root`;
     const { error: folderErr } = await G.supabase
       .from('folders')
@@ -548,7 +535,6 @@ function switchView(viewName) {
   G.currentView = viewName;
   closeMobileSidebar();
   
-  // Rendu des vues
   const views = {
     dashboard: renderDashboard,
     documents: renderDocuments,
@@ -862,7 +848,7 @@ function filterByTag(tagName) {
   showToast(`Filtre par tag: ${tagName}`, 'info');
 }
 
-// ─── Upload (CORRIGÉ) ───
+// ─── Upload ───
 function openUploadModal() {
   const modal = document.getElementById('uploadModal');
   if (modal) modal.classList.remove('hidden');
@@ -986,15 +972,13 @@ async function uploadDocument() {
     return;
   }
   
-  // Vérifier que le dossier racine est défini
   if (!G.currentFolderId) {
-    showToast('Erreur: dossier racine non trouvé. Veuillez réessayer.', 'error');
+    showToast('Erreur: dossier racine non trouvé', 'error');
     console.error('uploadDocument: currentFolderId est null');
     return;
   }
   
   const folderId = G.currentFolderId;
-  console.log('uploadDocument: folderId =', folderId);
   
   for (const file of G.selectedFiles) {
     const docId = generateId();
@@ -1002,7 +986,6 @@ async function uploadDocument() {
     const storagePath = `${G.currentUser.companyId}/${docId}.${fileExt}`;
     
     try {
-      // Upload vers Storage
       const { error: uploadErr } = await G.supabase.storage
         .from(CONFIG.storageBucket)
         .upload(storagePath, file);
@@ -1163,6 +1146,18 @@ async function shareDocument() {
     return;
   }
   
+  // Vérifier que l'email appartient à la même entreprise
+  const { data: targetUser, error: userError } = await G.supabase
+    .from('profiles')
+    .select('id, company_id')
+    .eq('email', email)
+    .single();
+  
+  if (userError || !targetUser || targetUser.company_id !== G.currentUser.companyId) {
+    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
+    return;
+  }
+  
   const share = {
     id: generateId(),
     document_id: G.currentDocId,
@@ -1184,6 +1179,45 @@ async function shareDocument() {
   showToast('Document partagé avec succès', 'success');
   closeShareModal();
   updateBadges();
+}
+
+async function revokeShare(shareId) {
+  const { error } = await G.supabase
+    .from('shares')
+    .update({ status: 'revoked' })
+    .eq('id', shareId);
+  if (error) {
+    showToast('Erreur révocation', 'error');
+  } else {
+    showToast('Partage révoqué', 'success');
+    loadShareHistory();
+  }
+}
+
+async function loadShareHistory() {
+  const { data: shares, error } = await G.supabase
+    .from('shares')
+    .select('*, documents!document_id(name)')
+    .eq('document_id', G.currentDocId);
+  
+  if (error) return;
+  
+  const historyContainer = document.getElementById('shareHistoryList');
+  if (historyContainer) {
+    if (shares.length === 0) {
+      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucun historique</p>';
+    } else {
+      historyContainer.innerHTML = shares.map(s => `
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50">
+          <div>
+            <p class="text-white text-sm">Partagé avec: ${s.recipient_email}</p>
+            <p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>
+          </div>
+          ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded">Révoquer</button>` : ''}
+        </div>
+      `).join('');
+    }
+  }
 }
 
 function switchSharedTab(tab) {
@@ -1243,7 +1277,10 @@ function renderShared() {
       <div class="glass-card rounded-xl p-4 border border-blue-500/20">
         <div class="flex items-center justify-between">
           <div><p class="text-white font-medium">${s.documents?.name || 'Document'}</p><p class="text-xs text-blue-300/60">À: ${s.recipient_email}</p></div>
-          <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
+          <div class="flex gap-2">
+            <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
+            ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="text-xs text-red-400 hover:text-red-300"><i class="fas fa-ban"></i></button>` : ''}
+          </div>
         </div>
       </div>
     `).join('');
@@ -1319,6 +1356,13 @@ async function createWorkflow(e) {
     return;
   }
   
+  // Récupérer les étapes du workflow
+  const steps = [];
+  const stepsInput = document.getElementById('wfSteps')?.value;
+  if (stepsInput) {
+    steps.push(...stepsInput.split(',').map(s => s.trim()));
+  }
+  
   const newWf = {
     id: generateId(),
     title,
@@ -1328,6 +1372,8 @@ async function createWorkflow(e) {
     assignee_id: document.getElementById('wfAssignee')?.value,
     created_by: G.currentUser.id,
     company_id: G.currentUser.companyId,
+    steps: steps,
+    current_step: 0,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -1344,10 +1390,114 @@ async function createWorkflow(e) {
   renderWorkflows();
 }
 
+async function actOnWorkflow(action, comment) {
+  if (!G.currentWfId) return;
+  
+  const wf = G.workflows.find(w => w.id === G.currentWfId);
+  if (!wf) return;
+  
+  // Enregistrer l'action
+  const actionRecord = {
+    id: generateId(),
+    workflow_id: G.currentWfId,
+    user_id: G.currentUser.id,
+    action: action,
+    comment: comment || '',
+    step_index: wf.current_step,
+    created_at: new Date().toISOString()
+  };
+  
+  await G.supabase.from('workflow_actions').insert(actionRecord);
+  
+  // Mettre à jour le statut du workflow
+  let newStatus = wf.status;
+  let newStep = wf.current_step;
+  
+  if (action === 'approve') {
+    if (wf.current_step + 1 >= (wf.steps?.length || 0)) {
+      newStatus = 'approved';
+    } else {
+      newStep = wf.current_step + 1;
+    }
+  } else if (action === 'reject') {
+    newStatus = 'rejected';
+  } else if (action === 'request_changes') {
+    newStatus = 'in_review';
+  }
+  
+  await G.supabase
+    .from('workflows')
+    .update({ 
+      status: newStatus, 
+      current_step: newStep,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', G.currentWfId);
+  
+  wf.status = newStatus;
+  wf.current_step = newStep;
+  
+  showToast(`Workflow ${action === 'approve' ? 'approuvé' : action === 'reject' ? 'rejeté' : 'mis à jour'}`, 'success');
+  renderWorkflows();
+  closeWfDetail();
+}
+
 function openWfDetail(wfId) {
   G.currentWfId = wfId;
   const modal = document.getElementById('wfDetailModal');
   if (modal) modal.classList.remove('hidden');
+  
+  const wf = G.workflows.find(w => w.id === wfId);
+  if (wf) {
+    document.getElementById('wfDetailTitle').textContent = wf.title;
+    
+    // Afficher les étapes
+    const stepsContainer = document.getElementById('wfDetailSteps');
+    if (stepsContainer && wf.steps) {
+      stepsContainer.innerHTML = wf.steps.map((step, idx) => `
+        <div class="flex items-center gap-3 p-2 rounded-lg ${idx <= wf.current_step ? 'bg-green-500/10 border border-green-500/30' : 'bg-slate-800/50'}">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center ${idx < wf.current_step ? 'bg-green-500 text-white' : idx === wf.current_step ? 'bg-blue-500 text-white' : 'bg-slate-600 text-gray-400'}">
+            ${idx + 1}
+          </div>
+          <div class="flex-1">
+            <p class="text-white text-sm">${step}</p>
+            ${idx === wf.current_step && wf.status === 'pending' ? '<p class="text-xs text-blue-400">En attente de validation</p>' : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    // Afficher l'historique
+    loadWorkflowHistory(wfId);
+  }
+}
+
+async function loadWorkflowHistory(wfId) {
+  const { data: actions, error } = await G.supabase
+    .from('workflow_actions')
+    .select('*, profiles!user_id(name)')
+    .eq('workflow_id', wfId)
+    .order('created_at', { ascending: false });
+  
+  const historyContainer = document.getElementById('wfDetailHistory');
+  if (historyContainer) {
+    if (!actions || actions.length === 0) {
+      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucune activité</p>';
+    } else {
+      historyContainer.innerHTML = actions.map(a => `
+        <div class="p-2 border-b border-blue-500/10">
+          <p class="text-white text-xs">${a.profiles?.name || 'Utilisateur'} a ${getActionLabel(a.action)}</p>
+          <p class="text-blue-300/50 text-[10px]">${formatDate(a.created_at)}</p>
+          ${a.comment ? `<p class="text-xs text-blue-300/70 mt-1">"${a.comment}"</p>` : ''}
+        </div>
+      `).join('');
+    }
+  }
+}
+
+function getActionLabel(action) {
+  const labels = { approve: 'approuvé', reject: 'rejeté', request_changes: 'demandé des modifications', comment: 'commenté' };
+  return labels[action] || action;
 }
 
 function closeWfDetail() {
@@ -1428,7 +1578,7 @@ function renderWorkflowsList() {
   `).join('');
 }
 
-// ─── Users (CORRIGÉ) ───
+// ─── Users (avec création via Edge Function) ───
 function renderUsers() {
   const tbody = document.getElementById('usersList');
   if (!tbody) return;
@@ -1440,17 +1590,18 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-       </td>
+        </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
       <td class="p-4 hidden md:table-cell">-</td>
       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
       <td class="p-4">
         <div class="flex gap-2">
           ${u.status === 'pending_validation' && canValidateUsers() ? `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
+          ${canValidateUsers() ? `<button onclick="resetUserPassword('${u.email}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Réinitialiser mot de passe"><i class="fas fa-key"></i></button>` : ''}
           ${canValidateUsers() ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
         </div>
-      </td>
-    </tr>
+       </td>
+     </tr>
   `).join('');
 }
 
@@ -1491,40 +1642,54 @@ async function addUser(e) {
     return;
   }
   
-  // Vérifier que l'utilisateur a une entreprise
   if (!G.currentUser?.companyId) {
     showToast('Erreur: entreprise non trouvée', 'error');
     return;
   }
   
-  const userId = generateId();
+  const name = `${firstName} ${lastName}`;
   const tempPassword = generatePassword();
   
   try {
-    // 1. Créer l'utilisateur dans la table profiles
-    const newUser = {
-      id: userId,
-      name: `${firstName} ${lastName}`,
-      email: email,
-      role: role,
-      status: 'pending_validation',
-      company_id: G.currentUser.companyId,
-      plan: 'free',
-      created_at: new Date().toISOString()
-    };
+    // Appeler l'Edge Function pour créer l'utilisateur
+    const response = await fetch(CONFIG.edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CONFIG.supabaseKey}`,
+      },
+      body: JSON.stringify({
+        email,
+        password: tempPassword,
+        role,
+        companyId: G.currentUser.companyId,
+        name,
+      }),
+    });
     
-    const { error: profError } = await G.supabase.from('profiles').insert(newUser);
-    if (profError) throw profError;
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
     
-    G.users.push(newUser);
     showToast(`Utilisateur créé. Mot de passe temporaire: ${tempPassword}`, 'success');
     closeAddUserModal();
+    await loadAllData(); // Recharger la liste des utilisateurs
     renderUsers();
     updatePendingUsersCount();
     
   } catch (err) {
     console.error('Erreur création utilisateur:', err);
     showToast('Erreur: ' + err.message, 'error');
+  }
+}
+
+async function resetUserPassword(email) {
+  const { error } = await G.supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/update-password`,
+  });
+  if (error) {
+    showToast('Erreur envoi de l\'email: ' + error.message, 'error');
+  } else {
+    showToast(`Un email de réinitialisation a été envoyé à ${email}`, 'success');
   }
 }
 
@@ -1757,6 +1922,21 @@ async function createFolder() {
   closeFolderModal();
   renderFolders();
   showToast('Dossier créé', 'success');
+}
+
+async function moveDocument(docId, newFolderId) {
+  const { error } = await G.supabase
+    .from('documents')
+    .update({ folder_id: newFolderId, updated_at: new Date().toISOString() })
+    .eq('id', docId);
+  if (error) {
+    showToast('Erreur déplacement', 'error');
+  } else {
+    const doc = G.documents.find(d => d.id === docId);
+    if (doc) doc.folder_id = newFolderId;
+    renderDocuments();
+    showToast('Document déplacé', 'success');
+  }
 }
 
 // ─── Settings ───
@@ -2688,6 +2868,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.openShareModal = openShareModal;
   window.closeShareModal = closeShareModal;
   window.shareDocument = shareDocument;
+  window.revokeShare = revokeShare;
+  window.loadShareHistory = loadShareHistory;
   window.switchSharedTab = switchSharedTab;
   window.renderDocuments = renderDocuments;
   window.switchDocsTab = switchDocsTab;
@@ -2700,6 +2882,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.openCreateWorkflowModal = openCreateWorkflowModal;
   window.closeWorkflowModal = closeWorkflowModal;
   window.createWorkflow = createWorkflow;
+  window.actOnWorkflow = actOnWorkflow;
   window.openWfDetail = openWfDetail;
   window.closeWfDetail = closeWfDetail;
   window.filterWorkflows = filterWorkflows;
@@ -2708,6 +2891,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.renderUsers = renderUsers;
   window.validateUser = validateUser;
   window.deleteUser = deleteUser;
+  window.resetUserPassword = resetUserPassword;
   window.openCreateUserModal = openCreateUserModal;
   window.closeAddUserModal = closeAddUserModal;
   window.addUser = addUser;
@@ -2744,6 +2928,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.openFolderModal = openFolderModal;
   window.closeFolderModal = closeFolderModal;
   window.createFolder = createFolder;
+  window.moveDocument = moveDocument;
   window.renderSignatures = renderSignatures;
   window.openSignModal = openSignModal;
   window.closeSignModal = closeSignModal;
