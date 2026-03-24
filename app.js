@@ -1714,7 +1714,7 @@ async function addUser(e) {
 
 async function resetUserPassword(email) {
   const { error } = await G.supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/update-password`,
+    redirectTo: `${window.location.origin}/update-password.html`,
   });
   if (error) {
     showToast('Erreur envoi de l\'email: ' + error.message, 'error');
