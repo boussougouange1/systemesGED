@@ -491,8 +491,11 @@ function renderSelectedFiles() { /* ... */ }
 function removeFileFromSelection(idx) { /* ... */ }
 function addUploadTag() { /* ... */ }
 function renderUploadTags() { /* ... */ }
-function removeUploadTag(idx) { /* ... */ */
+function removeUploadTag(idx) {
+  G.uploadTags.splice(idx, 1);
+  renderUploadTags();
 }
+
 async function uploadDocument() {
   if (G.selectedFiles.length === 0) {
     showToast('Veuillez sélectionner au moins un fichier', 'warning');
@@ -531,7 +534,7 @@ async function uploadDocument() {
       showToast(`Erreur: ${err.message}`, 'error');
     }
   }
-  G.selectedFiles = []; // vider la sélection
+  G.selectedFiles = [];
   closeUploadModal();
   renderDocuments();
   updateBadges();
