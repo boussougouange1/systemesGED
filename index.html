@@ -10,9 +10,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','sans-serif']},colors:{brand:{50:'#e6f0ff',100:'#cce0ff',500:'#3b82f6',600:'#2563eb',900:'#1e3a8a'}},screens:{xs:'375px',sm:'640px',md:'768px',lg:'1024px',xl:'1280px','2xl':'1536px'}}}}</script>
+<script>
+tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','sans-serif']},colors:{brand:{50:'#e6f0ff',100:'#cce0ff',500:'#3b82f6',600:'#2563eb',900:'#1e3a8a'}},screens:{xs:'375px',sm:'640px',md:'768px',lg:'1024px',xl:'1280px','2xl':'1536px'}}}}
+</script>
 <style>
-/* Tous les styles existants (inchangés) */
 *{-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
 body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-height:100vh;overflow-x:hidden;}
 .glass-panel{background:rgba(30,58,138,0.15);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(96,165,250,0.2);}
@@ -396,7 +397,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
   <!-- Main content -->
   <main class="flex-1 min-w-0 p-4 lg:p-6 pb-24 lg:pb-6 overflow-y-auto" style="max-height:calc(100vh - 61px)">
 
-    <!-- ══ DASHBOARD (inchangé) -->
+    <!-- ══ DASHBOARD -->
     <div id="view-dashboard" class="view-section active-view space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1">Tableau de bord</h2><p id="dashSubtitle" class="text-sm text-blue-300/80">Vue d'ensemble de votre GED</p></div>
@@ -459,7 +460,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       </div>
     </div>
 
-    <!-- ══ DOCUMENTS (inchangé sauf la zone de dépôt) -->
+    <!-- ══ DOCUMENTS -->
     <div id="view-documents" class="view-section space-y-5">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3"><i class="fas fa-file-alt text-blue-400"></i>Documents</h2><p class="text-sm text-blue-300/80">Gérez les documents de votre entreprise</p></div>
@@ -477,85 +478,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       <div class="doc-grid" id="documentGrid"></div>
     </div>
 
-    <!-- ══ SHARED, WORKFLOWS, RECHERCHE AVANCÉE, etc. (inchangés) -->
-    <!-- ... tout le reste du contenu (shared, workflows, search, versioning, logs, rbac, users, tags, billing, settings, security, analytics, folders, apikeys, billing2, auditv6, signatures, search, ai, automation, integrations, backups, rbacv7, pending-users) reste identique à votre version existante ... -->
-
-    <!-- ══ MODAL AJOUT D'UTILISATEUR (inchangé) -->
-    <!-- ... -->
-
-    <!-- ══ MODAL DE RÉINITIALISATION -->
-    <div id="resetPasswordModal" class="modal-overlay hidden">
-      <div class="modal-box" style="max-width: 420px;">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-white font-bold text-lg">Réinitialiser mon mot de passe</h3>
-          <button onclick="closeResetModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
-        </div>
-        <p class="text-blue-300/80 text-sm mb-4">Saisissez votre email pour recevoir un lien de réinitialisation.</p>
-        <input type="email" id="resetEmail" placeholder="votre@email.com" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none mb-4" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
-        <div class="flex gap-3">
-          <button onclick="closeResetModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10 border border-blue-500/30">Annuler</button>
-          <button onclick="sendResetEmail()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium">Envoyer</button>
-        </div>
-        <div id="resetMessage" class="mt-3 text-center text-sm"></div>
-      </div>
-    </div>
-
-  </main>
-</div>
-
-<!-- Bottom mobile nav (inchangé) -->
-<nav class="bottom-nav px-2 py-1">
-  <div class="flex items-center justify-around">
-    <button onclick="switchView('dashboard')" data-bnav="dashboard" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-chart-pie text-lg"></i><span class="text-[10px]">Accueil</span></button>
-    <button onclick="switchView('documents')" data-bnav="documents" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-file-alt text-lg"></i><span class="text-[10px]">Docs</span></button>
-    <button onclick="openUploadModal()" class="flex flex-col items-center gap-0.5 p-2 -mt-3 rounded-xl text-white min-w-[52px]" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);box-shadow:0 4px 15px rgba(37,99,235,0.5)"><i class="fas fa-plus text-lg"></i><span class="text-[10px]">Upload</span></button>
-    <button onclick="switchView('workflows')" data-bnav="workflows" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-project-diagram text-lg"></i><span class="text-[10px]">Flux</span></button>
-    <button onclick="switchView('settings')" data-bnav="settings" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-cog text-lg"></i><span class="text-[10px]">Config</span></button>
-  </div>
-</nav>
-</div>
-
-<!-- ════ UPLOAD MODAL (inchangé) -->
-<div id="uploadModal" class="modal-overlay hidden">
-  <div class="modal-box">
-    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg"><i class="fas fa-upload text-blue-400 mr-2"></i>Importer des fichiers</h3><button onclick="closeUploadModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
-    <div id="dropZone" class="border-2 border-dashed rounded-xl p-8 text-center mb-4 cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" onclick="document.getElementById('fileInput').click()" ondragover="handleDragOver(event,'dropZone')" ondragleave="handleDragLeave(event,'dropZone')" ondrop="handleDrop(event,'dropZone')">
-      <i class="fas fa-cloud-upload-alt text-blue-400 text-3xl mb-2"></i>
-      <p class="text-white font-medium mb-1">Glissez-déposez vos fichiers</p>
-      <p class="text-blue-400/60 text-sm">ou cliquez pour parcourir</p>
-      <p class="text-blue-400/40 text-xs mt-2">PDF, Word, Excel, Images… · Max 100 MB par fichier</p>
-    </div>
-    <input type="file" id="fileInput" class="hidden" multiple onchange="handleFileSelect(event)">
-    <div id="selectedFilesList" class="space-y-2 mb-4 max-h-40 overflow-y-auto"></div>
-    <div class="grid grid-cols-2 gap-3 mb-4"><div><label class="text-blue-200 text-xs font-medium block mb-1">Nom (optionnel)</label><input id="docNameInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom du document"></div><div><label class="text-blue-200 text-xs font-medium block mb-1">Description</label><input id="docDescInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Description courte"></div></div>
-    <div class="mb-4"><label class="text-blue-200 text-xs font-medium block mb-2">Type de document</label><div class="grid grid-cols-2 gap-2" id="docScopeSelector"><button type="button" id="scopeCompany" onclick="setDocScope('company')" class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-blue-500/40 bg-blue-500/15 text-blue-300 font-medium text-sm transition-all"><i class="fas fa-building text-blue-400"></i><div class="text-left"><p class="font-semibold text-white text-xs">Entreprise</p><p class="text-[10px] text-blue-300/60">Visible à toute l'équipe</p></div></button><button type="button" id="scopePersonal" onclick="setDocScope('personal')" class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-transparent bg-slate-800/40 text-gray-400 font-medium text-sm transition-all hover:border-purple-500/30"><i class="fas fa-user text-purple-400"></i><div class="text-left"><p class="font-semibold text-white text-xs">Personnel</p><p class="text-[10px] text-blue-300/60">Visible seulement par moi</p></div></button></div></div>
-    <div class="mb-4"><label class="text-blue-200 text-xs font-medium block mb-1">Tags (séparés par virgules)</label><div class="flex gap-2 flex-wrap mb-2" id="uploadTagsContainer"></div><div class="flex gap-2"><input id="tagInput" placeholder="Ajouter un tag..." onkeypress="if(event.key==='Enter'){addUploadTag();}" class="flex-1 px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><button onclick="addUploadTag()" class="px-3 py-2 rounded-xl text-blue-400 hover:text-white text-sm" style="border:1px solid rgba(96,165,250,0.2);"><i class="fas fa-plus"></i></button></div></div>
-    <div id="uploadProgress" class="hidden mb-4"><div class="flex justify-between text-xs text-blue-300/70 mb-1"><span id="uploadStatusText">Upload en cours...</span><span id="uploadPercent">0%</span></div><div class="progress-bar"><div id="uploadProgressBar" class="progress-fill" style="width:0%"></div></div></div>
-    <div class="flex gap-3"><button onclick="closeUploadModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button id="uploadBtn" onclick="uploadDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-cloud-upload-alt mr-2"></i>Importer</button></div>
-  </div>
-</div>
-
-<!-- ════ SHARE MODAL (ajout du bouton "Générer un lien public") -->
-<div id="shareModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:600px">
-    <div class="flex items-center justify-between mb-4"><div class="flex items-center gap-3"><div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-share-nodes"></i></div><div><h3 class="text-white font-bold">Partager</h3><p id="shareDocInfo" class="text-blue-300/60 text-xs truncate max-w-xs"></p></div></div><button onclick="closeShareModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button></div>
-    <div class="flex border-b border-blue-500/20 mb-4"><button onclick="switchShareTab('send')" id="shareTab-send" class="px-4 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2"><i class="fas fa-paper-plane"></i>Partager</button><button onclick="switchShareTab('history')" id="shareTab-history" class="px-4 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px flex items-center gap-2 hover:text-blue-400"><i class="fas fa-history"></i>Historique<span id="shareHistoryCount" class="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full hidden">0</span></button></div>
-    <div id="sharePanel-send">
-      <div class="mb-3"><label class="text-blue-200 text-xs font-medium block mb-1">Destinataire</label><div class="relative"><i class="fas fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-blue-400/60 text-sm"></i><input id="shareEmail" type="email" class="w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm outline-none transition-all" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="email@destinataire.com"></div></div>
-      <div class="mb-3"><label class="text-blue-200 text-xs font-medium block mb-1">Message (optionnel)</label><textarea id="shareMessage" rows="2" placeholder="Ajoutez un message personnalisé…" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea></div>
-      <div class="grid grid-cols-2 gap-3 mb-3"><div><label class="text-blue-200 text-xs font-medium block mb-1">Permission</label><select id="sharePermission" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="view">👁 Lecture seule</option><option value="download">⬇ Téléchargement</option><option value="edit">✏ Modification</option></select></div><div><label class="text-blue-200 text-xs font-medium block mb-1">Expiration</label><select id="shareExpiration" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="1">1 jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option><option value="0">Illimité</option></select></div></div>
-      <div id="generatedLink" class="hidden mb-3 p-3 rounded-xl" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2)"><p class="text-green-400 text-xs font-semibold mb-2"><i class="fas fa-check-circle mr-1"></i>Lien de partage généré</p><div class="flex gap-2"><input id="shareLinkInput" readonly class="flex-1 px-3 py-2 rounded-lg text-green-400 text-xs font-mono outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(16,185,129,0.2);"><button onclick="copyShareLink()" class="px-3 py-2 rounded-lg text-green-400 hover:text-white text-sm border border-green-500/20 hover:bg-green-500/10"><i class="fas fa-copy"></i></button></div></div>
-      <div class="flex gap-3"><button onclick="closeShareModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button onclick="shareDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Envoyer le partage</button></div>
-      <!-- Nouveau bouton pour générer un lien public -->
-      <div class="mt-4 pt-4 border-t border-blue-500/20">
-        <button onclick="generatePublicLink(G.currentDocId, 7)" class="w-full btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-link mr-2"></i>Générer un lien public (expiration 7 jours)</button>
-      </div>
-    </div>
-    <div id="sharePanel-history" class="hidden"><div class="flex items-center justify-between mb-3"><p class="text-blue-300/70 text-xs">Tous les partages actifs et expirés pour ce document</p><button onclick="loadShareHistory()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-sync-alt text-xs"></i>Actualiser</button></div><div id="shareHistoryList" class="space-y-2 max-h-72 overflow-y-auto"><div class="text-center py-8 text-blue-300/40"><i class="fas fa-history text-3xl mb-2 block opacity-20"></i><p class="text-sm">Chargement de l'historique…</p></div></div></div>
-  </div>
-</div>
-
- <!-- ══ SHARED -->
+    <!-- ══ SHARED -->
     <div id="view-shared" class="view-section space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-share-alt text-purple-400"></i>Documents partagés</h2><p class="text-sm text-blue-300/80">Gestion des accès et partages sécurisés</p></div>
@@ -687,7 +610,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
               <tr><th class="p-4 text-blue-300 font-semibold text-sm">Utilisateur</th><th class="p-4 text-blue-300 font-semibold text-sm">Rôle</th><th class="p-4 text-blue-300 font-semibold text-sm hidden md:table-cell">Documents</th><th class="p-4 text-blue-300 font-semibold text-sm hidden sm:table-cell">Statut</th><th class="p-4 text-blue-300 font-semibold text-sm">Actions</th></tr>
             </thead>
             <tbody class="divide-y divide-blue-500/10" id="usersList"></tbody>
-          </table>
+           </table>
         </div>
       </div>
     </div>
@@ -863,88 +786,634 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
       <div id="billingV6Content"><p class="text-blue-300/50 text-sm text-center py-8">Chargement...</p></div>
     </div>
 
-    <!-- ══ AUDIT SÉCURITÉ v6 -->
+       <!-- ══ AUDIT SÉCURITÉ v6 (SUITE) -->
     <div id="view-auditv6" class="view-section space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-shield-alt text-red-400"></i>Audit Sécurité Avancé</h2><p class="text-sm text-blue-300/80">Traçabilité complète, alertes et historique</p></div><div class="flex gap-2 flex-wrap"><select onchange="setAuditFilter('days',parseInt(this.value))" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none"><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select><select onchange="setAuditFilter('severity',this.value)" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none"><option value="">Tous niveaux</option><option value="critical">Critique</option><option value="warning">Warning</option><option value="info">Info</option></select><button onclick="renderAuditV6()" class="btn-primary px-4 py-2 rounded-lg text-sm text-white flex items-center gap-2"><i class="fas fa-sync-alt"></i>Actualiser</button></div></div>
-      <div id="auditStatsGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3"></div>
-      <div class="glass-card rounded-2xl border border-red-500/20 p-5"><h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-bell text-red-400"></i>Alertes sécurité</h3><div id="securityAlertsList"></div></div>
-      <div class="glass-card rounded-2xl border border-blue-500/20 p-5"><div class="flex items-center justify-between mb-4"><h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-history text-blue-400"></i>Historique des actions</h3><input oninput="setAuditFilter('action',this.value)" placeholder="Filtrer par action..." class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none w-40"></div><div id="auditTimelineList" class="max-h-96 overflow-y-auto"></div></div>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <i class="fas fa-shield-alt text-red-400"></i>Audit Sécurité Avancé
+          </h2>
+          <p class="text-sm text-blue-300/80">Traçabilité complète, alertes et historique des actions utilisateurs</p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <select onchange="setAuditFilter('days',parseInt(this.value))" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none">
+            <option value="7">7 jours</option>
+            <option value="30" selected>30 jours</option>
+            <option value="90">90 jours</option>
+            <option value="365">1 an</option>
+          </select>
+          <select onchange="setAuditFilter('severity',this.value)" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none">
+            <option value="">Tous niveaux</option>
+            <option value="critical">Critique</option>
+            <option value="warning">Avertissement</option>
+            <option value="info">Information</option>
+          </select>
+          <select onchange="setAuditFilter('action',this.value)" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-gray-300 outline-none">
+            <option value="">Toutes actions</option>
+            <option value="login">Connexion</option>
+            <option value="logout">Déconnexion</option>
+            <option value="upload">Upload</option>
+            <option value="download">Téléchargement</option>
+            <option value="delete">Suppression</option>
+            <option value="share">Partage</option>
+            <option value="restore">Restauration</option>
+            <option value="workflow">Workflow</option>
+            <option value="signature">Signature</option>
+          </select>
+          <button onclick="renderAuditV6()" class="btn-primary px-4 py-2 rounded-lg text-sm text-white flex items-center gap-2">
+            <i class="fas fa-sync-alt"></i>Actualiser
+          </button>
+          <button onclick="exportAuditLog()" class="px-4 py-2 rounded-lg text-sm text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 flex items-center gap-2">
+            <i class="fas fa-download"></i>Exporter
+          </button>
+        </div>
+      </div>
+
+      <!-- Statistiques d'audit -->
+      <div id="auditStatsGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="glass-card rounded-xl p-3 text-center border border-blue-500/20">
+          <p class="text-2xl font-bold text-white" id="auditTotalEvents">0</p>
+          <p class="text-xs text-blue-300/60">Événements totaux</p>
+        </div>
+        <div class="glass-card rounded-xl p-3 text-center border border-green-500/20">
+          <p class="text-2xl font-bold text-green-400" id="auditConnexions">0</p>
+          <p class="text-xs text-blue-300/60">Connexions</p>
+        </div>
+        <div class="glass-card rounded-xl p-3 text-center border border-orange-500/20">
+          <p class="text-2xl font-bold text-orange-400" id="auditUploads">0</p>
+          <p class="text-xs text-blue-300/60">Uploads</p>
+        </div>
+        <div class="glass-card rounded-xl p-3 text-center border border-purple-500/20">
+          <p class="text-2xl font-bold text-purple-400" id="auditShares">0</p>
+          <p class="text-xs text-blue-300/60">Partages</p>
+        </div>
+        <div class="glass-card rounded-xl p-3 text-center border border-red-500/20">
+          <p class="text-2xl font-bold text-red-400" id="auditDeletes">0</p>
+          <p class="text-xs text-blue-300/60">Suppressions</p>
+        </div>
+        <div class="glass-card rounded-xl p-3 text-center border border-yellow-500/20">
+          <p class="text-2xl font-bold text-yellow-400" id="auditWorkflows">0</p>
+          <p class="text-xs text-blue-300/60">Workflows</p>
+        </div>
+      </div>
+
+      <!-- Alertes sécurité -->
+      <div class="glass-card rounded-2xl border border-red-500/20 p-5">
+        <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+          <i class="fas fa-bell text-red-400"></i>Alertes sécurité
+          <span id="alertsBadge" class="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full hidden">0</span>
+        </h3>
+        <div id="securityAlertsList" class="space-y-2 max-h-64 overflow-y-auto">
+          <div class="text-center py-6 text-blue-300/50 text-sm">
+            <i class="fas fa-shield-alt text-2xl mb-2 block opacity-30"></i>
+            Aucune alerte récente
+          </div>
+        </div>
+      </div>
+
+      <!-- Historique des actions -->
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-5">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h3 class="text-white font-bold flex items-center gap-2">
+            <i class="fas fa-history text-blue-400"></i>Historique des actions
+          </h3>
+          <div class="flex gap-2">
+            <input type="text" id="auditSearchInput" oninput="filterAuditLogs(this.value)" placeholder="Rechercher..." 
+              class="px-3 py-1.5 rounded-lg text-sm text-white outline-none w-40" 
+              style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <button onclick="clearAuditFilters()" class="text-xs text-blue-400 hover:text-blue-300 px-2">
+              <i class="fas fa-times"></i> Effacer
+            </button>
+          </div>
+        </div>
+        <div id="auditTimelineList" class="space-y-2 max-h-96 overflow-y-auto">
+          <div class="text-center py-8 text-blue-300/50">
+            <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
+            <p class="text-sm">Chargement de l'historique...</p>
+          </div>
+        </div>
+        <div class="mt-4 pt-3 border-t border-blue-500/20 flex justify-between items-center">
+          <span id="auditPaginationInfo" class="text-xs text-blue-300/50"></span>
+          <div class="flex gap-2">
+            <button onclick="prevAuditPage()" id="auditPrevBtn" class="px-3 py-1 rounded-lg text-xs text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 disabled:opacity-50" disabled>
+              <i class="fas fa-chevron-left"></i> Précédent
+            </button>
+            <button onclick="nextAuditPage()" id="auditNextBtn" class="px-3 py-1 rounded-lg text-xs text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 disabled:opacity-50" disabled>
+              Suivant <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rapport de conformité RGPD -->
+      <div class="glass-card rounded-2xl border border-green-500/20 p-5">
+        <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+          <i class="fas fa-gavel text-green-400"></i>Conformité RGPD
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="flex items-center gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+            <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+              <i class="fas fa-check text-green-400"></i>
+            </div>
+            <div>
+              <p class="text-white text-sm font-medium">Consentement utilisateur</p>
+              <p class="text-xs text-green-400">Activé</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+            <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+              <i class="fas fa-database text-green-400"></i>
+            </div>
+            <div>
+              <p class="text-white text-sm font-medium">Droit à l'oubli</p>
+              <p class="text-xs text-green-400">Disponible</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+            <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+              <i class="fas fa-file-export text-green-400"></i>
+            </div>
+            <div>
+              <p class="text-white text-sm font-medium">Portabilité des données</p>
+              <p class="text-xs text-green-400">Export JSON/CSV</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 pt-3 border-t border-blue-500/20">
+          <button onclick="exportUserData()" class="px-4 py-2 rounded-lg text-sm text-green-400 border border-green-500/30 hover:bg-green-500/10 flex items-center gap-2">
+            <i class="fas fa-download"></i>Exporter mes données personnelles
+          </button>
+          <button onclick="requestAccountDeletion()" class="ml-3 px-4 py-2 rounded-lg text-sm text-red-400 border border-red-500/30 hover:bg-red-500/10 flex items-center gap-2">
+            <i class="fas fa-trash"></i>Demander suppression de compte
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- ══ SIGNATURES v7 -->
     <div id="view-signatures" class="view-section space-y-6">
-      <div class="flex items-center justify-between mb-2 flex-wrap gap-3"><div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-signature"></i></span>Signatures électroniques</h2><p class="text-blue-300/60 text-sm mt-1">Demandez et gérez les signatures de vos documents</p></div></div>
-      <div class="grid grid-cols-3 gap-4"><div class="glass-card rounded-xl p-4 border border-yellow-500/20 text-center"><p class="text-yellow-400 text-2xl font-bold" id="sigStatPending">0</p><p class="text-blue-300/60 text-xs mt-1">En attente</p></div><div class="glass-card rounded-xl p-4 border border-green-500/20 text-center"><p class="text-green-400 text-2xl font-bold" id="sigStatSigned">0</p><p class="text-blue-300/60 text-xs mt-1">Signés</p></div><div class="glass-card rounded-xl p-4 border border-red-500/20 text-center"><p class="text-red-400 text-2xl font-bold" id="sigStatRejected">0</p><p class="text-blue-300/60 text-xs mt-1">Rejetés</p></div></div>
-      <div class="space-y-3" id="signaturesList"><div class="text-center py-12 text-blue-300/50"><i class="fas fa-signature text-4xl mb-3 block opacity-20"></i><p>Chargement…</p></div></div>
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-signature"></i></span>
+            Signatures électroniques
+          </h2>
+          <p class="text-blue-300/60 text-sm mt-1">Demandez et gérez les signatures de vos documents</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="openRequestSignatureModal()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2">
+            <i class="fas fa-paper-plane"></i>Demander signature
+          </button>
+          <button onclick="renderSignatures()" class="px-4 py-2.5 rounded-xl text-blue-400 border border-blue-500/30 hover:bg-blue-500/10 text-sm flex items-center gap-2">
+            <i class="fas fa-sync-alt"></i>Actualiser
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="glass-card rounded-xl p-4 border border-yellow-500/20 text-center">
+          <p class="text-yellow-400 text-2xl font-bold" id="sigStatPending">0</p>
+          <p class="text-blue-300/60 text-xs mt-1">En attente</p>
+        </div>
+        <div class="glass-card rounded-xl p-4 border border-green-500/20 text-center">
+          <p class="text-green-400 text-2xl font-bold" id="sigStatSigned">0</p>
+          <p class="text-blue-300/60 text-xs mt-1">Signés</p>
+        </div>
+        <div class="glass-card rounded-xl p-4 border border-red-500/20 text-center">
+          <p class="text-red-400 text-2xl font-bold" id="sigStatRejected">0</p>
+          <p class="text-blue-300/60 text-xs mt-1">Rejetés</p>
+        </div>
+      </div>
+
+      <div class="space-y-3" id="signaturesList">
+        <div class="text-center py-12 text-blue-300/50">
+          <i class="fas fa-signature text-4xl mb-3 block opacity-20"></i>
+          <p>Chargement des signatures...</p>
+        </div>
+      </div>
     </div>
 
     <!-- ══ RECHERCHE FTS v7 -->
     <div id="view-search" class="view-section space-y-6">
-      <div class="mb-2"><h2 class="text-2xl font-bold text-white flex items-center gap-3 mb-4"><span class="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400"><i class="fas fa-search-plus"></i></span>Recherche plein texte</h2><div class="glass-card rounded-2xl border border-cyan-500/20 p-5"><div class="flex gap-3 mb-4"><div class="flex-1 relative"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-blue-400/60"></i><input id="ftsInput" type="text" placeholder="Recherche dans les documents et texte OCR…" class="w-full pl-10 pr-4 py-3 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" oninput="if(this.value.length>=3)runFTSearch()" onkeypress="if(event.key==='Enter')runFTSearch()"></div><button onclick="runFTSearch()" class="btn-primary px-5 py-3 rounded-xl text-white text-sm font-semibold"><i class="fas fa-search mr-2"></i>Rechercher</button></div><div class="flex flex-wrap gap-3"><select id="ftsType" class="px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">Tous types</option><option value="pdf">PDF</option><option value="doc">Word</option><option value="xls">Excel</option><option value="img">Images</option></select><select id="ftsDate" class="px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">Toutes dates</option><option value="today">Aujourd'hui</option><option value="week">7 derniers jours</option><option value="month">30 derniers jours</option></select><span id="ftsCount" class="text-blue-300/50 text-sm self-center"></span></div></div></div>
-      <div id="searchV7Results"><div class="text-center py-20 text-blue-300/30"><i class="fas fa-search text-6xl mb-5 block opacity-10"></i><p class="text-lg">Tapez pour rechercher dans vos documents</p></div></div>
+      <div class="mb-2">
+        <h2 class="text-2xl font-bold text-white flex items-center gap-3 mb-4">
+          <span class="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400"><i class="fas fa-search-plus"></i></span>
+          Recherche plein texte
+        </h2>
+        <div class="glass-card rounded-2xl border border-cyan-500/20 p-5">
+          <div class="flex gap-3 mb-4">
+            <div class="flex-1 relative">
+              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-blue-400/60"></i>
+              <input id="ftsInput" type="text" placeholder="Recherche dans les documents et texte OCR…" 
+                class="w-full pl-10 pr-4 py-3 rounded-xl text-white text-sm outline-none" 
+                style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" 
+                oninput="if(this.value.length>=3)runFTSearch()" onkeypress="if(event.key==='Enter')runFTSearch()">
+            </div>
+            <button onclick="runFTSearch()" class="btn-primary px-5 py-3 rounded-xl text-white text-sm font-semibold">
+              <i class="fas fa-search mr-2"></i>Rechercher
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-3 items-center">
+            <select id="ftsType" class="px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+              <option value="">Tous types</option>
+              <option value="pdf">PDF</option>
+              <option value="doc">Word</option>
+              <option value="xls">Excel</option>
+              <option value="img">Images</option>
+            </select>
+            <select id="ftsDate" class="px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+              <option value="">Toutes dates</option>
+              <option value="today">Aujourd'hui</option>
+              <option value="week">7 derniers jours</option>
+              <option value="month">30 derniers jours</option>
+            </select>
+            <span id="ftsCount" class="text-blue-300/50 text-sm self-center"></span>
+          </div>
+        </div>
+      </div>
+      <div id="searchV7Results">
+        <div class="text-center py-20 text-blue-300/30">
+          <i class="fas fa-search text-6xl mb-5 block opacity-10"></i>
+          <p class="text-lg">Tapez pour rechercher dans vos documents</p>
+        </div>
+      </div>
     </div>
 
     <!-- ══ INTELLIGENCE IA v7 -->
     <div id="view-ai" class="view-section space-y-6">
-      <div class="flex items-center justify-between mb-2 flex-wrap gap-3"><div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center text-pink-400"><i class="fas fa-brain"></i></span>Intelligence IA</h2><p class="text-blue-300/60 text-sm mt-1">Résumé automatique, classification et extraction d'entités</p></div><button onclick="analyzeAllDocuments()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-robot"></i>Analyser tous</button></div>
-      <div class="space-y-3" id="aiDocsList"><div class="text-center py-12 text-blue-300/50"><i class="fas fa-brain text-4xl mb-3 block opacity-20"></i><p>Chargement…</p></div></div>
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span class="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center text-pink-400"><i class="fas fa-brain"></i></span>
+            Intelligence IA
+          </h2>
+          <p class="text-blue-300/60 text-sm mt-1">Résumé automatique, classification et extraction d'entités</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="analyzeAllDocuments()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2">
+            <i class="fas fa-robot"></i>Analyser tous
+          </button>
+          <button onclick="renderAI()" class="px-4 py-2.5 rounded-xl text-blue-400 border border-blue-500/30 hover:bg-blue-500/10 text-sm">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl border border-pink-500/20 p-4 mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-full bg-pink-500/20 flex items-center justify-center">
+            <i class="fas fa-microphone text-pink-400 text-xl"></i>
+          </div>
+          <div class="flex-1">
+            <p class="text-white text-sm font-medium">Assistant IA - Posez une question sur vos documents</p>
+            <div class="flex gap-2 mt-2">
+              <input type="text" id="aiQueryInput" placeholder="Ex: Résume le dernier contrat signé..." 
+                class="flex-1 px-3 py-2 rounded-xl text-white text-sm outline-none" 
+                style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+              <button onclick="askAI()" class="px-4 py-2 btn-primary rounded-xl text-white text-sm">Envoyer</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="aiResponseContainer" class="hidden glass-card rounded-2xl border border-green-500/20 p-4 mb-4">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-robot text-green-400 text-sm"></i>
+          </div>
+          <div class="flex-1">
+            <p class="text-white text-sm font-medium mb-1">Assistant IA</p>
+            <p id="aiResponseText" class="text-blue-300/80 text-sm"></p>
+          </div>
+          <button onclick="document.getElementById('aiResponseContainer').classList.add('hidden')" class="text-blue-400/50 hover:text-blue-400">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="space-y-3" id="aiDocsList">
+        <div class="text-center py-12 text-blue-300/50">
+          <i class="fas fa-brain text-4xl mb-3 block opacity-20"></i>
+          <p>Chargement des documents...</p>
+        </div>
+      </div>
     </div>
 
     <!-- ══ AUTOMATION v7 -->
     <div id="view-automation" class="view-section space-y-6">
-      <div class="flex items-center justify-between mb-2 flex-wrap gap-3"><div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400"><i class="fas fa-magic"></i></span>Automatisation Workflows</h2><p class="text-blue-300/60 text-sm mt-1">Déclenchez des actions automatiques sur événements</p></div><div class="flex items-center gap-3"><span id="automationStats" class="text-blue-300/50 text-sm"></span><button onclick="openWfRuleModal()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-plus"></i>Nouvelle règle</button></div></div>
-      <div class="glass-card rounded-2xl border border-orange-500/20 p-4 mb-2"><p class="text-orange-300 text-sm font-semibold mb-3"><i class="fas fa-lightbulb mr-2"></i>Règles suggérées</p><div class="grid grid-cols-1 sm:grid-cols-3 gap-3"><div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10" onclick="document.getElementById('wfRuleName').value='Auto-approbation upload';openWfRuleModal()"><p class="text-white text-xs font-semibold">Upload → Workflow approbation</p><p class="text-orange-300/60 text-xs mt-1">Démarrer un workflow à chaque upload</p></div><div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10" onclick="document.getElementById('wfRuleName').value='Notif signature';openWfRuleModal()"><p class="text-white text-xs font-semibold">Signature → Notification</p><p class="text-orange-300/60 text-xs mt-1">Notifier quand un document est signé</p></div><div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10" onclick="document.getElementById('wfRuleName').value='Webhook approbation';openWfRuleModal()"><p class="text-white text-xs font-semibold">Approbation → Webhook</p><p class="text-orange-300/60 text-xs mt-1">Appeler un webhook après validation</p></div></div></div>
-      <div class="space-y-3" id="automationRulesList"><div class="text-center py-12 text-blue-300/50"><i class="fas fa-magic text-4xl mb-3 block opacity-20"></i><p>Chargement…</p></div></div>
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400"><i class="fas fa-magic"></i></span>
+            Automatisation Workflows
+          </h2>
+          <p class="text-blue-300/60 text-sm mt-1">Déclenchez des actions automatiques sur événements</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="automationStats" class="text-blue-300/50 text-sm"></span>
+          <button onclick="openWfRuleModal()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2">
+            <i class="fas fa-plus"></i>Nouvelle règle
+          </button>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl border border-orange-500/20 p-4 mb-2">
+        <p class="text-orange-300 text-sm font-semibold mb-3"><i class="fas fa-lightbulb mr-2"></i>Règles suggérées</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10 transition-all" onclick="quickCreateRule('upload_workflow')">
+            <p class="text-white text-xs font-semibold">Upload → Workflow approbation</p>
+            <p class="text-orange-300/60 text-xs mt-1">Démarrer un workflow à chaque upload</p>
+          </div>
+          <div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10 transition-all" onclick="quickCreateRule('signature_notify')">
+            <p class="text-white text-xs font-semibold">Signature → Notification</p>
+            <p class="text-orange-300/60 text-xs mt-1">Notifier quand un document est signé</p>
+          </div>
+          <div class="p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 cursor-pointer hover:bg-orange-500/10 transition-all" onclick="quickCreateRule('webhook_approve')">
+            <p class="text-white text-xs font-semibold">Approbation → Webhook</p>
+            <p class="text-orange-300/60 text-xs mt-1">Appeler un webhook après validation</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-3" id="automationRulesList">
+        <div class="text-center py-12 text-blue-300/50">
+          <i class="fas fa-magic text-4xl mb-3 block opacity-20"></i>
+          <p>Chargement des règles d'automatisation...</p>
+        </div>
+      </div>
     </div>
 
     <!-- ══ INTÉGRATIONS v7 -->
     <div id="view-integrations" class="view-section space-y-6">
-      <div class="mb-2"><h2 class="text-2xl font-bold text-white flex items-center gap-3 mb-1"><span class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400"><i class="fas fa-plug"></i></span>Marketplace Intégrations</h2><p class="text-blue-300/60 text-sm">Connectez SystemesGED à vos outils préférés</p></div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="integrationsGrid"><div class="text-center py-12 col-span-4 text-blue-300/50">Chargement…</div></div>
+      <div class="mb-2">
+        <h2 class="text-2xl font-bold text-white flex items-center gap-3 mb-1">
+          <span class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400"><i class="fas fa-plug"></i></span>
+          Marketplace Intégrations
+        </h2>
+        <p class="text-blue-300/60 text-sm">Connectez SystemesGED à vos outils préférés</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="integrationsGrid">
+        <!-- Les intégrations seront rendues par renderIntegrations() -->
+        <div class="text-center py-12 col-span-4 text-blue-300/50">Chargement...</div>
+      </div>
+
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-5 mt-4">
+        <h3 class="text-white font-bold mb-3 flex items-center gap-2">
+          <i class="fas fa-code text-blue-400"></i>Webhooks personnalisés
+        </h3>
+        <p class="text-blue-300/70 text-sm mb-3">Configurez des webhooks pour recevoir des notifications en temps réel</p>
+        <div class="flex gap-3 flex-wrap">
+          <input type="text" id="webhookUrl" placeholder="https://votre-serveur.com/webhook" 
+            class="flex-1 px-3 py-2 rounded-xl text-white text-sm outline-none" 
+            style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <select id="webhookEvent" class="px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="document.upload">Document uploadé</option>
+            <option value="document.delete">Document supprimé</option>
+            <option value="workflow.approved">Workflow approuvé</option>
+            <option value="signature.completed">Signature complétée</option>
+          </select>
+          <button onclick="addWebhook()" class="btn-primary px-4 py-2 rounded-xl text-white text-sm">Ajouter webhook</button>
+        </div>
+        <div id="webhooksList" class="mt-4 space-y-2">
+          <p class="text-blue-300/50 text-xs text-center">Aucun webhook configuré</p>
+        </div>
+      </div>
     </div>
 
     <!-- ══ BACKUPS v7 -->
     <div id="view-backups" class="view-section space-y-6">
-      <div class="flex items-center justify-between mb-2 flex-wrap gap-3"><div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-teal-500/20 rounded-xl flex items-center justify-center text-teal-400"><i class="fas fa-database"></i></span>Sauvegardes &amp; Restauration</h2><p id="backupStats" class="text-blue-300/60 text-sm mt-1">Aucune sauvegarde</p></div><div class="flex gap-3"><button onclick="createBackup('documents_only')" class="px-5 py-2.5 rounded-xl text-teal-400 text-sm font-semibold border border-teal-500/30 hover:bg-teal-500/10 flex items-center gap-2"><i class="fas fa-file-archive"></i>Docs seulement</button><button onclick="createBackup('full')" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-database"></i>Sauvegarde complète</button></div></div>
-      <div class="glass-card rounded-2xl border border-teal-500/20 p-4"><p class="text-teal-300/70 text-sm"><i class="fas fa-info-circle mr-2"></i>Les sauvegardes incluent les métadonnées de tous vos documents, tags, utilisateurs et workflows.</p></div>
-      <div class="space-y-3" id="backupsList"><div class="text-center py-12 text-blue-300/50">Chargement…</div></div>
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span class="w-10 h-10 bg-teal-500/20 rounded-xl flex items-center justify-center text-teal-400"><i class="fas fa-database"></i></span>
+            Sauvegardes &amp; Restauration
+          </h2>
+          <p id="backupStats" class="text-blue-300/60 text-sm mt-1">Aucune sauvegarde</p>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="createBackup('documents_only')" class="px-5 py-2.5 rounded-xl text-teal-400 text-sm font-semibold border border-teal-500/30 hover:bg-teal-500/10 flex items-center gap-2">
+            <i class="fas fa-file-archive"></i>Docs seulement
+          </button>
+          <button onclick="createBackup('full')" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2">
+            <i class="fas fa-database"></i>Sauvegarde complète
+          </button>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl border border-teal-500/20 p-4">
+        <p class="text-teal-300/70 text-sm">
+          <i class="fas fa-info-circle mr-2"></i>
+          Les sauvegardes incluent les métadonnées de tous vos documents, tags, utilisateurs et workflows.
+          Une sauvegarde complète peut prendre plusieurs minutes selon le volume de données.
+        </p>
+      </div>
+
+      <div class="space-y-3" id="backupsList">
+        <div class="text-center py-12 text-blue-300/50">
+          <i class="fas fa-spinner fa-spin text-2xl mb-3 block"></i>
+          <p>Chargement des sauvegardes...</p>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-5 mt-4">
+        <h3 class="text-white font-bold mb-3 flex items-center gap-2">
+          <i class="fas fa-calendar-alt text-blue-400"></i>Planification automatique
+        </h3>
+        <div class="flex items-center gap-4 flex-wrap">
+          <label class="flex items-center gap-2 text-sm text-blue-300">
+            <input type="checkbox" id="autoBackupEnable" onchange="toggleAutoBackup()"> Activer sauvegardes automatiques
+          </label>
+          <select id="autoBackupFrequency" class="px-3 py-2 rounded-xl text-white text-sm outline-none disabled:opacity-50" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" disabled>
+            <option value="daily">Quotidienne</option>
+            <option value="weekly">Hebdomadaire</option>
+            <option value="monthly">Mensuelle</option>
+          </select>
+          <select id="autoBackupRetention" class="px-3 py-2 rounded-xl text-white text-sm outline-none disabled:opacity-50" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" disabled>
+            <option value="7">Conserver 7 jours</option>
+            <option value="30" selected>Conserver 30 jours</option>
+            <option value="90">Conserver 90 jours</option>
+          </select>
+          <button onclick="saveBackupSettings()" class="px-4 py-2 rounded-lg text-sm text-blue-400 border border-blue-500/30 hover:bg-blue-500/10">Enregistrer</button>
+        </div>
+      </div>
     </div>
 
     <!-- ══ RBAC v7 -->
     <div id="view-rbacv7" class="view-section space-y-6">
-      <div class="flex items-center justify-between mb-2 flex-wrap gap-3"><div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><span class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400"><i class="fas fa-shield-alt"></i></span>RBAC Avancé</h2><p class="text-blue-300/60 text-sm mt-1">Rôles personnalisés et permissions granulaires</p></div><div class="flex items-center gap-3"><input id="newRoleName" type="text" placeholder="Nouveau rôle…" class="px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" onkeypress="if(event.key==='Enter')createRoleV7()"><button onclick="createRoleV7()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-plus"></i>Créer rôle</button></div></div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4" id="rbacV7RolesGrid"><div class="text-center py-8 col-span-4 text-blue-300/50">Chargement…</div></div>
-      <h3 class="text-white font-semibold flex items-center gap-2"><i class="fas fa-key text-yellow-400"></i>Matrice des permissions</h3>
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+            <span class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400"><i class="fas fa-shield-alt"></i></span>
+            RBAC Avancé
+          </h2>
+          <p class="text-blue-300/60 text-sm mt-1">Rôles personnalisés et permissions granulaires</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <input id="newRoleName" type="text" placeholder="Nouveau rôle…" 
+            class="px-3 py-2.5 rounded-xl text-white text-sm outline-none" 
+            style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" 
+            onkeypress="if(event.key==='Enter')createRoleV7()">
+          <button onclick="createRoleV7()" class="btn-primary px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2">
+            <i class="fas fa-plus"></i>Créer rôle
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4" id="rbacV7RolesGrid">
+        <div class="text-center py-8 col-span-4 text-blue-300/50">Chargement...</div>
+      </div>
+
+      <h3 class="text-white font-semibold flex items-center gap-2 mt-6">
+        <i class="fas fa-key text-yellow-400"></i>Matrice des permissions
+      </h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="rbacV7PermMatrix"></div>
+
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-5 mt-4">
+        <h3 class="text-white font-bold mb-3 flex items-center gap-2">
+          <i class="fas fa-users text-blue-400"></i>Affectation des rôles
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead class="border-b border-blue-500/20">
+              <tr>
+                <th class="p-3 text-blue-300 text-xs">Utilisateur</th>
+                <th class="p-3 text-blue-300 text-xs">Rôle actuel</th>
+                <th class="p-3 text-blue-300 text-xs">Nouveau rôle</th>
+                <th class="p-3 text-blue-300 text-xs">Action</th>
+              </tr>
+            </thead>
+            <tbody id="roleAssignmentList">
+              <tr><td colspan="4" class="text-center py-6 text-blue-300/50">Chargement des utilisateurs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- ══ VALIDATIONS EN ATTENTE -->
     <div id="view-pending-users" class="view-section space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4"><div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3"><i class="fas fa-user-clock text-yellow-400"></i>Validations en attente</h2><p class="text-sm text-blue-300/80">Gérez les demandes d'inscription des nouveaux utilisateurs</p></div><div class="flex gap-2"><button onclick="refreshPendingUsers()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2"><i class="fas fa-sync-alt"></i>Actualiser</button></div></div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4"><div class="glass-card rounded-2xl p-5 border border-yellow-500/20"><div class="flex items-center justify-between"><div><p class="text-yellow-400 text-2xl font-bold" id="pendingCount">0</p><p class="text-blue-300/60 text-sm">En attente</p></div><div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-400"><i class="fas fa-clock text-xl"></i></div></div></div><div class="glass-card rounded-2xl p-5 border border-green-500/20"><div class="flex items-center justify-between"><div><p class="text-green-400 text-2xl font-bold" id="approvedTodayCount">0</p><p class="text-blue-300/60 text-sm">Approuvés aujourd'hui</p></div><div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400"><i class="fas fa-check-circle text-xl"></i></div></div></div><div class="glass-card rounded-2xl p-5 border border-red-500/20"><div class="flex items-center justify-between"><div><p class="text-red-400 text-2xl font-bold" id="rejectedTodayCount">0</p><p class="text-blue-300/60 text-sm">Rejetés aujourd'hui</p></div><div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400"><i class="fas fa-times-circle text-xl"></i></div></div></div></div>
-      <div class="glass-card rounded-2xl border border-yellow-500/20 overflow-hidden"><div class="p-4 border-b border-blue-500/20 flex items-center justify-between"><h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-users text-yellow-400"></i>Demandes d'inscription</h3><div class="flex gap-2"><button onclick="approveAllPending()" class="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-xs hover:bg-green-500/30 flex items-center gap-1"><i class="fas fa-check-double"></i>Tout approuver</button><button onclick="rejectAllPending()" class="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-xs hover:bg-red-500/30 flex items-center gap-1"><i class="fas fa-times"></i>Tout rejeter</button></div></div><div id="pendingUsersList" class="divide-y divide-blue-500/10"><div class="text-center py-12 text-blue-300/50"><i class="fas fa-spinner fa-spin text-2xl mb-3"></i><p>Chargement des demandes...</p></div></div></div>
-      <div class="glass-card rounded-2xl border border-blue-500/20 p-5"><h3 class="text-white font-bold mb-4 flex items-center gap-2"><i class="fas fa-history text-blue-400"></i>Actions récentes</h3><div id="pendingUsersHistory" class="space-y-2 max-h-64 overflow-y-auto"><p class="text-blue-300/50 text-sm text-center py-4">Aucune action récente</p></div></div>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl lg:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+            <i class="fas fa-user-clock text-yellow-400"></i>Validations en attente
+          </h2>
+          <p class="text-sm text-blue-300/80">Gérez les demandes d'inscription des nouveaux utilisateurs</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="refreshPendingUsers()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2">
+            <i class="fas fa-sync-alt"></i>Actualiser
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="glass-card rounded-2xl p-5 border border-yellow-500/20">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-yellow-400 text-2xl font-bold" id="pendingCount">0</p>
+              <p class="text-blue-300/60 text-sm">En attente</p>
+            </div>
+            <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-400">
+              <i class="fas fa-clock text-xl"></i>
+            </div>
+          </div>
+        </div>
+        <div class="glass-card rounded-2xl p-5 border border-green-500/20">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-green-400 text-2xl font-bold" id="approvedTodayCount">0</p>
+              <p class="text-blue-300/60 text-sm">Approuvés aujourd'hui</p>
+            </div>
+            <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400">
+              <i class="fas fa-check-circle text-xl"></i>
+            </div>
+          </div>
+        </div>
+        <div class="glass-card rounded-2xl p-5 border border-red-500/20">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-red-400 text-2xl font-bold" id="rejectedTodayCount">0</p>
+              <p class="text-blue-300/60 text-sm">Rejetés aujourd'hui</p>
+            </div>
+            <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400">
+              <i class="fas fa-times-circle text-xl"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl border border-yellow-500/20 overflow-hidden">
+        <div class="p-4 border-b border-blue-500/20 flex items-center justify-between">
+          <h3 class="text-white font-bold flex items-center gap-2">
+            <i class="fas fa-users text-yellow-400"></i>Demandes d'inscription
+          </h3>
+          <div class="flex gap-2">
+            <button onclick="approveAllPending()" class="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-xs hover:bg-green-500/30 flex items-center gap-1">
+              <i class="fas fa-check-double"></i>Tout approuver
+            </button>
+            <button onclick="rejectAllPending()" class="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-xs hover:bg-red-500/30 flex items-center gap-1">
+              <i class="fas fa-times"></i>Tout rejeter
+            </button>
+          </div>
+        </div>
+        <div id="pendingUsersList" class="divide-y divide-blue-500/10">
+          <div class="text-center py-12 text-blue-300/50">
+            <i class="fas fa-spinner fa-spin text-2xl mb-3"></i>
+            <p>Chargement des demandes...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl border border-blue-500/20 p-5">
+        <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+          <i class="fas fa-history text-blue-400"></i>Actions récentes
+        </h3>
+        <div id="pendingUsersHistory" class="space-y-2 max-h-64 overflow-y-auto">
+          <p class="text-blue-300/50 text-sm text-center py-4">Aucune action récente</p>
+        </div>
+      </div>
     </div>
+
   </main>
 </div>
 
 <!-- Bottom mobile nav -->
 <nav class="bottom-nav px-2 py-1">
   <div class="flex items-center justify-around">
-    <button onclick="switchView('dashboard')" data-bnav="dashboard" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-chart-pie text-lg"></i><span class="text-[10px]">Accueil</span></button>
-    <button onclick="switchView('documents')" data-bnav="documents" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-file-alt text-lg"></i><span class="text-[10px]">Docs</span></button>
-    <button onclick="openUploadModal()" class="flex flex-col items-center gap-0.5 p-2 -mt-3 rounded-xl text-white min-w-[52px]" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);box-shadow:0 4px 15px rgba(37,99,235,0.5)"><i class="fas fa-plus text-lg"></i><span class="text-[10px]">Upload</span></button>
-    <button onclick="switchView('workflows')" data-bnav="workflows" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-project-diagram text-lg"></i><span class="text-[10px]">Flux</span></button>
-    <button onclick="switchView('settings')" data-bnav="settings" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]"><i class="fas fa-cog text-lg"></i><span class="text-[10px]">Config</span></button>
+    <button onclick="switchView('dashboard')" data-bnav="dashboard" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]">
+      <i class="fas fa-chart-pie text-lg"></i><span class="text-[10px]">Accueil</span>
+    </button>
+    <button onclick="switchView('documents')" data-bnav="documents" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]">
+      <i class="fas fa-file-alt text-lg"></i><span class="text-[10px]">Docs</span>
+    </button>
+    <button onclick="openUploadModal()" class="flex flex-col items-center gap-0.5 p-2 -mt-3 rounded-xl text-white min-w-[52px]" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);box-shadow:0 4px 15px rgba(37,99,235,0.5)">
+      <i class="fas fa-plus text-lg"></i><span class="text-[10px]">Upload</span>
+    </button>
+    <button onclick="switchView('workflows')" data-bnav="workflows" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]">
+      <i class="fas fa-project-diagram text-lg"></i><span class="text-[10px]">Flux</span>
+    </button>
+    <button onclick="switchView('settings')" data-bnav="settings" class="flex flex-col items-center gap-0.5 p-2 rounded-lg text-blue-400/60 hover:text-blue-300 min-w-[52px]">
+      <i class="fas fa-cog text-lg"></i><span class="text-[10px]">Config</span>
+    </button>
   </div>
 </nav>
+
+<!-- Fin de mainApp -->
 </div>
 
 <!-- ════ UPLOAD MODAL -->
 <div id="uploadModal" class="modal-overlay hidden">
   <div class="modal-box">
-    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg"><i class="fas fa-upload text-blue-400 mr-2"></i>Importer des fichiers</h3><button onclick="closeUploadModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
-    <div id="dropZone" class="border-2 border-dashed rounded-xl p-8 text-center mb-4 cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" onclick="document.getElementById('fileInput').click()" ondragover="handleDragOver(event,'dropZone')" ondragleave="handleDragLeave(event,'dropZone')" ondrop="handleDrop(event,'dropZone')">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold text-lg"><i class="fas fa-upload text-blue-400 mr-2"></i>Importer des fichiers</h3>
+      <button onclick="closeUploadModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div id="dropZone" class="border-2 border-dashed rounded-xl p-8 text-center mb-4 cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" 
+      onclick="document.getElementById('fileInput').click()" 
+      ondragover="handleDragOver(event,'dropZone')" 
+      ondragleave="handleDragLeave(event,'dropZone')" 
+      ondrop="handleDrop(event,'dropZone')">
       <i class="fas fa-cloud-upload-alt text-blue-400 text-3xl mb-2"></i>
       <p class="text-white font-medium mb-1">Glissez-déposez vos fichiers</p>
       <p class="text-blue-400/60 text-sm">ou cliquez pour parcourir</p>
@@ -953,14 +1422,32 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
     <input type="file" id="fileInput" class="hidden" multiple onchange="handleFileSelect(event)">
     <div id="selectedFilesList" class="space-y-2 mb-4 max-h-40 overflow-y-auto"></div>
     <div class="grid grid-cols-2 gap-3 mb-4">
-      <div><label class="text-blue-200 text-xs font-medium block mb-1">Nom (optionnel)</label><input id="docNameInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom du document"></div>
-      <div><label class="text-blue-200 text-xs font-medium block mb-1">Description</label><input id="docDescInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Description courte"></div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Nom (optionnel)</label>
+        <input id="docNameInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom du document">
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Description</label>
+        <input id="docDescInput" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Description courte">
+      </div>
     </div>
     <div class="mb-4">
       <label class="text-blue-200 text-xs font-medium block mb-2">Type de document</label>
       <div class="grid grid-cols-2 gap-2" id="docScopeSelector">
-        <button type="button" id="scopeCompany" onclick="setDocScope('company')" class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-blue-500/40 bg-blue-500/15 text-blue-300 font-medium text-sm transition-all"><i class="fas fa-building text-blue-400"></i><div class="text-left"><p class="font-semibold text-white text-xs">Entreprise</p><p class="text-[10px] text-blue-300/60">Visible à toute l'équipe</p></div></button>
-        <button type="button" id="scopePersonal" onclick="setDocScope('personal')" class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-transparent bg-slate-800/40 text-gray-400 font-medium text-sm transition-all hover:border-purple-500/30"><i class="fas fa-user text-purple-400"></i><div class="text-left"><p class="font-semibold text-white text-xs">Personnel</p><p class="text-[10px] text-blue-300/60">Visible seulement par moi</p></div></button>
+        <button type="button" id="scopeCompany" onclick="setDocScope('company')" class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-blue-500/40 bg-blue-500/15 text-blue-300 font-medium text-sm transition-all">
+          <i class="fas fa-building text-blue-400"></i>
+          <div class="text-left">
+            <p class="font-semibold text-white text-xs">Entreprise</p>
+            <p class="text-[10px] text-blue-300/60">Visible à toute l'équipe</p>
+          </div>
+        </button>
+        <button type="button" id="scopePersonal" onclick="setDocScope('personal')" class="scope-btn flex items-center gap-2 p-3 rounded-xl border-2 border-transparent bg-slate-800/40 text-gray-400 font-medium text-sm transition-all hover:border-purple-500/30">
+          <i class="fas fa-user text-purple-400"></i>
+          <div class="text-left">
+            <p class="font-semibold text-white text-xs">Personnel</p>
+            <p class="text-[10px] text-blue-300/60">Visible seulement par moi</p>
+          </div>
+        </button>
       </div>
     </div>
     <div class="mb-4">
@@ -971,32 +1458,159 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
         <button onclick="addUploadTag()" class="px-3 py-2 rounded-xl text-blue-400 hover:text-white text-sm" style="border:1px solid rgba(96,165,250,0.2);"><i class="fas fa-plus"></i></button>
       </div>
     </div>
-    <div id="uploadProgress" class="hidden mb-4"><div class="flex justify-between text-xs text-blue-300/70 mb-1"><span id="uploadStatusText">Upload en cours...</span><span id="uploadPercent">0%</span></div><div class="progress-bar"><div id="uploadProgressBar" class="progress-fill" style="width:0%"></div></div></div>
-    <div class="flex gap-3"><button onclick="closeUploadModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button id="uploadBtn" onclick="uploadDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-cloud-upload-alt mr-2"></i>Importer</button></div>
+    <div id="uploadProgress" class="hidden mb-4">
+      <div class="flex justify-between text-xs text-blue-300/70 mb-1">
+        <span id="uploadStatusText">Upload en cours...</span>
+        <span id="uploadPercent">0%</span>
+      </div>
+      <div class="progress-bar"><div id="uploadProgressBar" class="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="closeUploadModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+      <button id="uploadBtn" onclick="uploadDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-cloud-upload-alt mr-2"></i>Importer</button>
+    </div>
   </div>
 </div>
 
 <!-- ════ SHARE MODAL -->
 <div id="shareModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:600px">
-    <div class="flex items-center justify-between mb-4"><div class="flex items-center gap-3"><div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-share-nodes"></i></div><div><h3 class="text-white font-bold">Partager</h3><p id="shareDocInfo" class="text-blue-300/60 text-xs truncate max-w-xs"></p></div></div><button onclick="closeShareModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button></div>
-    <div class="flex border-b border-blue-500/20 mb-4"><button onclick="switchShareTab('send')" id="shareTab-send" class="px-4 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2"><i class="fas fa-paper-plane"></i>Partager</button><button onclick="switchShareTab('history')" id="shareTab-history" class="px-4 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px flex items-center gap-2 hover:text-blue-400"><i class="fas fa-history"></i>Historique<span id="shareHistoryCount" class="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full hidden">0</span></button></div>
-    <div id="sharePanel-send"><div class="mb-3"><label class="text-blue-200 text-xs font-medium block mb-1">Destinataire</label><div class="relative"><i class="fas fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-blue-400/60 text-sm"></i><input id="shareEmail" type="email" class="w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm outline-none transition-all" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="email@destinataire.com"></div></div><div class="mb-3"><label class="text-blue-200 text-xs font-medium block mb-1">Message (optionnel)</label><textarea id="shareMessage" rows="2" placeholder="Ajoutez un message personnalisé…" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea></div><div class="grid grid-cols-2 gap-3 mb-3"><div><label class="text-blue-200 text-xs font-medium block mb-1">Permission</label><select id="sharePermission" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="view">👁 Lecture seule</option><option value="download">⬇ Téléchargement</option><option value="edit">✏ Modification</option></select></div><div><label class="text-blue-200 text-xs font-medium block mb-1">Expiration</label><select id="shareExpiration" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="1">1 jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option><option value="0">Illimité</option></select></div></div><div id="generatedLink" class="hidden mb-3 p-3 rounded-xl" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2)"><p class="text-green-400 text-xs font-semibold mb-2"><i class="fas fa-check-circle mr-1"></i>Lien de partage généré</p><div class="flex gap-2"><input id="shareLinkInput" readonly class="flex-1 px-3 py-2 rounded-lg text-green-400 text-xs font-mono outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(16,185,129,0.2);"><button onclick="copyShareLink()" class="px-3 py-2 rounded-lg text-green-400 hover:text-white text-sm border border-green-500/20 hover:bg-green-500/10"><i class="fas fa-copy"></i></button></div></div><div class="flex gap-3"><button onclick="closeShareModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button onclick="shareDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Envoyer le partage</button></div></div>
-    <div id="sharePanel-history" class="hidden"><div class="flex items-center justify-between mb-3"><p class="text-blue-300/70 text-xs">Tous les partages actifs et expirés pour ce document</p><button onclick="loadShareHistory()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-sync-alt text-xs"></i>Actualiser</button></div><div id="shareHistoryList" class="space-y-2 max-h-72 overflow-y-auto"><div class="text-center py-8 text-blue-300/40"><i class="fas fa-history text-3xl mb-2 block opacity-20"></i><p class="text-sm">Chargement de l'historique…</p></div></div></div>
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-share-nodes"></i></div>
+        <div>
+          <h3 class="text-white font-bold">Partager</h3>
+          <p id="shareDocInfo" class="text-blue-300/60 text-xs truncate max-w-xs"></p>
+        </div>
+      </div>
+      <button onclick="closeShareModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="flex border-b border-blue-500/20 mb-4">
+      <button onclick="switchShareTab('send')" id="shareTab-send" class="px-4 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2"><i class="fas fa-paper-plane"></i>Partager</button>
+      <button onclick="switchShareTab('history')" id="shareTab-history" class="px-4 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px flex items-center gap-2 hover:text-blue-400"><i class="fas fa-history"></i>Historique<span id="shareHistoryCount" class="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full hidden">0</span></button>
+    </div>
+    <div id="sharePanel-send">
+      <div class="mb-3">
+        <label class="text-blue-200 text-xs font-medium block mb-1">Destinataire</label>
+        <div class="relative">
+          <i class="fas fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-blue-400/60 text-sm"></i>
+          <input id="shareEmail" type="email" class="w-full pl-9 pr-3 py-2.5 rounded-xl text-white text-sm outline-none transition-all" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="email@destinataire.com">
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="text-blue-200 text-xs font-medium block mb-1">Message (optionnel)</label>
+        <textarea id="shareMessage" rows="2" placeholder="Ajoutez un message personnalisé…" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Permission</label>
+          <select id="sharePermission" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="view">👁 Lecture seule</option>
+            <option value="download">⬇ Téléchargement</option>
+            <option value="edit">✏ Modification</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Expiration</label>
+          <select id="shareExpiration" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="1">1 jour</option>
+            <option value="7" selected>7 jours</option>
+            <option value="30">30 jours</option>
+            <option value="90">90 jours</option>
+            <option value="0">Illimité</option>
+          </select>
+        </div>
+      </div>
+      <div id="generatedLink" class="hidden mb-3 p-3 rounded-xl" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2)">
+        <p class="text-green-400 text-xs font-semibold mb-2"><i class="fas fa-check-circle mr-1"></i>Lien de partage généré</p>
+        <div class="flex gap-2">
+          <input id="shareLinkInput" readonly class="flex-1 px-3 py-2 rounded-lg text-green-400 text-xs font-mono outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(16,185,129,0.2);">
+          <button onclick="copyShareLink()" class="px-3 py-2 rounded-lg text-green-400 hover:text-white text-sm border border-green-500/20 hover:bg-green-500/10"><i class="fas fa-copy"></i></button>
+        </div>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="closeShareModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm font-medium hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button onclick="shareDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Envoyer le partage</button>
+      </div>
+      <div class="mt-4 pt-4 border-t border-blue-500/20">
+        <button onclick="generatePublicLink(G.currentDocId, 7)" class="w-full btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-link mr-2"></i>Générer un lien public (expiration 7 jours)</button>
+      </div>
+    </div>
+    <div id="sharePanel-history" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-blue-300/70 text-xs">Tous les partages actifs et expirés pour ce document</p>
+        <button onclick="loadShareHistory()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-sync-alt text-xs"></i>Actualiser</button>
+      </div>
+      <div id="shareHistoryList" class="space-y-2 max-h-72 overflow-y-auto">
+        <div class="text-center py-8 text-blue-300/40">
+          <i class="fas fa-history text-3xl mb-2 block opacity-20"></i>
+          <p class="text-sm">Chargement de l'historique…</p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- ════ WORKFLOW MODAL -->
 <div id="workflowModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:580px">
-    <div class="flex items-center justify-between mb-5"><div class="flex items-center gap-3"><div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400"><i class="fas fa-project-diagram"></i></div><div><h3 class="text-white font-bold">Nouveau workflow</h3><p class="text-blue-300/50 text-xs">Définissez les étapes de validation</p></div></div><button onclick="closeWorkflowModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button></div>
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400"><i class="fas fa-project-diagram"></i></div>
+        <div>
+          <h3 class="text-white font-bold">Nouveau workflow</h3>
+          <p class="text-blue-300/50 text-xs">Définissez les étapes de validation</p>
+        </div>
+      </div>
+      <button onclick="closeWorkflowModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+    </div>
     <form onsubmit="createWorkflow(event)" class="space-y-4">
-      <div class="grid grid-cols-3 gap-3"><div class="col-span-2"><label class="text-blue-200 text-xs font-medium block mb-1">Titre <span class="text-red-400">*</span></label><input id="wfTitle" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Ex: Validation contrat client"></div><div><label class="text-blue-200 text-xs font-medium block mb-1">Priorité</label><select id="wfPriority" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="low">🔵 Basse</option><option value="medium" selected>🟡 Moyenne</option><option value="high">🟠 Haute</option><option value="urgent">🔴 Urgente</option></select></div></div>
-      <div><label class="text-blue-200 text-xs font-medium block mb-1">Description</label><textarea id="wfDesc" rows="2" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Décrivez l'objectif de ce workflow…"></textarea></div>
-      <div><label class="text-blue-200 text-xs font-medium block mb-1">Étapes de validation (séparées par des virgules)</label><input id="wfSteps" type="text" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Approbation RH, Validation juridique, Signature finale"><p class="text-blue-400/50 text-xs mt-1">Les étapes seront validées dans l'ordre</p></div>
-      <div class="grid grid-cols-2 gap-3"><div><label class="text-blue-200 text-xs font-medium block mb-1">Document lié</label><select id="wfDocId" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">-- Aucun --</option></select></div><div><label class="text-blue-200 text-xs font-medium block mb-1">Échéance</label><input id="wfDueDate" type="date" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div></div>
-      <div><label class="text-blue-200 text-xs font-medium block mb-1">Responsable global</label><select id="wfAssignee" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">-- Non assigné --</option></select></div>
-      <div class="flex gap-3 pt-2"><button type="button" onclick="closeWorkflowModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-rocket mr-2"></i>Lancer le workflow</button></div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="col-span-2">
+          <label class="text-blue-200 text-xs font-medium block mb-1">Titre <span class="text-red-400">*</span></label>
+          <input id="wfTitle" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Ex: Validation contrat client">
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Priorité</label>
+          <select id="wfPriority" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="low">🔵 Basse</option>
+            <option value="medium" selected>🟡 Moyenne</option>
+            <option value="high">🟠 Haute</option>
+            <option value="urgent">🔴 Urgente</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Description</label>
+        <textarea id="wfDesc" rows="2" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Décrivez l'objectif de ce workflow…"></textarea>
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Étapes de validation (séparées par des virgules)</label>
+        <input id="wfSteps" type="text" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Approbation RH, Validation juridique, Signature finale">
+        <p class="text-blue-400/50 text-xs mt-1">Les étapes seront validées dans l'ordre</p>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Document lié</label>
+          <select id="wfDocId" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="">-- Aucun --</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Échéance</label>
+          <input id="wfDueDate" type="date" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+        </div>
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Responsable global</label>
+        <select id="wfAssignee" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="">-- Non assigné --</option>
+        </select>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeWorkflowModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-rocket mr-2"></i>Lancer le workflow</button>
+      </div>
     </form>
   </div>
 </div>
@@ -1004,24 +1618,82 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
 <!-- ════ WORKFLOW DETAIL MODAL -->
 <div id="wfDetailModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:680px;max-height:85vh;overflow-y:auto">
-    <div class="flex items-center justify-between mb-4"><div class="flex items-center gap-3 min-w-0 flex-1"><div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 flex-shrink-0"><i class="fas fa-project-diagram"></i></div><div class="min-w-0"><h3 class="text-white font-bold truncate" id="wfDetailTitle">Workflow</h3><div id="wfDetailMeta" class="flex items-center gap-2 mt-0.5"></div></div></div><button onclick="closeWfDetail()" class="text-blue-400 hover:text-white p-2 rounded-lg flex-shrink-0"><i class="fas fa-times text-xl"></i></button></div>
-    <div class="mb-4"><div class="flex items-center justify-between text-xs text-blue-300/60 mb-1"><span>Progression</span><span id="wfDetailProgress">0%</span></div><div class="h-2 bg-slate-900/50 rounded-full overflow-hidden"><div id="wfDetailProgressBar" class="h-2 rounded-full transition-all duration-500" style="width:0%;background:linear-gradient(90deg,#f97316,#22c55e)"></div></div></div>
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-400 flex-shrink-0"><i class="fas fa-project-diagram"></i></div>
+        <div class="min-w-0">
+          <h3 class="text-white font-bold truncate" id="wfDetailTitle">Workflow</h3>
+          <div id="wfDetailMeta" class="flex items-center gap-2 mt-0.5"></div>
+        </div>
+      </div>
+      <button onclick="closeWfDetail()" class="text-blue-400 hover:text-white p-2 rounded-lg flex-shrink-0"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="mb-4">
+      <div class="flex items-center justify-between text-xs text-blue-300/60 mb-1">
+        <span>Progression</span>
+        <span id="wfDetailProgress">0%</span>
+      </div>
+      <div class="h-2 bg-slate-900/50 rounded-full overflow-hidden">
+        <div id="wfDetailProgressBar" class="h-2 rounded-full transition-all duration-500" style="width:0%;background:linear-gradient(90deg,#f97316,#22c55e)"></div>
+      </div>
+    </div>
     <div id="wfDetailSteps" class="space-y-3 mb-5"></div>
     <div id="wfDetailDoc" class="hidden mb-4 p-3 rounded-xl" style="background:rgba(59,130,246,0.06);border:1px solid rgba(96,165,250,0.15)"></div>
-    <div id="wfDetailActions" class="hidden border-t border-blue-500/20 pt-4 space-y-3"><p class="text-blue-200 text-sm font-semibold">Votre décision</p><textarea id="wfDetailComment" rows="2" placeholder="Commentaire (optionnel)…" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea><div class="flex gap-3"><button onclick="actOnWorkflow('approve')" class="flex-1 py-2.5 rounded-xl text-sm text-green-400 hover:bg-green-500/10 border border-green-500/30 font-semibold flex items-center justify-center gap-2"><i class="fas fa-check-circle"></i>Approuver</button><button onclick="actOnWorkflow('reject')" class="flex-1 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 border border-red-500/30 font-semibold flex items-center justify-center gap-2"><i class="fas fa-times-circle"></i>Rejeter</button><button onclick="actOnWorkflow('request_changes')" class="flex-1 py-2.5 rounded-xl text-sm text-yellow-400 hover:bg-yellow-500/10 border border-yellow-500/30 font-semibold flex items-center justify-center gap-2"><i class="fas fa-redo"></i>Révision</button></div></div>
-    <div class="border-t border-blue-500/20 pt-4"><h4 class="text-white text-sm font-semibold mb-3 flex items-center gap-2"><i class="fas fa-comments text-blue-400"></i>Historique</h4><div id="wfDetailHistory" class="space-y-2 max-h-40 overflow-y-auto"></div><div class="flex gap-2 mt-3"><input id="wfCommentInput" type="text" placeholder="Ajouter un commentaire…" class="flex-1 px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" onkeypress="if(event.key==='Enter')addWfComment()"><button onclick="addWfComment()" class="px-4 py-2 btn-primary rounded-xl text-white text-sm"><i class="fas fa-paper-plane"></i></button></div></div>
+    <div id="wfDetailActions" class="hidden border-t border-blue-500/20 pt-4 space-y-3">
+      <p class="text-blue-200 text-sm font-semibold">Votre décision</p>
+      <textarea id="wfDetailComment" rows="2" placeholder="Commentaire (optionnel)…" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea>
+      <div class="flex gap-3">
+        <button onclick="actOnWorkflow('approve')" class="flex-1 py-2.5 rounded-xl text-sm text-green-400 hover:bg-green-500/10 border border-green-500/30 font-semibold flex items-center justify-center gap-2"><i class="fas fa-check-circle"></i>Approuver</button>
+        <button onclick="actOnWorkflow('reject')" class="flex-1 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 border border-red-500/30 font-semibold flex items-center justify-center gap-2"><i class="fas fa-times-circle"></i>Rejeter</button>
+        <button onclick="actOnWorkflow('request_changes')" class="flex-1 py-2.5 rounded-xl text-sm text-yellow-400 hover:bg-yellow-500/10 border border-yellow-500/30 font-semibold flex items-center justify-center gap-2"><i class="fas fa-redo"></i>Révision</button>
+      </div>
+    </div>
+    <div class="border-t border-blue-500/20 pt-4">
+      <h4 class="text-white text-sm font-semibold mb-3 flex items-center gap-2"><i class="fas fa-comments text-blue-400"></i>Historique</h4>
+      <div id="wfDetailHistory" class="space-y-2 max-h-40 overflow-y-auto"></div>
+      <div class="flex gap-2 mt-3">
+        <input id="wfCommentInput" type="text" placeholder="Ajouter un commentaire…" class="flex-1 px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" onkeypress="if(event.key==='Enter')addWfComment()">
+        <button onclick="addWfComment()" class="px-4 py-2 btn-primary rounded-xl text-white text-sm"><i class="fas fa-paper-plane"></i></button>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- ════ ADD USER MODAL -->
 <div id="addUserModal" class="modal-overlay hidden">
   <div class="modal-box">
-    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold text-lg"><i class="fas fa-user-plus text-blue-400 mr-2"></i>Ajouter un utilisateur</h3><button onclick="closeAddUserModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold text-lg"><i class="fas fa-user-plus text-blue-400 mr-2"></i>Ajouter un utilisateur</h3>
+      <button onclick="closeAddUserModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
     <form onsubmit="addUser(event)" class="space-y-3">
-      <div class="grid grid-cols-2 gap-3"><div><label class="text-blue-200 text-xs font-medium block mb-1">Prénom</label><input id="newUserFirst" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Prénom"></div><div><label class="text-blue-200 text-xs font-medium block mb-1">Nom</label><input id="newUserLast" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom"></div></div>
-      <div><label class="text-blue-200 text-xs font-medium block mb-1">Email</label><input id="newUserEmail" type="email" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="email@exemple.com"></div>
-      <div><label class="text-blue-200 text-xs font-medium block mb-1">Rôle</label><select id="newUserRole" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="viewer">Lecteur</option><option value="editor">Éditeur</option><option value="manager">Manager</option><option value="admin">Administrateur</option></select></div>
-      <div class="flex gap-3 pt-2"><button type="button" onclick="closeAddUserModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium">Ajouter</button></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Prénom</label>
+          <input id="newUserFirst" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Prénom">
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Nom</label>
+          <input id="newUserLast" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom">
+        </div>
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Email</label>
+        <input id="newUserEmail" type="email" required class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="email@exemple.com">
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Rôle</label>
+        <select id="newUserRole" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="viewer">Lecteur</option>
+          <option value="editor">Éditeur</option>
+          <option value="manager">Manager</option>
+          <option value="admin">Administrateur</option>
+        </select>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeAddUserModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium">Ajouter</button>
+      </div>
     </form>
   </div>
 </div>
@@ -1029,27 +1701,152 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
 <!-- ════ FOLDER MODAL -->
 <div id="folderModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:420px">
-    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-folder-plus text-yellow-400"></i>Nouveau dossier</h3><button onclick="closeFolderModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
-    <div class="space-y-3"><div><label class="text-blue-200 text-xs font-medium block mb-1">Nom du dossier</label><input id="newFolderName" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Ex: Contrats 2024" onkeypress="if(event.key==='Enter')createFolder()"></div><div class="flex gap-3 pt-2"><button onclick="closeFolderModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button onclick="createFolder()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-folder-plus mr-2"></i>Créer</button></div></div>
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-folder-plus text-yellow-400"></i>Nouveau dossier</h3>
+      <button onclick="closeFolderModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Nom du dossier</label>
+        <input id="newFolderName" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Ex: Contrats 2024" onkeypress="if(event.key==='Enter')createFolder()">
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeFolderModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button onclick="createFolder()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-folder-plus mr-2"></i>Créer</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- ════ AUTOMATION RULE MODAL -->
 <div id="wfRuleModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:480px">
-    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-magic text-orange-400"></i>Nouvelle règle d'automatisation</h3><button onclick="closeWfRuleModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
-    <form onsubmit="createWfRule(event)" class="space-y-4"><div><label class="text-blue-200 text-xs font-medium block mb-1">Nom de la règle</label><input id="wfRuleName" type="text" placeholder="Ex: Upload → Notification Slack" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div><div class="grid grid-cols-2 gap-3"><div><label class="text-blue-200 text-xs font-medium block mb-1">Déclencheur (SI)</label><select id="wfRuleTrigger" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="document_upload">Upload document</option><option value="document_delete">Suppression</option><option value="workflow_approve">Approbation workflow</option><option value="workflow_reject">Rejet workflow</option><option value="signature_done">Signature effectuée</option><option value="user_login">Connexion utilisateur</option></select></div><div><label class="text-blue-200 text-xs font-medium block mb-1">Action (ALORS)</label><select id="wfRuleAction" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="start_workflow">Démarrer workflow</option><option value="send_notification">Notifier utilisateurs</option><option value="assign_tag">Assigner un tag</option><option value="move_folder">Déplacer dans dossier</option><option value="send_email">Envoyer email</option><option value="call_webhook">Appeler webhook</option></select></div></div><div class="flex gap-3 pt-2"><button type="button" onclick="closeWfRuleModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button><button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-save mr-2"></i>Créer la règle</button></div></form>
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-magic text-orange-400"></i>Nouvelle règle d'automatisation</h3>
+      <button onclick="closeWfRuleModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <form onsubmit="createWfRule(event)" class="space-y-4">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Nom de la règle</label>
+        <input id="wfRuleName" type="text" placeholder="Ex: Upload → Notification Slack" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Déclencheur (SI)</label>
+          <select id="wfRuleTrigger" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="document_upload">Upload document</option>
+            <option value="document_delete">Suppression</option>
+            <option value="workflow_approve">Approbation workflow</option>
+            <option value="workflow_reject">Rejet workflow</option>
+            <option value="signature_done">Signature effectuée</option>
+            <option value="user_login">Connexion utilisateur</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-blue-200 text-xs font-medium block mb-1">Action (ALORS)</label>
+          <select id="wfRuleAction" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <option value="start_workflow">Démarrer workflow</option>
+            <option value="send_notification">Notifier utilisateurs</option>
+            <option value="assign_tag">Assigner un tag</option>
+            <option value="move_folder">Déplacer dans dossier</option>
+            <option value="send_email">Envoyer email</option>
+            <option value="call_webhook">Appeler webhook</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="closeWfRuleModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
+        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-save mr-2"></i>Créer la règle</button>
+      </div>
+    </form>
   </div>
 </div>
 
 <!-- ════ SIGNATURE MODAL -->
 <div id="signatureModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:560px">
-    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-signature text-purple-400"></i>Signer le document</h3><button onclick="closeSignModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button></div>
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-signature text-purple-400"></i>Signer le document</h3>
+      <button onclick="closeSignModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
     <p class="text-blue-300/70 text-sm mb-4">Dessinez votre signature dans la zone ci-dessous :</p>
     <canvas id="signatureCanvas" class="w-full rounded-xl cursor-crosshair touch-none" style="height:180px;background:rgba(8,15,40,0.8);border:1px solid rgba(96,165,250,0.3);"></canvas>
-    <div class="flex gap-3 mt-4"><button onclick="clearSignature()" class="flex-1 py-2.5 rounded-xl text-yellow-400 text-sm border border-yellow-500/30 hover:bg-yellow-500/10"><i class="fas fa-eraser mr-2"></i>Effacer</button><button onclick="submitSignature()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold"><i class="fas fa-check mr-2"></i>Valider la signature</button></div>
+    <div class="flex gap-3 mt-4">
+      <button onclick="clearSignature()" class="flex-1 py-2.5 rounded-xl text-yellow-400 text-sm border border-yellow-500/30 hover:bg-yellow-500/10"><i class="fas fa-eraser mr-2"></i>Effacer</button>
+      <button onclick="submitSignature()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold"><i class="fas fa-check mr-2"></i>Valider la signature</button>
+    </div>
     <p class="text-blue-300/40 text-xs mt-3 text-center">Votre signature sera horodatée et liée à votre compte.</p>
+  </div>
+</div>
+
+<!-- ════ PREVIEW MODAL -->
+<div id="previewModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:90vw;max-height:90vh;width:auto;min-width:400px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-white font-bold text-lg" id="previewTitle">Aperçu document</h3>
+      <div class="flex gap-2">
+        <button onclick="downloadCurrentDocument()" class="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10" title="Télécharger"><i class="fas fa-download"></i></button>
+        <button onclick="shareCurrentDocument()" class="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10" title="Partager"><i class="fas fa-share-alt"></i></button>
+        <button onclick="openSignModal()" class="p-2 rounded-lg text-green-400 hover:bg-green-500/10" title="Signer"><i class="fas fa-signature"></i></button>
+        <button onclick="closePreviewModal()" class="p-2 rounded-lg text-gray-400 hover:bg-gray-500/10"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="relative">
+      <iframe id="previewFrame" class="w-full h-[70vh] rounded-lg border-0 hidden"></iframe>
+      <img id="previewImage" class="max-w-full max-h-[70vh] mx-auto hidden" alt="Aperçu">
+      <div id="previewContent" class="hidden p-8 text-center text-blue-300/70">
+        <i class="fas fa-file-alt text-4xl mb-3 block"></i>
+        <p>Aperçu non disponible pour ce type de fichier</p>
+        <button onclick="downloadCurrentDocument()" class="mt-4 btn-primary px-4 py-2 rounded-lg text-white">Télécharger</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ RESET PASSWORD MODAL -->
+<div id="resetPasswordModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-white font-bold text-lg">Réinitialiser mon mot de passe</h3>
+      <button onclick="closeResetModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <p class="text-blue-300/80 text-sm mb-4">Saisissez votre email pour recevoir un lien de réinitialisation.</p>
+    <input type="email" id="resetEmail" placeholder="votre@email.com" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none mb-4" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+    <div class="flex gap-3">
+      <button onclick="closeResetModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10 border border-blue-500/30">Annuler</button>
+      <button onclick="sendResetEmail()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium">Envoyer</button>
+    </div>
+    <div id="resetMessage" class="mt-3 text-center text-sm"></div>
+  </div>
+</div>
+
+<!-- ════ DEMANDE SIGNATURE MODAL -->
+<div id="requestSignatureModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:500px;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-paper-plane text-purple-400"></i>Demander une signature</h3>
+      <button onclick="closeRequestSignatureModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Document</label>
+        <select id="signatureDocId" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="">-- Sélectionner un document --</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Email du signataire</label>
+        <input id="signatureSignerEmail" type="email" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="signataire@exemple.com">
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Message</label>
+        <textarea id="signatureMessage" rows="2" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Veuillez signer ce document..."></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeRequestSignatureModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10 border border-blue-500/30">Annuler</button>
+        <button onclick="requestSignature()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Envoyer la demande</button>
+      </div>
+    </div>
   </div>
 </div>
 
