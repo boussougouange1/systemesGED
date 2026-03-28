@@ -58,6 +58,7 @@ window.G = {
   folderPath: [],
   pendingUsersCount: 0,
   _uploadScope: 'company',
+  
   // Variables d'audit
   auditFilter: { days: 30, severity: '', action: '' },
   logFilter: 'all',
@@ -366,7 +367,6 @@ function updateBadges() {
     wfBadge.classList.toggle('hidden', wfCount === 0);
   }
   
-  // Mettre à jour les badges mobiles
   const mDocsBadge = document.getElementById('m-docsBadge');
   if (mDocsBadge) {
     mDocsBadge.textContent = docCount;
@@ -1502,14 +1502,12 @@ function getWfStatusColor(status) {
 }
 
 function openCreateWorkflowModal() {
-  // Remplir le sélecteur de documents
   const docSelect = document.getElementById('wfDocId');
   if (docSelect) {
     docSelect.innerHTML = '<option value="">-- Aucun --</option>' + 
       G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${doc.name}</option>`).join('');
   }
   
-  // Remplir le sélecteur d'assignation
   const assigneeSelect = document.getElementById('wfAssignee');
   if (assigneeSelect) {
     assigneeSelect.innerHTML = '<option value="">-- Non assigné --</option>' + 
@@ -1630,7 +1628,6 @@ function openWfDetail(wfId) {
     const titleEl = document.getElementById('wfDetailTitle');
     if (titleEl) titleEl.textContent = wf.title;
     
-    // Meta info
     const metaEl = document.getElementById('wfDetailMeta');
     if (metaEl) {
       metaEl.innerHTML = `
@@ -1640,7 +1637,6 @@ function openWfDetail(wfId) {
       `;
     }
     
-    // Steps
     const stepsContainer = document.getElementById('wfDetailSteps');
     if (stepsContainer) {
       if (wf.steps && Array.isArray(wf.steps) && wf.steps.length > 0) {
@@ -1666,7 +1662,6 @@ function openWfDetail(wfId) {
       }
     }
     
-    // Document lié
     if (wf.document_id) {
       const doc = G.documents.find(d => d.id === wf.document_id);
       const docContainer = document.getElementById('wfDetailDoc');
@@ -1685,7 +1680,6 @@ function openWfDetail(wfId) {
       if (docContainer) docContainer.classList.add('hidden');
     }
     
-    // Actions (si l'utilisateur est assigné ou admin)
     const actionsContainer = document.getElementById('wfDetailActions');
     if (actionsContainer) {
       const isAssignee = wf.assignee_id === G.currentUser.id;
@@ -1843,7 +1837,7 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-           </td>
+            </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
       <td class="p-4 hidden md:table-cell">-</td>
       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
@@ -1853,8 +1847,8 @@ function renderUsers() {
           ${canValidateUsers() ? `<button onclick="resetUserPassword('${u.email}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Réinitialiser mot de passe"><i class="fas fa-key"></i></button>` : ''}
           ${canValidateUsers() ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
         </div>
-       </td>
-     </tr>
+      </td>
+    </tr>
   `).join('');
 }
 
@@ -2649,7 +2643,6 @@ function saveRole() {
 function renderRBACV7() {
   renderRBAC();
   
-  // Afficher la matrice des permissions
   const matrixContainer = document.getElementById('rbacV7PermMatrix');
   if (matrixContainer) {
     const roles = Object.entries(G.roles);
@@ -2672,7 +2665,6 @@ function renderRBACV7() {
     `).join('');
   }
   
-  // Afficher l'affectation des rôles
   const assignmentList = document.getElementById('roleAssignmentList');
   if (assignmentList) {
     assignmentList.innerHTML = G.users.map(user => `
@@ -2685,7 +2677,7 @@ function renderRBACV7() {
           </select>
         </td>
         <td class="p-3">
-          <button onclick="updateUserRole('${user.id}', document.getElementById('roleSelect_${user.id}').value)" class="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs">Appliquer</button>
+          <button onclick="updateUserRole('${user.id}', this.parentElement.querySelector('select').value)" class="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs">Appliquer</button>
         </td>
       </tr>
     `).join('');
@@ -2784,7 +2776,6 @@ function renderSignatures() {
     return;
   }
   
-  // Mettre à jour les statistiques
   const pendingCount = G.signatures.filter(s => s.status === 'pending').length;
   const signedCount = G.signatures.filter(s => s.status === 'signed').length;
   const rejectedCount = G.signatures.filter(s => s.status === 'rejected').length;
@@ -2873,7 +2864,6 @@ function initSignatureCanvas() {
     drawing = false;
   });
   
-  // Support tactile
   canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     drawing = true;
@@ -2945,7 +2935,6 @@ function openRequestSignatureModal() {
   const modal = document.getElementById('requestSignatureModal');
   if (modal) modal.classList.remove('hidden');
   
-  // Remplir le sélecteur de documents
   const docSelect = document.getElementById('signatureDocId');
   if (docSelect) {
     docSelect.innerHTML = '<option value="">-- Sélectionner un document --</option>' + 
@@ -3506,7 +3495,8 @@ function renderAuditV6() {
 }
 
 function setAuditFilter(type, value) {
-  if (type === 'days') G.auditFilter.days = value;
+  if (!G.auditFilter) G.auditFilter = { days: 30, severity: '', action: '' };
+  if (type === 'days') G.auditFilter.days = parseInt(value);
   if (type === 'severity') G.auditFilter.severity = value;
   if (type === 'action') G.auditFilter.action = value;
   renderAuditV6();
