@@ -1850,6 +1850,56 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
   </div>
 </div>
 
+<!-- ════ MOVE DOCUMENT MODAL -->
+<div id="moveModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-folder-open text-yellow-400"></i>Déplacer le document</h3>
+      <button onclick="closeMoveModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Dossier de destination</label>
+        <select id="moveFolderSelect" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="">-- Sélectionner un dossier --</option>
+        </select>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeMoveModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10 border border-blue-500/30">Annuler</button>
+        <button onclick="confirmMoveDocument()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-arrow-right mr-2"></i>Déplacer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ COLLABORATION MODAL -->
+<div id="collabModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:480px">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-users text-green-400"></i>Inviter à collaborer</h3>
+      <button onclick="closeCollabModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="space-y-4">
+      <p class="text-blue-300/70 text-sm">Invitez un membre de votre entreprise à collaborer sur <strong id="collabDocInfo">ce document</strong>.</p>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Email du collaborateur</label>
+        <input id="collabEmail" type="email" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="collaborateur@entreprise.com">
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Permission</label>
+        <select id="collabPermission" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          <option value="view">👁 Lecture seule</option>
+          <option value="download">⬇ Téléchargement</option>
+          <option value="edit">✏ Modification</option>
+        </select>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeCollabModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10 border border-blue-500/30">Annuler</button>
+        <button onclick="inviteCollaborator()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Inviter</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script src="app.js" defer></script>
 </body>
 </html>
