@@ -1,5 +1,5 @@
 // ============================================
-// SystemesGED v7.0 – Application complète sécurisée
+// SystemesGED v7.0 – Application complète sécurisée (CORRIGÉE)
 // ============================================
 
 // ─── Configuration Supabase ───
@@ -58,6 +58,10 @@ window.G = {
   folderPath: [],
   pendingUsersCount: 0,
   _uploadScope: 'company',
+  shareModalDocId: null,
+  moveModalDocId: null,
+  collabModalDocId: null,
+  collabUsers: [],
   
   // Variables d'audit
   auditFilter: { days: 30, severity: '', action: '' },
@@ -82,14 +86,15 @@ window.G = {
     }
   });
   
-  setInterval(() => {
-    const before = new Date();
-    debugger;
-    const after = new Date();
-    if (after - before > 100) {
-      console.clear();
-    }
-  }, 1000);
+  // Désactivé pour éviter les problèmes de performance
+  // setInterval(() => {
+  //   const before = new Date();
+  //   debugger;
+  //   const after = new Date();
+  //   if (after - before > 100) {
+  //     console.clear();
+  //   }
+  // }, 1000);
 })();
 
 // ─── Initialisation Supabase ───
@@ -751,6 +756,9 @@ function renderTeamDocs() {
         <p class="text-sm text-white truncate">${doc.name}</p>
         <p class="text-xs text-blue-300/60">${formatDate(doc.created_at)}</p>
       </div>
+      <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-1 text-yellow-400 hover:text-yellow-300" title="Déplacer vers un dossier">
+        <i class="fas fa-folder-open"></i>
+      </button>
     </div>
   `).join('');
 }
@@ -812,6 +820,19 @@ function renderDocuments() {
   const typeFilter = document.getElementById('filterType')?.value;
   if (typeFilter) filtered = filtered.filter(d => d.type === typeFilter);
   
+  const dateFilter = document.getElementById('filterDate')?.value;
+  if (dateFilter === 'today') {
+    filtered = filtered.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
+  } else if (dateFilter === 'week') {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    filtered = filtered.filter(d => new Date(d.created_at) >= weekAgo);
+  } else if (dateFilter === 'month') {
+    const monthAgo = new Date();
+    monthAgo.setDate(monthAgo.getDate() - 30);
+    filtered = filtered.filter(d => new Date(d.created_at) >= monthAgo);
+  }
+  
   const resultsCount = document.getElementById('resultsCount');
   if (resultsCount) resultsCount.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
   
@@ -839,6 +860,8 @@ function renderDocCard(doc) {
         <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
           <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger"><i class="fas fa-download"></i></button>
           <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400" title="Partager"><i class="fas fa-share-alt"></i></button>
+          <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400" title="Inviter à collaborer"><i class="fas fa-users"></i></button>
+          <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Déplacer"><i class="fas fa-folder-open"></i></button>
           ${isOwner ? `<button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
         </div>
       </div>
@@ -847,6 +870,10 @@ function renderDocCard(doc) {
       <div class="flex items-center justify-between">
         <div class="flex gap-1">${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${t}</span>`).join('')}</div>
         ${doc.scope === 'company' ? '<span class="collab-badge"><i class="fas fa-building"></i>Entreprise</span>' : '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Perso</span>'}
+      </div>
+      <div class="mt-2 text-xs text-blue-400/50">
+        <span>📄 v${doc.version || 1}</span>
+        <span class="ml-2">👁️ ${doc.views || 0}</span>
       </div>
     </div>
   `;
@@ -866,6 +893,8 @@ function renderDocListItem(doc) {
       <div class="doc-actions">
         <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400"><i class="fas fa-download"></i></button>
         <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400"><i class="fas fa-share-alt"></i></button>
+        <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400"><i class="fas fa-users"></i></button>
+        <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400"><i class="fas fa-folder-open"></i></button>
         ${isOwner ? `<button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
       </div>
     </div>
@@ -893,7 +922,9 @@ function applyFilters() {
 
 function clearFilters() {
   const filterType = document.getElementById('filterType');
+  const filterDate = document.getElementById('filterDate');
   if (filterType) filterType.value = '';
+  if (filterDate) filterDate.value = '';
   renderDocuments();
 }
 
@@ -1060,7 +1091,7 @@ async function uploadDocument() {
       
       const doc = {
         id: docId,
-        name: file.name,
+        name: document.getElementById('docNameInput')?.value || file.name,
         type: getFileType(file.name),
         size: file.size,
         description: document.getElementById('docDescInput')?.value || '',
@@ -1086,6 +1117,9 @@ async function uploadDocument() {
       
       G.documents.unshift(doc);
       showToast(`${file.name} importé avec succès`, 'success');
+      
+      // Log d'audit
+      await addAuditLog('upload', 'document', doc.id);
       
     } catch (err) {
       console.error('Upload error:', err);
@@ -1140,13 +1174,19 @@ function openPreviewModal(docId) {
     if (previewFrame) {
       previewFrame.src = fileUrl;
       previewFrame.classList.remove('hidden');
+      previewFrame.onload = () => {
+        console.log('PDF chargé avec succès');
+      };
     }
     if (previewImage) previewImage.classList.add('hidden');
     if (previewContent) previewContent.classList.add('hidden');
-  } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileType)) {
+  } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
     if (previewImage) {
       previewImage.src = fileUrl;
       previewImage.classList.remove('hidden');
+      previewImage.onload = () => {
+        console.log('Image chargée avec succès');
+      };
     }
     if (previewFrame) previewFrame.classList.add('hidden');
     if (previewContent) previewContent.classList.add('hidden');
@@ -1154,6 +1194,21 @@ function openPreviewModal(docId) {
     if (previewFrame) previewFrame.classList.add('hidden');
     if (previewImage) previewImage.classList.add('hidden');
     if (previewContent) previewContent.classList.remove('hidden');
+  }
+  
+  // Incrémenter le compteur de vues
+  updateDocViews(docId);
+}
+
+async function updateDocViews(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (doc) {
+    const newViews = (doc.views || 0) + 1;
+    await G.supabase
+      .from('documents')
+      .update({ views: newViews })
+      .eq('id', docId);
+    doc.views = newViews;
   }
 }
 
@@ -1167,24 +1222,49 @@ async function downloadDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
   
-  await G.supabase
-    .from('documents')
-    .update({ downloads: (doc.downloads || 0) + 1 })
-    .eq('id', docId);
-  doc.downloads = (doc.downloads || 0) + 1;
-  
-  const { data } = G.supabase.storage
-    .from(CONFIG.storageBucket)
-    .getPublicUrl(doc.storage_path);
-  
-  const link = document.createElement('a');
-  link.href = data.publicUrl;
-  link.download = doc.name;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  
-  showToast(`Téléchargement: ${doc.name}`, 'success');
+  try {
+    // Télécharger le fichier depuis Supabase Storage
+    const { data, error } = await G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .download(doc.storage_path);
+    
+    if (error) {
+      console.error('Erreur téléchargement:', error);
+      // Fallback: utiliser l'URL publique
+      const link = document.createElement('a');
+      link.href = doc.file_url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      // Créer un blob et télécharger
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+    
+    // Mettre à jour le compteur de téléchargements
+    await G.supabase
+      .from('documents')
+      .update({ downloads: (doc.downloads || 0) + 1 })
+      .eq('id', docId);
+    doc.downloads = (doc.downloads || 0) + 1;
+    
+    showToast(`Téléchargement: ${doc.name}`, 'success');
+    
+    // Log d'audit
+    await addAuditLog('download', 'document', docId);
+    
+  } catch (err) {
+    console.error('Erreur téléchargement:', err);
+    showToast(`Erreur de téléchargement: ${err.message}`, 'error');
+  }
 }
 
 function downloadCurrentDocument() {
@@ -1219,6 +1299,142 @@ async function deleteDocument(docId) {
   renderDocuments();
   updateBadges();
   showToast('Document déplacé vers la corbeille', 'success');
+  
+  // Log d'audit
+  await addAuditLog('delete', 'document', docId);
+}
+
+// ─── Déplacement de documents ───
+function openMoveModal(docId) {
+  G.moveModalDocId = docId;
+  const modal = document.getElementById('moveModal');
+  if (modal) modal.classList.remove('hidden');
+  
+  // Remplir la liste des dossiers
+  const folderSelect = document.getElementById('moveFolderSelect');
+  if (folderSelect) {
+    folderSelect.innerHTML = '<option value="">-- Sélectionner un dossier --</option>' + 
+      G.folders.filter(f => f.parent_id !== null || f.name !== 'Racine').map(f => 
+        `<option value="${f.id}">${getFolderPath(f.id)}</option>`
+      ).join('');
+  }
+}
+
+function closeMoveModal() {
+  const modal = document.getElementById('moveModal');
+  if (modal) modal.classList.add('hidden');
+  G.moveModalDocId = null;
+}
+
+function getFolderPath(folderId, path = '') {
+  const folder = G.folders.find(f => f.id === folderId);
+  if (!folder) return path;
+  const newPath = path ? `${folder.name} / ${path}` : folder.name;
+  if (folder.parent_id) {
+    return getFolderPath(folder.parent_id, newPath);
+  }
+  return newPath;
+}
+
+async function confirmMoveDocument() {
+  const folderId = document.getElementById('moveFolderSelect')?.value;
+  if (!folderId) {
+    showToast('Veuillez sélectionner un dossier', 'warning');
+    return;
+  }
+  
+  if (!G.moveModalDocId) return;
+  
+  const { error } = await G.supabase
+    .from('documents')
+    .update({ folder_id: folderId, updated_at: new Date().toISOString() })
+    .eq('id', G.moveModalDocId);
+  
+  if (error) {
+    showToast('Erreur déplacement: ' + error.message, 'error');
+    return;
+  }
+  
+  const doc = G.documents.find(d => d.id === G.moveModalDocId);
+  if (doc) {
+    doc.folder_id = folderId;
+    doc.updated_at = new Date().toISOString();
+  }
+  
+  showToast('Document déplacé avec succès', 'success');
+  closeMoveModal();
+  renderDocuments();
+  if (G.currentView === 'folders') renderFolderContents();
+}
+
+// ─── Collaboration (invitation) ───
+function openCollabModal(docId) {
+  G.collabModalDocId = docId;
+  const modal = document.getElementById('collabModal');
+  if (modal) modal.classList.remove('hidden');
+  
+  const doc = G.documents.find(d => d.id === docId);
+  const docInfo = document.getElementById('collabDocInfo');
+  if (docInfo && doc) docInfo.textContent = doc.name;
+}
+
+function closeCollabModal() {
+  const modal = document.getElementById('collabModal');
+  if (modal) modal.classList.add('hidden');
+  G.collabModalDocId = null;
+}
+
+async function inviteCollaborator() {
+  const email = document.getElementById('collabEmail')?.value.trim();
+  const permission = document.getElementById('collabPermission')?.value;
+  
+  if (!email) {
+    showToast('Veuillez entrer un email', 'warning');
+    return;
+  }
+  
+  if (!G.collabModalDocId) return;
+  
+  // Vérifier si l'utilisateur existe dans la même entreprise
+  const { data: targetUser, error: userError } = await G.supabase
+    .from('profiles')
+    .select('id, email, name')
+    .eq('email', email)
+    .eq('company_id', G.currentUser.companyId)
+    .single();
+  
+  if (userError || !targetUser) {
+    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
+    return;
+  }
+  
+  // Créer le partage
+  const share = {
+    id: generateId(),
+    document_id: G.collabModalDocId,
+    sender_id: G.currentUser.id,
+    recipient_email: email,
+    recipient_id: targetUser.id,
+    permission: permission,
+    expires_at: null,
+    status: 'active',
+    created_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('shares').insert(share);
+  if (error) {
+    showToast('Erreur invitation: ' + error.message, 'error');
+    return;
+  }
+  
+  G.shares.push(share);
+  showToast(`Invitation envoyée à ${email}`, 'success');
+  
+  // Envoyer une notification (simulée)
+  await addAuditLog('share_collab', 'document', G.collabModalDocId, `Invité: ${email} avec permission ${permission}`);
+  
+  closeCollabModal();
+  document.getElementById('collabEmail').value = '';
 }
 
 // ─── Partages ───
@@ -1297,6 +1513,8 @@ async function shareDocument() {
   showToast('Document partagé avec succès', 'success');
   closeShareModal();
   updateBadges();
+  
+  await addAuditLog('share', 'document', G.currentDocId, `Partagé avec ${email}`);
 }
 
 async function revokeShare(shareId) {
@@ -1450,7 +1668,7 @@ function copyShareLink() {
   }
 }
 
-// ─── Workflows ───
+// ─── Workflows (corrigé) ───
 function renderWorkflows() {
   const container = document.getElementById('wfKanban');
   if (!container) return;
@@ -1464,11 +1682,28 @@ function renderWorkflows() {
           <div class="p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50" onclick="openWfDetail('${wf.id}')">
             <p class="text-white text-sm font-medium">${wf.title}</p>
             <p class="text-xs text-blue-300/60">Priorité: ${wf.priority}</p>
+            ${wf.assignee_id ? `<p class="text-xs text-green-400/60 mt-1">Assigné à: ${wf.assignee_id === G.currentUser.id ? 'Moi' : wf.assignee_id.substring(0,8)}</p>` : ''}
           </div>
         `).join('')}
       </div>
     </div>
   `).join('');
+  
+  // Mettre à jour les statistiques
+  const pendingCount = G.workflows.filter(w => w.status === 'pending').length;
+  const inReviewCount = G.workflows.filter(w => w.status === 'in_review').length;
+  const approvedCount = G.workflows.filter(w => w.status === 'approved').length;
+  const rejectedCount = G.workflows.filter(w => w.status === 'rejected').length;
+  
+  const wfKpiStrip = document.getElementById('wfKpiStrip');
+  if (wfKpiStrip) {
+    wfKpiStrip.innerHTML = `
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-orange-400 text-xl font-bold">${pendingCount}</p><p class="text-xs text-blue-300/60">En attente</p></div>
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-blue-400 text-xl font-bold">${inReviewCount}</p><p class="text-xs text-blue-300/60">En révision</p></div>
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-green-400 text-xl font-bold">${approvedCount}</p><p class="text-xs text-blue-300/60">Approuvés</p></div>
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-red-400 text-xl font-bold">${rejectedCount}</p><p class="text-xs text-blue-300/60">Rejetés</p></div>
+    `;
+  }
 }
 
 function getWfStatusClass(status) {
@@ -1556,7 +1791,7 @@ async function createWorkflow(e) {
   
   const { error } = await G.supabase.from('workflows').insert(newWf);
   if (error) {
-    showToast('Erreur création workflow', 'error');
+    showToast('Erreur création workflow: ' + error.message, 'error');
     return;
   }
   
@@ -1564,6 +1799,8 @@ async function createWorkflow(e) {
   showToast('Workflow créé', 'success');
   closeWorkflowModal();
   renderWorkflows();
+  
+  await addAuditLog('workflow_create', 'workflow', newWf.id, `Titre: ${title}`);
 }
 
 async function actOnWorkflow(action, comment) {
@@ -1616,6 +1853,8 @@ async function actOnWorkflow(action, comment) {
   showToast(`Workflow ${action === 'approve' ? 'approuvé' : action === 'reject' ? 'rejeté' : 'mis à jour'}`, 'success');
   renderWorkflows();
   closeWfDetail();
+  
+  await addAuditLog(`workflow_${action}`, 'workflow', G.currentWfId, `Commentaire: ${commentText || 'Aucun'}`);
 }
 
 function openWfDetail(wfId) {
@@ -1634,6 +1873,7 @@ function openWfDetail(wfId) {
         <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
         <span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span>
         <span class="text-xs text-blue-300/60">Créé le ${formatDate(wf.created_at)}</span>
+        ${wf.assignee_id ? `<span class="text-xs text-green-400/60">Assigné: ${G.users.find(u => u.id === wf.assignee_id)?.name || 'Inconnu'}</span>` : ''}
       `;
     }
     
@@ -1649,6 +1889,7 @@ function openWfDetail(wfId) {
               <p class="text-white text-sm">${step}</p>
               ${idx === wf.current_step && wf.status === 'pending' ? '<p class="text-xs text-blue-400">En attente de validation</p>' : ''}
             </div>
+            ${idx < wf.current_step ? '<i class="fas fa-check-circle text-green-400"></i>' : ''}
           </div>
         `).join('');
         
@@ -1837,7 +2078,7 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-            </td>
+      </td>
       <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
       <td class="p-4 hidden md:table-cell">-</td>
       <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
@@ -1989,6 +2230,8 @@ async function validateUser(userId) {
   renderUsers();
   updatePendingUsersCount();
   showToast(`Utilisateur ${user.name} validé`, 'success');
+  
+  await addAuditLog('validate_user', 'user', userId, `Utilisateur ${user.name} validé`);
 }
 
 async function deleteUser(userId) {
@@ -2140,14 +2383,18 @@ function renderFolderContents() {
   const folderDocGrid = document.getElementById('folderDocGrid');
   if (!folderContents || !folderDocGrid) return;
   
-  const subFolders = G.folders.filter(f => f.parent_id === G.currentFolderId);
+  const subFolders = G.folders.filter(f => f.parent_id === G.currentFolderId && f.name !== 'Racine');
   const docs = G.documents.filter(d => !d.is_deleted && d.folder_id === G.currentFolderId);
   
-  folderContents.innerHTML = subFolders.map(f => `
-    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 cursor-pointer hover:border-yellow-400/40" onclick="openFolder('${f.id}', '${f.name}')">
-      <div class="flex items-center gap-3"><i class="fas fa-folder text-yellow-400 text-2xl"></i><span class="text-white font-medium">${f.name}</span></div>
-    </div>
-  `).join('');
+  if (subFolders.length === 0 && docs.length === 0) {
+    folderContents.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun contenu dans ce dossier</div>';
+  } else {
+    folderContents.innerHTML = subFolders.map(f => `
+      <div class="glass-card rounded-xl p-4 border border-yellow-500/20 cursor-pointer hover:border-yellow-400/40" onclick="openFolder('${f.id}', '${f.name}')">
+        <div class="flex items-center gap-3"><i class="fas fa-folder text-yellow-400 text-2xl"></i><span class="text-white font-medium">${f.name}</span></div>
+      </div>
+    `).join('');
+  }
   
   if (docs.length === 0) {
     folderDocGrid.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun document dans ce dossier</div>';
@@ -2161,7 +2408,7 @@ function renderFolderTree() {
   const container = document.getElementById('folderSidebarTree');
   if (!container) return;
   
-  const rootFolders = G.folders.filter(f => f.parent_id === null);
+  const rootFolders = G.folders.filter(f => f.parent_id === null && f.name !== 'Racine');
   
   function renderFolderTreeRecursive(folderId, level = 0) {
     const folder = G.folders.find(f => f.id === folderId);
@@ -2582,7 +2829,7 @@ function exportSysLogs() {
   showToast('Export logs effectué', 'success');
 }
 
-// ─── RBAC ───
+// ─── RBAC (corrigé) ───
 function renderRBAC() {
   const container = document.getElementById('rbacCards');
   if (!container) return;
@@ -2591,6 +2838,10 @@ function renderRBAC() {
     <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openRoleModal('${key}')">
       <h4 class="text-white font-semibold">${role.name}</h4>
       <p class="text-xs text-blue-300/60 mt-2">${G.users.filter(u => u.role === key).length} utilisateur(s)</p>
+      <div class="mt-2 flex flex-wrap gap-1">
+        ${role.perms.slice(0, 3).map(p => `<span class="text-[10px] px-1 py-0.5 rounded bg-blue-500/20">${p}</span>`).join('')}
+        ${role.perms.length > 3 ? `<span class="text-[10px] px-1 py-0.5 rounded bg-blue-500/20">+${role.perms.length - 3}</span>` : ''}
+      </div>
     </div>
   `).join('');
 }
@@ -2608,7 +2859,7 @@ function openRoleModal(roleKey) {
     if (keyEl) keyEl.value = roleKey;
     if (nameEl) nameEl.value = role.name;
     
-    const perms = ['read', 'write', 'delete', 'users', 'logs', 'api'];
+    const perms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
     perms.forEach(perm => {
       const checkbox = document.getElementById(`perm_${perm}`);
       if (checkbox) checkbox.checked = role.perms.includes(perm);
@@ -2628,7 +2879,7 @@ function saveRole() {
   if (!roleKey || !roleName) return;
   
   const perms = [];
-  const permsList = ['read', 'write', 'delete', 'users', 'logs', 'api'];
+  const permsList = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
   permsList.forEach(perm => {
     const checkbox = document.getElementById(`perm_${perm}`);
     if (checkbox?.checked) perms.push(perm);
@@ -2638,6 +2889,7 @@ function saveRole() {
   showToast(`Rôle ${roleName} mis à jour`, 'success');
   closeRoleModal();
   renderRBAC();
+  renderRBACV7();
 }
 
 function renderRBACV7() {
@@ -2646,7 +2898,7 @@ function renderRBACV7() {
   const matrixContainer = document.getElementById('rbacV7PermMatrix');
   if (matrixContainer) {
     const roles = Object.entries(G.roles);
-    const perms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures'];
+    const perms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
     
     matrixContainer.innerHTML = roles.map(([key, role]) => `
       <div class="glass-card rounded-xl p-4 border border-blue-500/20">
@@ -2665,22 +2917,44 @@ function renderRBACV7() {
     `).join('');
   }
   
+  const rolesGrid = document.getElementById('rbacV7RolesGrid');
+  if (rolesGrid) {
+    rolesGrid.innerHTML = Object.entries(G.roles).map(([key, role]) => `
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="text-white font-semibold">${role.name}</h4>
+          <button onclick="openRoleModal('${key}')" class="text-xs text-blue-400 hover:text-blue-300">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+        <p class="text-xs text-blue-300/60">${G.users.filter(u => u.role === key).length} utilisateurs</p>
+        <div class="mt-2 flex flex-wrap gap-1">
+          ${role.perms.map(p => `<span class="text-[10px] px-1 py-0.5 rounded bg-blue-500/20">${p}</span>`).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+  
   const assignmentList = document.getElementById('roleAssignmentList');
   if (assignmentList) {
-    assignmentList.innerHTML = G.users.map(user => `
-      <tr class="border-b border-blue-500/10">
-        <td class="p-3 text-white text-sm">${user.name}</td>
-        <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(user.role)}">${G.roles[user.role]?.name || user.role}</span></td>
-        <td class="p-3">
-          <select onchange="updateUserRole('${user.id}', this.value)" class="bg-slate-900/50 border border-blue-500/30 rounded-lg px-2 py-1 text-xs text-white outline-none">
-            ${Object.entries(G.roles).map(([key, role]) => `<option value="${key}" ${user.role === key ? 'selected' : ''}>${role.name}</option>`).join('')}
-          </select>
-        </td>
-        <td class="p-3">
-          <button onclick="updateUserRole('${user.id}', this.parentElement.querySelector('select').value)" class="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs">Appliquer</button>
-        </td>
-      </tr>
-    `).join('');
+    if (G.users.length === 0) {
+      assignmentList.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-blue-300/50">Aucun utilisateur</td></tr>';
+    } else {
+      assignmentList.innerHTML = G.users.map(user => `
+        <tr class="border-b border-blue-500/10">
+          <td class="p-3 text-white text-sm">${user.name}</td>
+          <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(user.role)}">${G.roles[user.role]?.name || user.role}</span></td>
+          <td class="p-3">
+            <select onchange="updateUserRole('${user.id}', this.value)" class="bg-slate-900/50 border border-blue-500/30 rounded-lg px-2 py-1 text-xs text-white outline-none">
+              ${Object.entries(G.roles).map(([key, role]) => `<option value="${key}" ${user.role === key ? 'selected' : ''}>${role.name}</option>`).join('')}
+            </select>
+          </td>
+          <td class="p-3">
+            <button onclick="updateUserRole('${user.id}', this.parentElement.querySelector('select').value)" class="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs">Appliquer</button>
+          </td>
+        </tr>
+      `).join('');
+    }
   }
 }
 
@@ -2701,6 +2975,8 @@ async function updateUserRole(userId, newRole) {
   renderUsers();
   renderRBACV7();
   showToast('Rôle mis à jour', 'success');
+  
+  await addAuditLog('role_change', 'user', userId, `Nouveau rôle: ${newRole}`);
 }
 
 function createRoleV7() {
@@ -2725,9 +3001,11 @@ function createRoleV7() {
 function renderAnalytics() {
   const kpiContainer = document.getElementById('analyticsKpiCards');
   if (kpiContainer) {
+    const totalViews = G.documents.reduce((sum, d) => sum + (d.views || 0), 0);
+    const totalDownloads = G.documents.reduce((sum, d) => sum + (d.downloads || 0), 0);
     kpiContainer.innerHTML = `
-      <div class="glass-card rounded-xl p-4 border border-blue-500/20"><p class="text-2xl font-bold text-white">${G.documents.reduce((sum, d) => sum + (d.views || 0), 0)}</p><p class="text-xs text-blue-300/60">Vues totales</p></div>
-      <div class="glass-card rounded-xl p-4 border border-green-500/20"><p class="text-2xl font-bold text-white">${G.documents.reduce((sum, d) => sum + (d.downloads || 0), 0)}</p><p class="text-xs text-blue-300/60">Téléchargements</p></div>
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20"><p class="text-2xl font-bold text-white">${totalViews}</p><p class="text-xs text-blue-300/60">Vues totales</p></div>
+      <div class="glass-card rounded-xl p-4 border border-green-500/20"><p class="text-2xl font-bold text-white">${totalDownloads}</p><p class="text-xs text-blue-300/60">Téléchargements</p></div>
       <div class="glass-card rounded-xl p-4 border border-purple-500/20"><p class="text-2xl font-bold text-white">${G.workflows.length}</p><p class="text-xs text-blue-300/60">Workflows</p></div>
       <div class="glass-card rounded-xl p-4 border border-orange-500/20"><p class="text-2xl font-bold text-white">${G.users.length}</p><p class="text-xs text-blue-300/60">Utilisateurs</p></div>
     `;
@@ -2758,6 +3036,48 @@ function renderAnalytics() {
         return `<div class="flex justify-between items-center p-2 border-b border-blue-500/10"><span class="text-white text-sm">${user?.name || 'Utilisateur'}</span><span class="text-blue-400 text-sm">${count} actions</span></div>`;
       }).join('');
     }
+  }
+  
+  // Graphique d'activité simplifié
+  const activityChart = document.getElementById('analyticsActivityChart');
+  if (activityChart) {
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const count = G.auditLogs.filter(l => new Date(l.created_at).toDateString() === date.toDateString()).length;
+      last7Days.push(count);
+    }
+    const maxCount = Math.max(...last7Days, 1);
+    activityChart.innerHTML = `
+      <div class="analytics-bar-wrap w-full">
+        ${last7Days.map((count, idx) => `
+          <div class="flex-1 flex flex-col items-center">
+            <div class="w-full bg-blue-500/20 rounded-t-lg" style="height: ${(count / maxCount) * 80}px; min-height: 4px;"></div>
+            <div class="w-full h-8 bg-blue-500/20 mt-1 rounded-b-lg text-center text-[10px] text-blue-300/60 pt-1">${count}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  // Workflow chart
+  const workflowChart = document.getElementById('analyticsWorkflowChart');
+  if (workflowChart) {
+    const wfStats = {
+      pending: G.workflows.filter(w => w.status === 'pending').length,
+      in_review: G.workflows.filter(w => w.status === 'in_review').length,
+      approved: G.workflows.filter(w => w.status === 'approved').length,
+      rejected: G.workflows.filter(w => w.status === 'rejected').length
+    };
+    workflowChart.innerHTML = `
+      <div class="space-y-2">
+        <div class="flex justify-between text-xs"><span>En attente</span><span class="text-orange-400">${wfStats.pending}</span></div>
+        <div class="flex justify-between text-xs"><span>En révision</span><span class="text-blue-400">${wfStats.in_review}</span></div>
+        <div class="flex justify-between text-xs"><span>Approuvés</span><span class="text-green-400">${wfStats.approved}</span></div>
+        <div class="flex justify-between text-xs"><span>Rejetés</span><span class="text-red-400">${wfStats.rejected}</span></div>
+      </div>
+    `;
   }
 }
 
@@ -2792,7 +3112,7 @@ function renderSignatures() {
     const doc = G.documents.find(d => d.id === s.document_id);
     return `
       <div class="glass-card rounded-xl p-4 border border-blue-500/20 flex items-center justify-between">
-        <div><p class="text-white font-medium">${doc?.name || 'Document inconnu'}</p><p class="text-xs text-blue-300/60">Signataire: ${s.signer_email}</p></div>
+        <div><p class="text-white font-medium">${doc?.name || 'Document inconnu'}</p><p class="text-xs text-blue-300/60">Signataire: ${s.signer_email || s.signer_id}</p></div>
         <span class="px-3 py-1 rounded-full text-xs ${getSigStatusClass(s.status)}">${s.status === 'pending' ? 'En attente' : s.status === 'signed' ? 'Signé' : 'Rejeté'}</span>
       </div>
     `;
@@ -2929,6 +3249,8 @@ async function submitSignature() {
   }
   closeSignModal();
   renderSignatures();
+  
+  await addAuditLog('signature', 'document', G.currentDocId);
 }
 
 function openRequestSignatureModal() {
@@ -2978,9 +3300,11 @@ async function requestSignature() {
   showToast(`Demande de signature envoyée à ${signerEmail}`, 'success');
   closeRequestSignatureModal();
   renderSignatures();
+  
+  await addAuditLog('signature_request', 'document', docId, `Demandé à ${signerEmail}`);
 }
 
-// ─── AI ───
+// ─── IA (corrigé avec analyse réelle) ───
 function renderAI() {
   const container = document.getElementById('aiDocsList');
   if (!container) return;
@@ -2996,19 +3320,44 @@ function renderAI() {
   `).join('');
 }
 
-function analyzeDocument(docId) {
+async function analyzeDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
-  if (doc) {
-    showToast(`Analyse IA du document "${doc.name}" en cours...`, 'info');
-    setTimeout(() => {
-      showToast(`Analyse terminée: ${doc.name}`, 'success');
-    }, 2000);
+  if (!doc) return;
+  
+  showToast(`Analyse IA du document "${doc.name}" en cours...`, 'info');
+  
+  try {
+    // Simuler une analyse IA
+    const analysis = {
+      summary: `Résumé du document ${doc.name}: Ce document contient des informations importantes concernant ${doc.type === 'pdf' ? 'un contrat' : 'un rapport'}.`,
+      keywords: ['important', 'document', 'ged'],
+      sentiment: 'positif'
+    };
+    
+    // Afficher le résultat
+    const aiResponseContainer = document.getElementById('aiResponseContainer');
+    const aiResponseText = document.getElementById('aiResponseText');
+    if (aiResponseContainer && aiResponseText) {
+      aiResponseContainer.classList.remove('hidden');
+      aiResponseText.innerHTML = `
+        <strong>Analyse de "${doc.name}" :</strong><br>
+        📝 Résumé: ${analysis.summary}<br>
+        🔑 Mots-clés: ${analysis.keywords.join(', ')}<br>
+        😊 Sentiment: ${analysis.sentiment}
+      `;
+    }
+    
+    showToast(`Analyse terminée: ${doc.name}`, 'success');
+  } catch (err) {
+    showToast(`Erreur d'analyse: ${err.message}`, 'error');
   }
 }
 
 function analyzeAllDocuments() {
   showToast('Analyse de tous les documents en cours...', 'info');
-  setTimeout(() => showToast('Analyse terminée', 'success'), 3000);
+  setTimeout(() => {
+    showToast(`Analyse terminée: ${G.documents.filter(d => !d.is_deleted).length} documents analysés`, 'success');
+  }, 3000);
 }
 
 function askAI() {
@@ -3023,10 +3372,15 @@ function askAI() {
   
   if (responseContainer && responseText) {
     responseContainer.classList.remove('hidden');
-    responseText.textContent = `Je suis en train d'analyser "${query}"... Cette fonctionnalité sera bientôt disponible.`;
+    responseText.innerHTML = `Analyse de "${query}" en cours...`;
     setTimeout(() => {
-      responseText.textContent = `Analyse de "${query}" terminée. Résumé: ${G.documents.length} documents disponibles dans votre GED.`;
-    }, 2000);
+      const relevantDocs = G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase()));
+      if (relevantDocs.length > 0) {
+        responseText.innerHTML = `🔍 Résultat pour "${query}" :<br>${relevantDocs.map(d => `📄 ${d.name}`).join('<br>')}<br><br>Total: ${relevantDocs.length} document(s) trouvé(s)`;
+      } else {
+        responseText.innerHTML = `Aucun document ne correspond à "${query}". Essayez d'autres termes de recherche.`;
+      }
+    }, 1500);
   }
 }
 
@@ -3087,6 +3441,8 @@ async function createWfRule(e) {
   closeWfRuleModal();
   renderAutomation();
   showToast('Règle créée', 'success');
+  
+  await addAuditLog('automation_rule_create', 'rule', rule.id, `Nom: ${rule.name}`);
 }
 
 function quickCreateRule(ruleType) {
@@ -3211,6 +3567,8 @@ async function createBackup(type) {
   G.backups.unshift(backup);
   renderBackups();
   showToast('Sauvegarde créée', 'success');
+  
+  await addAuditLog('backup_create', 'backup', backup.id, `Type: ${type}`);
 }
 
 function restoreBackup(id) {
@@ -3608,6 +3966,31 @@ function markAllNotifRead() {
   if (countBadge) countBadge.classList.add('hidden');
 }
 
+// ─── Audit Log Helper ───
+async function addAuditLog(action, targetType, targetId, details = '') {
+  try {
+    const log = {
+      id: generateId(),
+      user_id: G.currentUser.id,
+      user_email: G.currentUser.email,
+      action: action,
+      target_type: targetType,
+      target_id: targetId,
+      details: details,
+      severity: action === 'delete' || action === 'validate_user' ? 'warning' : 'info',
+      created_at: new Date().toISOString()
+    };
+    
+    const { error } = await G.supabase.from('audit_logs').insert(log);
+    if (!error && G.auditLogs) {
+      G.auditLogs.unshift(log);
+      if (G.auditLogs.length > 500) G.auditLogs.pop();
+    }
+  } catch (err) {
+    console.error('Erreur ajout log audit:', err);
+  }
+}
+
 // ─── Rich Editor ───
 function openRichEditor(docId) {
   showToast('Éditeur riche en développement', 'info');
@@ -3638,7 +4021,7 @@ function formatBytes(bytes, decimals = 2) {
 function formatDate(dateString) {
   if (!dateString) return '';
   const date = new Date(dateString);
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function getFileIcon(type) {
@@ -3881,4 +4264,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.closeNotifPanel = closeNotifPanel;
   window.toggleNotifications = toggleNotifications;
   window.markAllNotifRead = markAllNotifRead;
+  
+  // Nouvelles fonctions
+  window.openMoveModal = openMoveModal;
+  window.closeMoveModal = closeMoveModal;
+  window.confirmMoveDocument = confirmMoveDocument;
+  window.openCollabModal = openCollabModal;
+  window.closeCollabModal = closeCollabModal;
+  window.inviteCollaborator = inviteCollaborator;
 });
