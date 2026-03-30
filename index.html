@@ -402,8 +402,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1">Tableau de bord</h2><p id="dashSubtitle" class="text-sm text-blue-300/80">Vue d'ensemble de votre GED</p></div>
         <button onclick="openUploadModal()" class="btn-primary px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold"><i class="fas fa-plus"></i>Nouveau document</button>
-	<input type="file" id="fileInput" style="display:none">     
- </div>
+      </div>
       <div class="stats-grid">
         <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-blue-400/40 cursor-pointer" onclick="switchView('documents')">
           <div class="flex items-center justify-between mb-4"><div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 border border-blue-400/30"><i class="fas fa-file-alt text-2xl"></i></div><span class="text-green-400 text-sm font-bold bg-green-500/10 px-3 py-1 rounded-full" id="docGrowth">+0%</span></div>
@@ -1902,21 +1901,5 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
   </div>
 </div>
 <script src="app.js" defer></script>
-<script>
-
-// 🔥 CONNECTER INPUT FILE À L'UPLOAD
-document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('fileInput');
-
-  if (input) {
-    input.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      uploadFile(file);
-    });
-  }
-});
-</script>
-</body>
-</html>
 </body>
 </html>
