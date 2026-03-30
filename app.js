@@ -408,38 +408,51 @@ function updateStorageDisplay() {
 // ─── Authentification ───
 async function handleLogin(e) {
   e.preventDefault();
+
   const email = document.getElementById('loginEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('loginPassword')?.value;
-  
+
   if (!email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
-  
-  const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
 
-	if (error) throw error;
+  // 🔥 AJOUT IMPORTANT
+  const btn = document.getElementById('loginBtn');
+  const btnText = document.getElementById('loginBtnText');
 
-// 🔥 AJOUT 1 : vérifier session
-	if (!data.session) {
- 	 throw new Error("Session non créée");
-}
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.innerHTML = 'Connexion...';
 
-// 🔥 AJOUT 2 : vérifier utilisateur
-	if (!data.user) {
- 	 throw new Error("Utilisateur introuvable");
-}
+  try {
+    const { data, error } = await G.supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-// ✅ garder ton code
-	await loadUserFromSupabase(data.user);
-	showToast(`Bienvenue ${G.currentUser.name}`, 'success');
-	switchToMainApp();
+    if (error) throw error;
+
+    if (!data.session) {
+      throw new Error("Session non créée");
+    }
+
+    if (!data.user) {
+      throw new Error("Utilisateur introuvable");
+    }
+
+    await loadUserFromSupabase(data.user);
+
+    showToast(`Bienvenue ${G.currentUser.name}`, 'success');
+
+    switchToMainApp();
+
   } catch (err) {
     console.error(err);
-    showToast('Email ou mot de passe incorrect', 'error');
+    showToast(err.message || 'Email ou mot de passe incorrect', 'error');
+
   } finally {
     if (btn) btn.disabled = false;
-    if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
+    if (btnText) btnText.innerHTML = 'Se connecter';
   }
 }
 
@@ -597,7 +610,120 @@ function demoLogin() {
 }
 
 function oauthLogin(provider) {
-  showToast(`Connexion ${provider} en développement`, 'info');
+}
+    if (!file) {
+      showToast('Aucun fichier sélectionné', 'warning');
+      return;
+    }
+async function uploadFile(file) {
+  try {
+    if (!file) {
+      showToast('Aucun fichier sélectionné', 'warning');
+      return;
+    }
+
+    if (file.size > CONFIG.maxFileSize) {
+      showToast('Fichier trop volumineux (max 50MB)', 'error');
+      return;
+    }
+
+    const user = G.currentUser;
+    if (!user) {
+      showToast('Utilisateur non connecté', 'error');
+      return;
+    }
+
+    const filePath = `${user.companyId}/${user.id}/${Date.now()}_${file.name}`;
+
+    const { data, error } = await G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data: publicUrlData } = G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    const { error: dbError } = await G.supabase
+      .from('documents')
+      .insert({
+        name: file.name,
+        path: filePath,
+        url: publicUrl,
+        size: file.size,
+        type: file.type,
+        company_id: user.companyId,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        is_deleted: false,
+        scope: G._uploadScope || 'company'
+      });
+
+    if (dbError) throw dbError;
+
+    showToast('✅ Fichier uploadé avec succès', 'success');
+
+    await loadAllData();
+
+  } catch (err) {
+    console.error(err);
+    showToast('❌ Erreur upload : ' + err.message, 'error');
+  }
+}
+
+    if (file.size > CONFIG.maxFileSize) {
+      showToast('Fichier trop volumineux (max 50MB)', 'error');
+      return;
+    }
+
+    const user = G.currentUser;
+    if (!user) {
+      showToast('Utilisateur non connecté', 'error');
+      return;
+    }
+
+    const filePath = `${user.companyId}/${user.id}/${Date.now()}_${file.name}`;
+
+    const { data, error } = await G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data: publicUrlData } = G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    const { error: dbError } = await G.supabase
+      .from('documents')
+      .insert({
+        name: file.name,
+        path: filePath,
+        url: publicUrl,
+        size: file.size,
+        type: file.type,
+        company_id: user.companyId,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        is_deleted: false,
+        scope: G._uploadScope || 'company'
+      });
+
+    if (dbError) throw dbError;
+
+    showToast('✅ Fichier uploadé avec succès', 'success');
+
+    await loadAllData();
+
+  } catch (err) {
+    console.error(err);
+    showToast('❌ Erreur upload : ' + err.message, 'error');
+  }
 }
 
 // ─── Navigation ───
