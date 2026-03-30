@@ -416,20 +416,24 @@ async function handleLogin(e) {
     return;
   }
   
-  const btn = document.getElementById('loginBtn');
-  const btnText = document.getElementById('loginBtnText');
-  if (btn) btn.disabled = true;
-  if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
+  const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
 
-  try {
-    const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    
-    if (data.user) {
-      await loadUserFromSupabase(data.user);
-      showToast(`Bienvenue ${G.currentUser.name}`, 'success');
-      switchToMainApp();
-    }
+	if (error) throw error;
+
+// 🔥 AJOUT 1 : vérifier session
+	if (!data.session) {
+ 	 throw new Error("Session non créée");
+}
+
+// 🔥 AJOUT 2 : vérifier utilisateur
+	if (!data.user) {
+ 	 throw new Error("Utilisateur introuvable");
+}
+
+// ✅ garder ton code
+	await loadUserFromSupabase(data.user);
+	showToast(`Bienvenue ${G.currentUser.name}`, 'success');
+	switchToMainApp();
   } catch (err) {
     console.error(err);
     showToast('Email ou mot de passe incorrect', 'error');
@@ -479,29 +483,35 @@ async function handleRegister(e) {
     if (compErr) throw compErr;
 
     const { data, error } = await G.supabase.auth.signUp({
-      email,
-      password,
-      options: { 
-        data: { 
-          name: `${firstName} ${lastName}`, 
-          company_id: companyId 
-        } 
-      }
-    });
-    if (error) throw error;
+  email,
+  password
+});
 
-    const { error: profErr } = await G.supabase
-      .from('profiles')
-      .insert({
-        id: data.user.id,
-        email,
-        name: `${firstName} ${lastName}`,
-        role: 'admin',
-        status: 'pending_validation',
-        company_id: companyId,
-        plan: 'free'
-      });
-    if (profErr) throw profErr;
+if (error) throw error;
+
+// ⚠️ Vérifier que l'utilisateur est bien créé
+if (!data.user) {
+  throw new Error("Utilisateur non créé");
+}
+
+// ✅ Création du profil
+const { error: profErr } = await G.supabase
+  .from('profiles')
+  .insert({
+    id: data.user.id,
+    email,
+    name: `${firstName} ${lastName}`,
+    role: 'admin',
+    status: 'active', // ✅ IMPORTANT (corrigé)
+    company_id: companyId,
+    plan: 'free'
+  });
+
+if (profErr) throw profErr;
+
+    // 🔥 AUTO LOGIN après inscription
+await loadUserFromSupabase(data.user);
+switchToMainApp();
 
     const rootFolderId = `${companyId}_root`;
     const { error: folderErr } = await G.supabase
