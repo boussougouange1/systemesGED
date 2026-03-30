@@ -436,7 +436,9 @@ async function handleLogin(e) {
 	switchToMainApp();
   } catch (err) {
     console.error(err);
-    showToast('Email ou mot de passe incorrect', 'error');
+
+    // 🔥 MEILLEUR MESSAGE
+    showToast(err.message || 'Email ou mot de passe incorrect', 'error');
   } finally {
     if (btn) btn.disabled = false;
     if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
@@ -597,7 +599,63 @@ function demoLogin() {
 }
 
 function oauthLogin(provider) {
-  showToast(`Connexion ${provider} en développement`, 'info');
+ async function uploadFile(file) {
+  try {
+    if (!file) {
+      showToast('Aucun fichier sélectionné', 'warning');
+      return;
+    }
+
+    if (file.size > CONFIG.maxFileSize) {
+      showToast('Fichier trop volumineux (max 50MB)', 'error');
+      return;
+    }
+
+    const user = G.currentUser;
+    if (!user) {
+      showToast('Utilisateur non connecté', 'error');
+      return;
+    }
+
+    const filePath = `${user.companyId}/${user.id}/${Date.now()}_${file.name}`;
+
+    const { data, error } = await G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data: publicUrlData } = G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    const { error: dbError } = await G.supabase
+      .from('documents')
+      .insert({
+        name: file.name,
+        path: filePath,
+        url: publicUrl,
+        size: file.size,
+        type: file.type,
+        company_id: user.companyId,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        is_deleted: false,
+        scope: G._uploadScope || 'company'
+      });
+
+    if (dbError) throw dbError;
+
+    showToast('✅ Fichier uploadé avec succès', 'success');
+
+    await loadAllData();
+
+  } catch (err) {
+    console.error(err);
+    showToast('❌ Erreur upload : ' + err.message, 'error');
+  }
 }
 
 // ─── Navigation ───
