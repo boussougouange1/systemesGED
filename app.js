@@ -408,40 +408,51 @@ function updateStorageDisplay() {
 // ─── Authentification ───
 async function handleLogin(e) {
   e.preventDefault();
+
   const email = document.getElementById('loginEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('loginPassword')?.value;
-  
+
   if (!email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
-  
-  const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
 
-	if (error) throw error;
+  // 🔥 AJOUT IMPORTANT
+  const btn = document.getElementById('loginBtn');
+  const btnText = document.getElementById('loginBtnText');
 
-// 🔥 AJOUT 1 : vérifier session
-	if (!data.session) {
- 	 throw new Error("Session non créée");
-}
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.innerHTML = 'Connexion...';
 
-// 🔥 AJOUT 2 : vérifier utilisateur
-	if (!data.user) {
- 	 throw new Error("Utilisateur introuvable");
-}
+  try {
+    const { data, error } = await G.supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-// ✅ garder ton code
-	await loadUserFromSupabase(data.user);
-	showToast(`Bienvenue ${G.currentUser.name}`, 'success');
-	switchToMainApp();
+    if (error) throw error;
+
+    if (!data.session) {
+      throw new Error("Session non créée");
+    }
+
+    if (!data.user) {
+      throw new Error("Utilisateur introuvable");
+    }
+
+    await loadUserFromSupabase(data.user);
+
+    showToast(`Bienvenue ${G.currentUser.name}`, 'success');
+
+    switchToMainApp();
+
   } catch (err) {
     console.error(err);
-
-    // 🔥 MEILLEUR MESSAGE
     showToast(err.message || 'Email ou mot de passe incorrect', 'error');
+
   } finally {
     if (btn) btn.disabled = false;
-    if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
+    if (btnText) btnText.innerHTML = 'Se connecter';
   }
 }
 
