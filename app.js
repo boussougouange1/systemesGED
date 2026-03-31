@@ -1493,171 +1493,52 @@ function setDocScope(scope) {
 
 // ─── Preview et téléchargement ───
 function openPreviewModal(docId) {
-  console.log('👁️ Ouverture de l\'aperçu pour:', docId);
   G.currentDocId = docId;
-  
   const modal = document.getElementById('previewModal');
   if (modal) modal.classList.remove('hidden');
   
   const doc = G.documents.find(d => d.id === docId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
+  if (!doc) return;
   
   const titleEl = document.getElementById('previewTitle');
   if (titleEl) titleEl.textContent = doc.name;
   
-  // Mettre à jour les métadonnées dans le modal
-  updatePreviewMetadata(doc);
-  
   const fileUrl = doc.file_url;
   const fileType = doc.type;
-  const fileName = doc.name;
-  const fileExt = fileName.split('.').pop().toLowerCase();
-  
   const previewFrame = document.getElementById('previewFrame');
   const previewImage = document.getElementById('previewImage');
   const previewContent = document.getElementById('previewContent');
-  const previewOffice = document.getElementById('previewOffice');
-  const previewUnsupported = document.getElementById('previewUnsupported');
   
-  // Cacher tous les conteneurs
-  if (previewFrame) previewFrame.classList.add('hidden');
-  if (previewImage) previewImage.classList.add('hidden');
-  if (previewContent) previewContent.classList.add('hidden');
-  if (previewOffice) previewOffice.classList.add('hidden');
-  if (previewUnsupported) previewUnsupported.classList.add('hidden');
-  
-  // Types de fichiers supportés pour l'aperçu direct
-  const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
-  const pdfTypes = ['pdf'];
-  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
-  const textTypes = ['txt', 'json', 'xml', 'html', 'css', 'js', 'md'];
-  
-  try {
-    if (imageTypes.includes(fileExt)) {
-      // Aperçu image
-      if (previewImage) {
-        previewImage.src = fileUrl;
-        previewImage.classList.remove('hidden');
-        previewImage.onload = () => console.log('✅ Image chargée');
-        previewImage.onerror = () => {
-          console.error('Erreur chargement image');
-          showUnsupportedPreview(doc);
-        };
-      }
-    } 
-    else if (pdfTypes.includes(fileExt)) {
-      // Aperçu PDF avec iframe
-      if (previewFrame) {
-        // Utiliser le viewer PDF de Google pour une meilleure compatibilité
-        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
-        previewFrame.src = viewerUrl;
-        previewFrame.classList.remove('hidden');
-        previewFrame.onload = () => console.log('✅ PDF chargé');
-        previewFrame.onerror = () => {
-          // Fallback: afficher le PDF directement
-          previewFrame.src = fileUrl;
-        };
-      }
+  if (fileType === 'pdf') {
+    if (previewFrame) {
+      previewFrame.src = fileUrl;
+      previewFrame.classList.remove('hidden');
+      previewFrame.onload = () => {
+        console.log('PDF chargé avec succès');
+      };
     }
-    else if (officeTypes.includes(fileExt)) {
-      // Aperçu Office avec Microsoft Online Viewer
-      if (previewOffice) {
-        const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
-        previewOffice.src = viewerUrl;
-        previewOffice.classList.remove('hidden');
-        previewOffice.onload = () => console.log('✅ Document Office chargé');
-        previewOffice.onerror = () => {
-          showUnsupportedPreview(doc);
-        };
-      }
+    if (previewImage) previewImage.classList.add('hidden');
+    if (previewContent) previewContent.classList.add('hidden');
+  } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
+    if (previewImage) {
+      previewImage.src = fileUrl;
+      previewImage.classList.remove('hidden');
+      previewImage.onload = () => {
+        console.log('Image chargée avec succès');
+      };
     }
-    else if (textTypes.includes(fileExt)) {
-      // Aperçu texte avec lecture du contenu
-      previewContent.classList.remove('hidden');
-      const contentEl = document.getElementById('previewTextContent');
-      if (contentEl) {
-        contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i><p class="mt-2">Chargement du contenu...</p></div>';
-        
-        try {
-          const response = await fetch(fileUrl);
-          const text = await response.text();
-          contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap overflow-auto max-h-[60vh] p-4 bg-slate-900/50 rounded-lg">${escapeHtml(text.substring(0, 50000))}${text.length > 50000 ? '\n\n... (fichier tronqué, 50000 caractères max)' : ''}</pre>`;
-        } catch (err) {
-          contentEl.innerHTML = `<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-2 block"></i><p>Impossible de lire le contenu du fichier</p><button onclick="downloadDocument('${doc.id}')" class="mt-3 btn-primary px-4 py-2 rounded-lg text-sm">Télécharger pour lire</button></div>`;
-        }
-      }
-    }
-    else {
-      // Type non supporté
-      showUnsupportedPreview(doc);
-    }
-  } catch (err) {
-    console.error('Erreur aperçu:', err);
-    showUnsupportedPreview(doc);
+    if (previewFrame) previewFrame.classList.add('hidden');
+    if (previewContent) previewContent.classList.add('hidden');
+  } else {
+    if (previewFrame) previewFrame.classList.add('hidden');
+    if (previewImage) previewImage.classList.add('hidden');
+    if (previewContent) previewContent.classList.remove('hidden');
   }
   
   // Incrémenter le compteur de vues
   updateDocViews(docId);
 }
 
-function showUnsupportedPreview(doc) {
-  const previewUnsupported = document.getElementById('previewUnsupported');
-  if (previewUnsupported) {
-    previewUnsupported.classList.remove('hidden');
-    const unsupportedInfo = document.getElementById('unsupportedFileInfo');
-    if (unsupportedInfo) {
-      unsupportedInfo.innerHTML = `
-        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-4 block text-blue-400"></i>
-        <p class="text-white font-medium">${escapeHtml(doc.name)}</p>
-        <p class="text-sm text-blue-300/60 mt-1">${formatBytes(doc.size)} • ${doc.type?.toUpperCase() || 'Fichier'}</p>
-        <p class="text-xs text-blue-400/50 mt-3">Aperçu non disponible pour ce type de fichier</p>
-        <div class="flex gap-3 mt-4 justify-center">
-          <button onclick="downloadDocument('${doc.id}')" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-            <i class="fas fa-download"></i>Télécharger
-          </button>
-          <button onclick="copyFileLink('${doc.id}')" class="px-4 py-2 rounded-lg text-sm border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-2">
-            <i class="fas fa-link"></i>Copier le lien
-          </button>
-        </div>
-      `;
-    }
-  }
-}
-
-function updatePreviewMetadata(doc) {
-  const metaContainer = document.getElementById('previewMetadata');
-  if (metaContainer) {
-    metaContainer.innerHTML = `
-      <div class="flex items-center gap-4 text-xs text-blue-300/60">
-        <span><i class="fas fa-code-branch mr-1"></i>Version ${doc.version || 1}</span>
-        <span><i class="fas fa-eye mr-1"></i>${doc.views || 0} vues</span>
-        <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0} téléchargements</span>
-        <span><i class="fas fa-calendar-alt mr-1"></i>${formatDate(doc.created_at)}</span>
-        ${doc.owner_id === G.currentUser.id ? '<span class="text-green-400"><i class="fas fa-user-check mr-1"></i>Propriétaire</span>' : ''}
-      </div>
-    `;
-  }
-}
-
-function copyFileLink(docId) {
-  const doc = G.documents.find(d => d.id === docId);
-  if (doc && doc.file_url) {
-    navigator.clipboard.writeText(doc.file_url);
-    showToast('Lien du fichier copié', 'success');
-  }
-}
-function showPreviewLoading() {
-  const loadingEl = document.getElementById('previewLoading');
-  if (loadingEl) loadingEl.classList.remove('hidden');
-}
-
-function hidePreviewLoading() {
-  const loadingEl = document.getElementById('previewLoading');
-  if (loadingEl) loadingEl.classList.add('hidden');
-}
 async function updateDocViews(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (doc) {
@@ -1897,43 +1778,13 @@ async function inviteCollaborator() {
 
 // ─── Partages ───
 function openShareModal(docId) {
-  console.log('📤 Ouverture du modal de partage pour:', docId);
   G.currentDocId = docId;
-  
   const modal = document.getElementById('shareModal');
   if (modal) modal.classList.remove('hidden');
   
   const doc = G.documents.find(d => d.id === docId);
   const docInfo = document.getElementById('shareDocInfo');
-  const shareDocName = document.getElementById('shareDocName');
-  
-  if (docInfo && doc) {
-    docInfo.textContent = doc.name;
-  }
-  if (shareDocName && doc) {
-    shareDocName.textContent = doc.name;
-  }
-  
-  // Réinitialiser le formulaire
-  const emailInput = document.getElementById('shareEmail');
-  const messageInput = document.getElementById('shareMessage');
-  const permissionSelect = document.getElementById('sharePermission');
-  const expirationSelect = document.getElementById('shareExpiration');
-  const generatedLinkDiv = document.getElementById('generatedLink');
-  const shareLinkInput = document.getElementById('shareLinkInput');
-  
-  if (emailInput) emailInput.value = '';
-  if (messageInput) messageInput.value = '';
-  if (permissionSelect) permissionSelect.value = 'view';
-  if (expirationSelect) expirationSelect.value = '7';
-  if (generatedLinkDiv) generatedLinkDiv.classList.add('hidden');
-  if (shareLinkInput) shareLinkInput.value = '';
-  
-  // Charger l'historique des partages pour ce document
-  loadShareHistory();
-  
-  // Mettre à jour l'onglet actif
-  switchShareTab('send');
+  if (docInfo && doc) docInfo.textContent = doc.name;
 }
 
 function closeShareModal() {
@@ -1963,141 +1814,59 @@ function switchShareTab(tab) {
 }
 
 async function shareDocument() {
-  const email = document.getElementById('shareEmail')?.value.trim();
-  const permission = document.getElementById('sharePermission')?.value || 'view';
-  const message = document.getElementById('shareMessage')?.value;
-  const expirationDays = parseInt(document.getElementById('shareExpiration')?.value);
-  
+  const email = document.getElementById('shareEmail')?.value;
   if (!email) {
     showToast('Veuillez entrer un email', 'warning');
     return;
   }
   
-  if (!G.currentDocId) {
-    showToast('Aucun document sélectionné', 'error');
-    return;
-  }
-  
-  const doc = G.documents.find(d => d.id === G.currentDocId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  // Vérifier si l'utilisateur existe dans la même entreprise
   const { data: targetUser, error: userError } = await G.supabase
     .from('profiles')
-    .select('id, email, name')
+    .select('id, company_id')
     .eq('email', email)
     .single();
   
-  if (userError || !targetUser) {
-    showToast('Utilisateur non trouvé dans votre entreprise', 'error');
+  if (userError || !targetUser || targetUser.company_id !== G.currentUser.companyId) {
+    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
     return;
   }
   
-  // Vérifier si l'utilisateur n'est pas déjà le propriétaire
-  if (targetUser.id === G.currentUser.id) {
-    showToast('Vous ne pouvez pas partager un document avec vous-même', 'warning');
-    return;
-  }
-  
-  // Vérifier si le partage existe déjà
-  const existingShare = G.shares.find(s => 
-    s.document_id === G.currentDocId && 
-    s.recipient_email === email && 
-    s.status === 'active'
-  );
-  
-  if (existingShare) {
-    showToast('Ce document est déjà partagé avec cet utilisateur', 'warning');
-    return;
-  }
-  
-  // Calculer la date d'expiration
-  let expiresAt = null;
-  if (expirationDays && expirationDays > 0) {
-    expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + expirationDays);
-  }
-  
-  // Créer le partage
   const share = {
     id: generateId(),
     document_id: G.currentDocId,
     sender_id: G.currentUser.id,
     recipient_email: email,
-    recipient_id: targetUser.id,
-    permission: permission,
-    expires_at: expiresAt ? expiresAt.toISOString() : null,
-    message: message || null,
+    permission: document.getElementById('sharePermission')?.value || 'view',
+    expires_at: null,
     status: 'active',
     created_at: new Date().toISOString()
   };
   
   const { error } = await G.supabase.from('shares').insert(share);
   if (error) {
-    console.error('Erreur partage:', error);
-    showToast('Erreur lors du partage: ' + error.message, 'error');
+    showToast('Erreur partage', 'error');
     return;
   }
   
   G.shares.push(share);
-  
-  // Afficher le message de succès avec détails
-  const expirationMsg = expiresAt ? ` (expire le ${formatDate(expiresAt)})` : '';
-  showToast(`Document partagé avec ${email}${expirationMsg}`, 'success');
-  
-  // Ajouter un log d'audit
-  await addAuditLog('share', 'document', G.currentDocId, `Partagé avec ${email} (${permission})`);
-  
-  // Réinitialiser le formulaire
-  document.getElementById('shareEmail').value = '';
-  document.getElementById('shareMessage').value = '';
-  
+  showToast('Document partagé avec succès', 'success');
   closeShareModal();
   updateBadges();
-  renderShared();
   
-  // Notifier l'utilisateur (simulé)
-  console.log(`📧 Notification envoyée à ${email}: ${doc.name} partagé avec vous`);
+  await addAuditLog('share', 'document', G.currentDocId, `Partagé avec ${email}`);
 }
 
 async function revokeShare(shareId) {
-  if (!confirm('Êtes-vous sûr de vouloir révoquer ce partage ? L\'utilisateur n\'aura plus accès au document.')) {
-    return;
-  }
-  
   const { error } = await G.supabase
     .from('shares')
-    .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+    .update({ status: 'revoked' })
     .eq('id', shareId);
-  
   if (error) {
-    console.error('Erreur révocation:', error);
-    showToast('Erreur lors de la révocation', 'error');
-    return;
-  }
-  
-  // Mettre à jour la liste locale
-  const share = G.shares.find(s => s.id === shareId);
-  if (share) {
-    share.status = 'revoked';
-  }
-  
-  showToast('Partage révoqué avec succès', 'success');
-  
-  // Ajouter un log d'audit
-  await addAuditLog('share_revoke', 'share', shareId);
-  
-  // Recharger l'affichage
-  if (G.sharedTab === 'sent') {
-    renderShared();
+    showToast('Erreur révocation', 'error');
   } else {
+    showToast('Partage révoqué', 'success');
     loadShareHistory();
   }
-  
-  updateBadges();
 }
 
 async function loadShareHistory() {
@@ -2125,52 +1894,6 @@ async function loadShareHistory() {
     }
   }
 }
-async function loadShareHistory() {
-  const { data: shares, error } = await G.supabase
-    .from('shares')
-    .select('*, documents!document_id(name)')
-    .eq('document_id', G.currentDocId);
-  
-  if (error) return;
-  
-  const historyContainer = document.getElementById('shareHistoryList');
-  if (historyContainer) {
-    if (shares.length === 0) {
-      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucun historique</p>';
-    } else {
-      historyContainer.innerHTML = shares.map(s => `
-        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50">
-          <div>
-            <p class="text-white text-sm">Partagé avec: ${s.recipient_email}</p>
-            <p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>
-          </div>
-          ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded">Révoquer</button>` : ''}
-        </div>
-      `).join('');
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AJOUTER ICI LA NOUVELLE FONCTION
-// ═══════════════════════════════════════════════════════════════
-function openShareHistory(docId) {
-  console.log('📜 Ouverture de l\'historique des partages pour:', docId);
-  G.currentDocId = docId;
-  const modal = document.getElementById('shareModal');
-  if (modal) modal.classList.remove('hidden');
-  
-  const doc = G.documents.find(d => d.id === docId);
-  const docInfo = document.getElementById('shareDocInfo');
-  if (docInfo && doc) docInfo.textContent = doc.name;
-  
-  // Charger l'historique
-  loadShareHistory();
-  
-  // Passer directement à l'onglet historique
-  switchShareTab('history');
-}
-// ═══════════════════════════════════════════════════════════════
 
 function switchSharedTab(tab) {
   G.sharedTab = tab;
@@ -2195,51 +1918,7 @@ function switchSharedTab(tab) {
   renderShared();
 }
 
-function switchSharedTab(tab) {
-  console.log('🔄 Changement d\'onglet partages:', tab);
-  G.sharedTab = tab;
-  
-  const receivedPanel = document.getElementById('shared-received');
-  const sentPanel = document.getElementById('shared-sent');
-  const tabReceived = document.getElementById('tab-received');
-  const tabSent = document.getElementById('tab-sent');
-  
-  if (receivedPanel && sentPanel) {
-    if (tab === 'received') {
-      receivedPanel.classList.remove('hidden');
-      sentPanel.classList.add('hidden');
-      if (tabReceived) {
-        tabReceived.classList.add('border-blue-400', 'text-blue-400');
-        tabReceived.classList.remove('border-transparent', 'text-gray-400');
-      }
-      if (tabSent) {
-        tabSent.classList.remove('border-blue-400', 'text-blue-400');
-        tabSent.classList.add('border-transparent', 'text-gray-400');
-      }
-    } else {
-      receivedPanel.classList.add('hidden');
-      sentPanel.classList.remove('hidden');
-      if (tabSent) {
-        tabSent.classList.add('border-blue-400', 'text-blue-400');
-        tabSent.classList.remove('border-transparent', 'text-gray-400');
-      }
-      if (tabReceived) {
-        tabReceived.classList.remove('border-blue-400', 'text-blue-400');
-        tabReceived.classList.add('border-transparent', 'text-gray-400');
-      }
-    }
-  }
-  
-  // Recharger l'affichage
-  renderShared();
-  
-  // Mettre à jour les badges
-  updateBadges();
-}
-
 function renderShared() {
-  console.log('🔄 Rendu des partages, tab:', G.sharedTab);
-  
   const receivedContainer = document.getElementById('sharedList');
   const sentContainer = document.getElementById('sentSharesList');
   const sharedEmptyState = document.getElementById('sharedEmptyState');
@@ -2247,253 +1926,75 @@ function renderShared() {
   
   if (G.sharedTab === 'received') {
     if (!receivedContainer) return;
-    
-    // Récupérer les partages reçus actifs
-    const received = G.shares.filter(s => 
-      s.recipient_email === G.currentUser.email && 
-      s.status === 'active'
-    );
-    
-    console.log(`📥 ${received.length} partage(s) reçu(s)`);
+    const received = G.shares.filter(s => s.recipient_email === G.currentUser.email && s.status === 'active');
     
     if (received.length === 0) {
       if (sharedEmptyState) sharedEmptyState.classList.remove('hidden');
       if (receivedContainer) receivedContainer.classList.add('hidden');
-      if (sentEmptyState) sentEmptyState.classList.add('hidden');
       return;
     }
     
     if (sharedEmptyState) sharedEmptyState.classList.add('hidden');
     receivedContainer.classList.remove('hidden');
-    
-    receivedContainer.innerHTML = received.map(s => {
-      const doc = G.documents.find(d => d.id === s.document_id);
-      const sender = G.users.find(u => u.id === s.sender_id);
-      const fileIcon = getFileIcon(doc?.type || 'unknown');
-      
-      return `
-        <div class="glass-card rounded-xl p-4 border border-purple-500/20 hover:border-purple-400/40 transition-all cursor-pointer group" 
-             onclick="openPreviewModal('${s.document_id}')">
-          <div class="flex items-start gap-3">
-            <!-- Icône du document -->
-            <div class="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center flex-shrink-0 ${fileIcon.split(' ')[1] || 'text-purple-400'}">
-              <i class="fas ${fileIcon.split(' ')[0]} text-xl"></i>
-            </div>
-            
-            <!-- Informations -->
-            <div class="flex-1 min-w-0">
-              <p class="text-white font-medium truncate" title="${escapeHtml(doc?.name || 'Document inconnu')}">
-                ${escapeHtml(doc?.name || 'Document inconnu')}
-              </p>
-              <div class="flex items-center gap-2 mt-1 flex-wrap">
-                <span class="text-xs text-purple-400/80">
-                  <i class="fas fa-user mr-1"></i>${sender?.name || s.sender_id?.substring(0, 8) || 'Utilisateur'}
-                </span>
-                <span class="text-blue-300/40">•</span>
-                <span class="text-xs text-blue-300/60">
-                  <i class="fas fa-calendar-alt mr-1"></i>${formatDate(s.created_at)}
-                </span>
-                <span class="text-blue-300/40">•</span>
-                <span class="text-xs px-2 py-0.5 rounded-full ${getPermissionBadgeClass(s.permission)}">
-                  ${getPermissionLabel(s.permission)}
-                </span>
-              </div>
-              ${doc ? `<p class="text-xs text-blue-400/50 mt-1">${formatBytes(doc.size)} • ${doc.type?.toUpperCase() || 'Fichier'}</p>` : ''}
-            </div>
-            
-            <!-- Actions -->
-            <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onclick="event.stopPropagation(); downloadDocument('${s.document_id}')" 
-                      class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400" 
-                      title="Télécharger">
-                <i class="fas fa-download"></i>
-              </button>
-              ${s.permission === 'edit' ? `
-              <button onclick="event.stopPropagation(); openPreviewModal('${s.document_id}')" 
-                      class="p-2 rounded-lg hover:bg-green-500/20 text-green-400" 
-                      title="Éditer">
-                <i class="fas fa-edit"></i>
-              </button>
-              ` : ''}
-            </div>
-          </div>
+    receivedContainer.innerHTML = received.map(s => `
+      <div class="glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="openPreviewModal('${s.document_id}')">
+        <div class="flex items-center gap-3">
+          <i class="fas fa-share-alt text-purple-400"></i>
+          <div><p class="text-white font-medium">${s.documents?.name || 'Document'}</p><p class="text-xs text-blue-300/60">Partagé par: ${s.sender_id}</p></div>
         </div>
-      `;
-    }).join('');
-    
+      </div>
+    `).join('');
   } else {
     if (!sentContainer) return;
-    
-    // Récupérer les partages envoyés
     const sent = G.shares.filter(s => s.sender_id === G.currentUser.id);
-    
-    console.log(`📤 ${sent.length} partage(s) envoyé(s)`);
     
     if (sent.length === 0) {
       if (sentEmptyState) sentEmptyState.classList.remove('hidden');
       if (sentContainer) sentContainer.classList.add('hidden');
-      if (sharedEmptyState) sharedEmptyState.classList.add('hidden');
       return;
     }
     
     if (sentEmptyState) sentEmptyState.classList.add('hidden');
     sentContainer.classList.remove('hidden');
-    
-    sentContainer.innerHTML = sent.map(s => {
-      const doc = G.documents.find(d => d.id === s.document_id);
-      const fileIcon = getFileIcon(doc?.type || 'unknown');
-      const isActive = s.status === 'active';
-      const isExpired = s.expires_at && new Date(s.expires_at) < new Date();
-      
-      return `
-        <div class="glass-card rounded-xl p-4 border ${isActive ? 'border-blue-500/20' : 'border-gray-500/20'} hover:border-blue-400/40 transition-all group">
-          <div class="flex items-start gap-3">
-            <!-- Icône du document -->
-            <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0 ${fileIcon.split(' ')[1] || 'text-blue-400'}">
-              <i class="fas ${fileIcon.split(' ')[0]} text-xl"></i>
-            </div>
-            
-            <!-- Informations -->
-            <div class="flex-1 min-w-0">
-              <p class="text-white font-medium truncate" title="${escapeHtml(doc?.name || 'Document inconnu')}">
-                ${escapeHtml(doc?.name || 'Document inconnu')}
-              </p>
-              <div class="flex items-center gap-2 mt-1 flex-wrap">
-                <span class="text-xs text-blue-400/80">
-                  <i class="fas fa-envelope mr-1"></i>${s.recipient_email}
-                </span>
-                <span class="text-blue-300/40">•</span>
-                <span class="text-xs text-blue-300/60">
-                  <i class="fas fa-calendar-alt mr-1"></i>${formatDate(s.created_at)}
-                </span>
-                ${s.expires_at ? `
-                <span class="text-blue-300/40">•</span>
-                <span class="text-xs ${isExpired ? 'text-red-400/60' : 'text-yellow-400/60'}">
-                  <i class="fas fa-clock mr-1"></i>Expire le ${formatDate(s.expires_at)}
-                </span>
-                ` : ''}
-              </div>
-              <div class="flex items-center gap-2 mt-1">
-                <span class="text-xs px-2 py-0.5 rounded-full ${getStatusBadgeClass(s.status)}">
-                  ${getStatusLabel(s.status)}
-                </span>
-                <span class="text-xs px-2 py-0.5 rounded-full ${getPermissionBadgeClass(s.permission)}">
-                  ${getPermissionLabel(s.permission)}
-                </span>
-              </div>
-            </div>
-            
-            <!-- Actions -->
-            <div class="flex gap-1">
-              ${isActive && !isExpired ? `
-              <button onclick="event.stopPropagation(); revokeShare('${s.id}')" 
-                      class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors" 
-                      title="Révoquer l'accès">
-                <i class="fas fa-ban"></i>
-              </button>
-              ` : ''}
-              <button onclick="event.stopPropagation(); openShareHistory('${s.document_id}')" 
-                      class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-colors" 
-                      title="Historique des partages">
-                <i class="fas fa-history"></i>
-              </button>
-            </div>
+    sentContainer.innerHTML = sent.map(s => `
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+        <div class="flex items-center justify-between">
+          <div><p class="text-white font-medium">${s.documents?.name || 'Document'}</p><p class="text-xs text-blue-300/60">À: ${s.recipient_email}</p></div>
+          <div class="flex gap-2">
+            <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
+            ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="text-xs text-red-400 hover:text-red-300"><i class="fas fa-ban"></i></button>` : ''}
           </div>
         </div>
-      `;
-    }).join('');
+      </div>
+    `).join('');
   }
-  
-  // Mettre à jour les badges
-  updateBadges();
-}
-
-function getPermissionLabel(permission) {
-  const labels = {
-    view: '👁 Lecture seule',
-    download: '⬇ Téléchargement',
-    edit: '✏ Modification'
-  };
-  return labels[permission] || permission;
-}
-
-function getPermissionBadgeClass(permission) {
-  const classes = {
-    view: 'bg-blue-500/20 text-blue-300',
-    download: 'bg-green-500/20 text-green-300',
-    edit: 'bg-orange-500/20 text-orange-300'
-  };
-  return classes[permission] || 'bg-gray-500/20 text-gray-300';
-}
-
-function getStatusBadgeClass(status) {
-  const classes = {
-    active: 'bg-green-500/20 text-green-400',
-    revoked: 'bg-red-500/20 text-red-400',
-    expired: 'bg-gray-500/20 text-gray-400'
-  };
-  return classes[status] || 'bg-gray-500/20 text-gray-300';
-}
-
-function getStatusLabel(status) {
-  const labels = {
-    active: 'Actif',
-    revoked: 'Révoqué',
-    expired: 'Expiré'
-  };
-  return labels[status] || status;
 }
 
 async function generatePublicLink(docId, expiresInDays = 7) {
-  if (!docId) {
-    showToast('Aucun document sélectionné', 'warning');
-    return;
-  }
-  
   try {
-    const token = generateId() + generateId().substring(0, 16);
+    const token = generateId();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expiresInDays);
     
-    const publicShare = {
-      id: generateId(),
+    const { error } = await G.supabase.from('public_shares').insert({
       document_id: docId,
       token: token,
       expires_at: expiresAt.toISOString(),
-      created_by: G.currentUser.id,
-      created_at: new Date().toISOString(),
-      access_count: 0
-    };
-    
-    const { error } = await G.supabase.from('public_shares').insert(publicShare);
-    if (error) {
-      console.error('Erreur création lien public:', error);
-      showToast('Erreur lors de la génération du lien', 'error');
-      return;
-    }
+      created_by: G.currentUser.id
+    });
+    if (error) throw error;
     
     const shareUrl = `${window.location.origin}/public/${token}`;
     const linkInput = document.getElementById('shareLinkInput');
     const generatedLinkDiv = document.getElementById('generatedLink');
     
-    if (linkInput) {
-      linkInput.value = shareUrl;
-      linkInput.select();
-    }
-    if (generatedLinkDiv) {
-      generatedLinkDiv.classList.remove('hidden');
-    }
+    if (linkInput) linkInput.value = shareUrl;
+    if (generatedLinkDiv) generatedLinkDiv.classList.remove('hidden');
     
-    // Afficher les détails
-    const expirationText = expiresInDays === 0 ? 'illimitée' : `${expiresInDays} jours`;
-    showToast(`Lien public généré (expiration: ${expirationText})`, 'success');
-    
-    // Ajouter un log d'audit
-    await addAuditLog('public_link_create', 'document', docId, `Lien public créé, expire dans ${expirationText}`);
-    
+    showToast(`Lien public généré`, 'success');
     return shareUrl;
   } catch (err) {
-    console.error('Erreur:', err);
+    console.error(err);
     showToast('Erreur lors de la génération du lien', 'error');
   }
 }
@@ -3966,169 +3467,87 @@ function getSigStatusClass(status) {
   return classes[status] || 'bg-gray-500/20 text-gray-300';
 }
 
-// ─── Signature électronique moderne ───
-let signaturePad = null;
-let signatureCanvas = null;
-
 function openSignModal() {
   if (!G.currentDocId) {
-    showToast('Veuillez d\'abord ouvrir un document', 'warning');
+    showToast('Veuillez ouvrir un document d\'abord', 'warning');
     return;
   }
-  
-  const doc = G.documents.find(d => d.id === G.currentDocId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
   const modal = document.getElementById('signatureModal');
   if (modal) modal.classList.remove('hidden');
-  
-  // Mettre à jour les informations du document
-  const signDocName = document.getElementById('signDocName');
-  if (signDocName) signDocName.textContent = doc.name;
-  
-  const signDocInfo = document.getElementById('signDocInfo');
-  if (signDocInfo) {
-    signDocInfo.innerHTML = `
-      <span class="text-xs text-blue-300/60">${formatBytes(doc.size)}</span>
-      <span class="text-blue-300/40">•</span>
-      <span class="text-xs text-blue-300/60">Version ${doc.version || 1}</span>
-    `;
-  }
-  
-  // Réinitialiser le canvas
   initSignatureCanvas();
-  
-  // Afficher les signatures existantes
-  loadExistingSignatures(doc.id);
 }
 
-function loadExistingSignatures(docId) {
-  const existingSignatures = G.signatures.filter(s => s.document_id === docId);
-  const container = document.getElementById('existingSignatures');
-  
-  if (container) {
-    if (existingSignatures.length === 0) {
-      container.classList.add('hidden');
-    } else {
-      container.classList.remove('hidden');
-      container.innerHTML = `
-        <p class="text-xs text-blue-300/60 mb-2 flex items-center gap-2">
-          <i class="fas fa-check-circle text-green-400"></i>
-          ${existingSignatures.length} signature(s) existante(s)
-        </p>
-        <div class="flex flex-wrap gap-2">
-          ${existingSignatures.map(sig => `
-            <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 border border-green-500/20">
-              <i class="fas fa-signature text-green-400 text-sm"></i>
-              <div>
-                <p class="text-xs text-white">${sig.signer_email || sig.signer_id?.substring(0, 8)}</p>
-                <p class="text-[10px] text-blue-300/50">${formatDate(sig.signed_at || sig.created_at)}</p>
-              </div>
-              <button onclick="viewSignature('${sig.id}')" class="text-blue-400 hover:text-blue-300">
-                <i class="fas fa-eye text-xs"></i>
-              </button>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-  }
+function closeSignModal() {
+  const modal = document.getElementById('signatureModal');
+  if (modal) modal.classList.add('hidden');
 }
 
 function initSignatureCanvas() {
   const canvas = document.getElementById('signatureCanvas');
   if (!canvas) return;
   
-  signatureCanvas = canvas;
-  
-  // Ajuster la taille du canvas
-  const container = canvas.parentElement;
-  const width = container.clientWidth - 32;
-  canvas.width = width;
-  canvas.height = 200;
-  
+  canvas.width = canvas.offsetWidth;
+  canvas.height = 180;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0f172a';
+  ctx.fillStyle = 'rgba(8,15,40,0.8)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = '#60a5fa';
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
   
   let drawing = false;
-  let lastX = 0, lastY = 0;
   
-  function getCoordinates(e) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    let clientX, clientY;
-    if (e.touches) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-    return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
-  }
-  
-  function startDrawing(e) {
-    e.preventDefault();
+  canvas.addEventListener('mousedown', (e) => {
     drawing = true;
-    const { x, y } = getCoordinates(e);
-    lastX = x;
-    lastY = y;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
     ctx.beginPath();
     ctx.moveTo(x, y);
-  }
+  });
   
-  function draw(e) {
-    e.preventDefault();
+  canvas.addEventListener('mousemove', (e) => {
     if (!drawing) return;
-    const { x, y } = getCoordinates(e);
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
     ctx.lineTo(x, y);
     ctx.stroke();
-    lastX = x;
-    lastY = y;
-  }
+  });
   
-  function stopDrawing() {
+  canvas.addEventListener('mouseup', () => {
     drawing = false;
+  });
+  
+  canvas.addEventListener('mouseleave', () => {
+    drawing = false;
+  });
+  
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    drawing = true;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
     ctx.beginPath();
-  }
+    ctx.moveTo(x, y);
+  });
   
-  // Événements souris
-  canvas.addEventListener('mousedown', startDrawing);
-  canvas.addEventListener('mousemove', draw);
-  canvas.addEventListener('mouseup', stopDrawing);
-  canvas.addEventListener('mouseleave', stopDrawing);
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (!drawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  });
   
-  // Événements tactiles
-  canvas.addEventListener('touchstart', startDrawing);
-  canvas.addEventListener('touchmove', draw);
-  canvas.addEventListener('touchend', stopDrawing);
-  
-  // Ajouter un guide visuel
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(96,165,250,0.3)';
-  ctx.setLineDash([5, 5]);
-  ctx.moveTo(50, canvas.height - 30);
-  ctx.lineTo(canvas.width - 50, canvas.height - 30);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  
-  // Texte indicatif
-  ctx.font = '12px "Inter", sans-serif';
-  ctx.fillStyle = 'rgba(96,165,250,0.5)';
-  ctx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
+  canvas.addEventListener('touchend', () => {
+    drawing = false;
+  });
 }
 
 function clearSignature() {
@@ -4136,173 +3555,41 @@ function clearSignature() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#0f172a';
+  ctx.fillStyle = 'rgba(8,15,40,0.8)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#60a5fa';
-  ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
-  
-  // Refaire le guide
-  ctx.beginPath();
-  ctx.strokeStyle = 'rgba(96,165,250,0.3)';
-  ctx.setLineDash([5, 5]);
-  ctx.moveTo(50, canvas.height - 30);
-  ctx.lineTo(canvas.width - 50, canvas.height - 30);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.font = '12px "Inter", sans-serif';
-  ctx.fillStyle = 'rgba(96,165,250,0.5)';
-  ctx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
 }
 
 async function submitSignature() {
   const canvas = document.getElementById('signatureCanvas');
   if (!canvas) return;
   
-  // Vérifier si une signature a été dessinée
-  const ctx = canvas.getContext('2d');
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  let hasDrawing = false;
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    if (imageData.data[i] !== 0 || imageData.data[i+1] !== 0 || imageData.data[i+2] !== 0) {
-      hasDrawing = true;
-      break;
-    }
-  }
+  const imageData = canvas.toDataURL('image/png');
   
-  if (!hasDrawing) {
-    showToast('Veuillez dessiner votre signature avant de valider', 'warning');
-    return;
-  }
-  
-  const signatureData = canvas.toDataURL('image/png');
-  const signerName = document.getElementById('signerName')?.value.trim() || G.currentUser.name;
-  const signerTitle = document.getElementById('signerTitle')?.value.trim() || '';
-  const signReason = document.getElementById('signReason')?.value.trim() || 'Approbation du document';
-  
-  if (!G.currentDocId) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  const doc = G.documents.find(d => d.id === G.currentDocId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  const signatureId = generateId();
-  const newSig = {
-    id: signatureId,
-    document_id: G.currentDocId,
-    document_name: doc.name,
-    signer_id: G.currentUser.id,
-    signer_email: G.currentUser.email,
-    signer_name: signerName,
-    signer_title: signerTitle,
-    sign_reason: signReason,
-    status: 'signed',
-    signature_data: signatureData,
-    signed_at: new Date().toISOString(),
-    ip_address: await getClientIP(),
-    user_agent: navigator.userAgent,
-    created_at: new Date().toISOString()
-  };
-  
-  // Afficher un indicateur de chargement
-  const submitBtn = document.getElementById('submitSignatureBtn');
-  const originalText = submitBtn?.innerHTML;
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement...';
-  }
-  
-  try {
+  if (G.currentDocId) {
+    const newSig = {
+      id: generateId(),
+      document_id: G.currentDocId,
+      signer_id: G.currentUser.id,
+      signer_email: G.currentUser.email,
+      status: 'signed',
+      signature_data: imageData,
+      signed_at: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+    
     const { error } = await G.supabase.from('signatures').insert(newSig);
-    if (error) throw error;
+    if (error) {
+      showToast('Erreur signature', 'error');
+      return;
+    }
     
     G.signatures.push(newSig);
-    
-    // Ajouter un tampon horodaté au document
-    await addTimestampToDocument(doc.id, newSig);
-    
-    showToast('✓ Signature enregistrée avec succès', 'success');
-    
-    // Ajouter un log d'audit
-    await addAuditLog('signature', 'document', G.currentDocId, `Signé par ${signerName}`);
-    
-    closeSignModal();
-    renderSignatures();
-    
-    // Mettre à jour l'aperçu pour montrer la signature
-    if (G.currentView === 'documents') {
-      renderDocuments();
-    }
-    
-  } catch (err) {
-    console.error('Erreur signature:', err);
-    showToast('Erreur lors de l\'enregistrement de la signature', 'error');
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
-    }
+    showToast('Signature enregistrée', 'success');
   }
-}
-
-async function getClientIP() {
-  try {
-    const response = await fetch('https://api.ipify.org?format=json');
-    const data = await response.json();
-    return data.ip;
-  } catch (err) {
-    return 'unknown';
-  }
-}
-
-async function addTimestampToDocument(docId, signature) {
-  // Ajouter une annotation de signature au document (simulé)
-  console.log(`📝 Timestamp ajouté au document ${docId} par ${signature.signer_name} à ${signature.signed_at}`);
-}
-
-function viewSignature(signatureId) {
-  const signature = G.signatures.find(s => s.id === signatureId);
-  if (!signature || !signature.signature_data) {
-    showToast('Signature non disponible', 'error');
-    return;
-  }
+  closeSignModal();
+  renderSignatures();
   
-  // Créer un modal pour visualiser la signature
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.style.zIndex = '300';
-  modal.innerHTML = `
-    <div class="modal-box" style="max-width: 500px;">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-white font-bold">Signature électronique</h3>
-        <button onclick="this.closest('.modal-overlay').remove()" class="text-blue-400 hover:text-white">
-          <i class="fas fa-times text-xl"></i>
-        </button>
-      </div>
-      <div class="text-center">
-        <img src="${signature.signature_data}" class="max-w-full mx-auto border border-blue-500/30 rounded-lg bg-white p-4" alt="Signature">
-        <div class="mt-4 text-left space-y-1 text-sm">
-          <p><span class="text-blue-300/60">Signataire:</span> <span class="text-white">${escapeHtml(signature.signer_name || signature.signer_email)}</span></p>
-          ${signature.signer_title ? `<p><span class="text-blue-300/60">Fonction:</span> <span class="text-white">${escapeHtml(signature.signer_title)}</span></p>` : ''}
-          <p><span class="text-blue-300/60">Date:</span> <span class="text-white">${formatDate(signature.signed_at)}</span></p>
-          <p><span class="text-blue-300/60">Document:</span> <span class="text-white">${escapeHtml(signature.document_name || 'Document')}</span></p>
-          ${signature.ip_address !== 'unknown' ? `<p><span class="text-blue-300/60">IP:</span> <span class="text-white text-xs font-mono">${signature.ip_address}</span></p>` : ''}
-        </div>
-        <div class="mt-4 pt-3 border-t border-blue-500/20">
-          <p class="text-xs text-green-400/70 flex items-center justify-center gap-2">
-            <i class="fas fa-check-circle"></i>
-            Signature valide et horodatée
-          </p>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+  await addAuditLog('signature', 'document', G.currentDocId);
 }
 
 function openRequestSignatureModal() {
