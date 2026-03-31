@@ -975,10 +975,16 @@ function renderMyWorkflows() {
 // ─── Documents ───
 function renderDocuments() {
   const grid = document.getElementById('documentGrid');
-  if (!grid) return;
+  if (!grid) {
+    console.warn('documentGrid non trouvé');
+    return;
+  }
+  
+  console.log('🔄 Rendu des documents, tab:', G.docsTab);
   
   let filtered = G.documents.filter(d => !d.is_deleted);
   
+  // Filtrer selon l'onglet sélectionné
   if (G.docsTab === 'company') {
     filtered = filtered.filter(d => d.scope === 'company');
   } else if (G.docsTab === 'personal') {
@@ -992,12 +998,20 @@ function renderDocuments() {
     filtered = filtered.filter(d => sharedIds.includes(d.id));
   }
   
+  // Filtre par type
   const typeFilter = document.getElementById('filterType')?.value;
-  if (typeFilter) filtered = filtered.filter(d => d.type === typeFilter);
+  if (typeFilter && typeFilter !== '') {
+    filtered = filtered.filter(d => d.type === typeFilter);
+  }
   
+  // Filtre par date
   const dateFilter = document.getElementById('filterDate')?.value;
   if (dateFilter === 'today') {
-    filtered = filtered.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
+    filtered = filtered.filter(d => {
+      const docDate = new Date(d.created_at);
+      const today = new Date();
+      return docDate.toDateString() === today.toDateString();
+    });
   } else if (dateFilter === 'week') {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
@@ -1008,47 +1022,124 @@ function renderDocuments() {
     filtered = filtered.filter(d => new Date(d.created_at) >= monthAgo);
   }
   
+  // Mettre à jour le compteur
   const resultsCount = document.getElementById('resultsCount');
-  if (resultsCount) resultsCount.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
+  if (resultsCount) {
+    resultsCount.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
+  }
   
+  // Afficher un message si aucun document
   if (filtered.length === 0) {
-    grid.innerHTML = `<div class="col-span-full text-center py-12 text-blue-300/50">
-      <i class="fas fa-folder-open text-4xl mb-3 block opacity-30"></i>
-      <p>Aucun document trouvé</p>
-    </div>`;
+    let emptyMessage = '';
+    if (G.docsTab === 'company') {
+      emptyMessage = 'Aucun document d\'entreprise. Importez des documents pour les partager avec votre équipe.';
+    } else if (G.docsTab === 'personal') {
+      emptyMessage = 'Aucun document personnel. Importez vos documents privés.';
+    } else if (G.docsTab === 'mine') {
+      emptyMessage = 'Vous n\'avez pas encore importé de documents.';
+    } else if (G.docsTab === 'shared') {
+      emptyMessage = 'Aucun document partagé avec vous.';
+    } else {
+      emptyMessage = 'Aucun document trouvé.';
+    }
+    
+    grid.innerHTML = `
+      <div class="col-span-full text-center py-16">
+        <i class="fas fa-folder-open text-5xl mb-4 block opacity-20 text-blue-400"></i>
+        <p class="text-blue-300/60">${emptyMessage}</p>
+        <button onclick="openUploadModal()" class="mt-4 btn-primary px-5 py-2 rounded-xl text-white text-sm font-medium inline-flex items-center gap-2">
+          <i class="fas fa-cloud-upload-alt"></i>Importer un document
+        </button>
+      </div>
+    `;
     return;
   }
   
+  // Appliquer le mode d'affichage
   grid.className = G.viewMode === 'grid' ? 'doc-grid' : 'space-y-2';
   grid.innerHTML = filtered.map(doc => G.viewMode === 'grid' ? renderDocCard(doc) : renderDocListItem(doc)).join('');
+  
+  console.log(`✅ ${filtered.length} documents affichés`);
 }
 
 function renderDocCard(doc) {
   const isOwner = doc.owner_id === G.currentUser.id;
+  const canEdit = isOwner || G.currentUser.role === 'admin' || G.currentUser.role === 'manager';
+  const fileIcon = getFileIcon(doc.type);
+  const iconClass = fileIcon.split(' ')[0];
+  const colorClass = fileIcon.split(' ')[1] || 'text-blue-400';
+  
   return `
-    <div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer group" 
-         onclick="openPreviewModal('${doc.id}')" draggable="true" ondragstart="handleDocDragStart(event, '${doc.id}')" oncontextmenu="showDocContextMenu(event, '${doc.id}')">
+    <div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer group hover:scale-[1.02] transition-all duration-200" 
+         onclick="openPreviewModal('${doc.id}')" 
+         draggable="true" 
+         ondragstart="handleDocDragStart(event, '${doc.id}')" 
+         oncontextmenu="showDocContextMenu(event, '${doc.id}')">
+      
+      <!-- En-tête avec icône et actions -->
       <div class="flex items-start justify-between mb-3">
-        <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]} text-2xl">
-          <i class="fas ${getFileIcon(doc.type).split(' ')[0]}"></i>
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center ${colorClass} text-2xl">
+          <i class="fas ${iconClass}"></i>
         </div>
-        <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-          <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger"><i class="fas fa-download"></i></button>
-          <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400" title="Partager"><i class="fas fa-share-alt"></i></button>
-          <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400" title="Inviter à collaborer"><i class="fas fa-users"></i></button>
-          <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Déplacer"><i class="fas fa-folder-open"></i></button>
-          ${isOwner ? `<button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
+        <div class="opacity-0 group-hover:opacity-100 transition-all duration-200 flex gap-1">
+          <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-colors" 
+                  title="Télécharger">
+            <i class="fas fa-download"></i>
+          </button>
+          <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-colors" 
+                  title="Partager">
+            <i class="fas fa-share-alt"></i>
+          </button>
+          <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
+                  title="Inviter à collaborer">
+            <i class="fas fa-users"></i>
+          </button>
+          <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400 transition-colors" 
+                  title="Déplacer">
+            <i class="fas fa-folder-open"></i>
+          </button>
+          ${canEdit ? `
+          <button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors" 
+                  title="Supprimer">
+            <i class="fas fa-trash"></i>
+          </button>
+          ` : ''}
         </div>
       </div>
-      <h4 class="text-white font-semibold text-sm mb-1 truncate" title="${doc.name}">${doc.name}</h4>
-      <p class="text-blue-300/60 text-xs mb-2">${formatBytes(doc.size)} • ${formatDate(doc.created_at)}</p>
+      
+      <!-- Informations du document -->
+      <h4 class="text-white font-semibold text-sm mb-1 truncate" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</h4>
+      <p class="text-blue-300/60 text-xs mb-2">
+        ${formatBytes(doc.size)} • ${formatDate(doc.created_at)}
+      </p>
+      
+      <!-- Tags et scope -->
       <div class="flex items-center justify-between">
-        <div class="flex gap-1">${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${t}</span>`).join('')}</div>
-        ${doc.scope === 'company' ? '<span class="collab-badge"><i class="fas fa-building"></i>Entreprise</span>' : '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Perso</span>'}
+        <div class="flex gap-1 flex-wrap">
+          ${(doc.tags || []).slice(0, 2).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${escapeHtml(t)}</span>`).join('')}
+          ${(doc.tags || []).length > 2 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length - 2}</span>` : ''}
+        </div>
+        ${doc.scope === 'company' ? 
+          '<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>' : 
+          '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
       </div>
-      <div class="mt-2 text-xs text-blue-400/50">
-        <span>📄 v${doc.version || 1}</span>
-        <span class="ml-2">👁️ ${doc.views || 0}</span>
+      
+      <!-- Métadonnées supplémentaires -->
+      <div class="mt-2 pt-2 border-t border-blue-500/10 flex items-center justify-between text-xs">
+        <span class="text-blue-400/50">
+          <i class="fas fa-code-branch mr-1"></i>v${doc.version || 1}
+        </span>
+        <span class="text-blue-400/50">
+          <i class="fas fa-eye mr-1"></i>${doc.views || 0}
+        </span>
+        <span class="text-blue-400/50">
+          <i class="fas fa-download mr-1"></i>${doc.downloads || 0}
+        </span>
       </div>
     </div>
   `;
@@ -1056,31 +1147,104 @@ function renderDocCard(doc) {
 
 function renderDocListItem(doc) {
   const isOwner = doc.owner_id === G.currentUser.id;
+  const canEdit = isOwner || G.currentUser.role === 'admin' || G.currentUser.role === 'manager';
+  const fileIcon = getFileIcon(doc.type);
+  const iconClass = fileIcon.split(' ')[0];
+  const colorClass = fileIcon.split(' ')[1] || 'text-blue-400';
+  
   return `
-    <div class="doc-list-item glass-card rounded-xl border border-blue-500/10 hover:border-blue-500/30 cursor-pointer" onclick="openPreviewModal('${doc.id}')">
-      <div class="doc-icon rounded-lg bg-blue-500/10 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]}">
-        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-lg"></i>
+    <div class="doc-list-item glass-card rounded-xl border border-blue-500/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all cursor-pointer group" 
+         onclick="openPreviewModal('${doc.id}')">
+      
+      <!-- Icône -->
+      <div class="doc-icon w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center ${colorClass} flex-shrink-0">
+        <i class="fas ${iconClass} text-xl"></i>
       </div>
-      <div class="doc-content">
-        <h4 class="text-white font-medium text-sm truncate">${doc.name}</h4>
-        <p class="text-blue-300/60 text-xs">${formatBytes(doc.size)} • ${formatDate(doc.created_at)}</p>
+      
+      <!-- Contenu principal -->
+      <div class="doc-content flex-1 min-w-0">
+        <h4 class="text-white font-medium text-sm truncate" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</h4>
+        <div class="flex items-center gap-3 mt-1">
+          <p class="text-blue-300/60 text-xs">${formatBytes(doc.size)}</p>
+          <span class="text-blue-400/40">•</span>
+          <p class="text-blue-300/60 text-xs">${formatDate(doc.created_at)}</p>
+          ${doc.scope === 'company' ? 
+            `<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>` : 
+            '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
+        </div>
+        <div class="flex gap-2 mt-1">
+          ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${escapeHtml(t)}</span>`).join('')}
+        </div>
       </div>
-      <div class="doc-actions">
-        <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400"><i class="fas fa-download"></i></button>
-        <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400"><i class="fas fa-share-alt"></i></button>
-        <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400"><i class="fas fa-users"></i></button>
-        <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400"><i class="fas fa-folder-open"></i></button>
-        ${isOwner ? `<button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
+      
+      <!-- Métadonnées supplémentaires -->
+      <div class="hidden sm:flex items-center gap-4 text-xs text-blue-400/50 mr-4">
+        <span><i class="fas fa-code-branch mr-1"></i>v${doc.version || 1}</span>
+        <span><i class="fas fa-eye mr-1"></i>${doc.views || 0}</span>
+        <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0}</span>
+      </div>
+      
+      <!-- Actions -->
+      <div class="doc-actions flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+        <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-colors" 
+                title="Télécharger">
+          <i class="fas fa-download"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-colors" 
+                title="Partager">
+          <i class="fas fa-share-alt"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
+                title="Inviter à collaborer">
+          <i class="fas fa-users"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400 transition-colors" 
+                title="Déplacer">
+          <i class="fas fa-folder-open"></i>
+        </button>
+        ${canEdit ? `
+        <button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors" 
+                title="Supprimer">
+          <i class="fas fa-trash"></i>
+        </button>
+        ` : ''}
       </div>
     </div>
   `;
 }
 
 function switchDocsTab(tab) {
+  console.log('🔄 Changement d\'onglet documents:', tab);
   G.docsTab = tab;
-  document.querySelectorAll('.docs-tab').forEach(el => el.classList.remove('active'));
+  
+  // Mettre à jour l'interface des onglets
+  document.querySelectorAll('.docs-tab').forEach(el => {
+    el.classList.remove('active');
+  });
+  
   const tabEl = document.getElementById(`docsTab-${tab}`);
-  if (tabEl) tabEl.classList.add('active');
+  if (tabEl) {
+    tabEl.classList.add('active');
+  }
+  
+  // Mettre à jour le texte du titre
+  const docTitle = document.getElementById('documentsTitle');
+  if (docTitle) {
+    const titles = {
+      company: 'Documents de l\'entreprise',
+      personal: 'Mes documents personnels',
+      mine: 'Mes documents',
+      shared: 'Documents partagés avec moi'
+    };
+    docTitle.textContent = titles[tab] || 'Documents';
+  }
+  
+  // Recharger l'affichage
   renderDocuments();
 }
 
@@ -4201,11 +4365,29 @@ function formatDate(dateString) {
 
 function getFileIcon(type) {
   const icons = { 
-    pdf: 'fa-file-pdf text-red-400', 
-    doc: 'fa-file-word text-blue-400', 
-    xls: 'fa-file-excel text-green-400', 
-    img: 'fa-file-image text-purple-400', 
-    txt: 'fa-file-alt text-gray-400' 
+    pdf: 'fa-file-pdf text-red-400',
+    doc: 'fa-file-word text-blue-400',
+    docx: 'fa-file-word text-blue-400',
+    xls: 'fa-file-excel text-green-400',
+    xlsx: 'fa-file-excel text-green-400',
+    ppt: 'fa-file-powerpoint text-orange-400',
+    pptx: 'fa-file-powerpoint text-orange-400',
+    png: 'fa-file-image text-purple-400',
+    jpg: 'fa-file-image text-purple-400',
+    jpeg: 'fa-file-image text-purple-400',
+    gif: 'fa-file-image text-purple-400',
+    webp: 'fa-file-image text-purple-400',
+    svg: 'fa-file-image text-purple-400',
+    txt: 'fa-file-alt text-gray-400',
+    zip: 'fa-file-archive text-yellow-400',
+    rar: 'fa-file-archive text-yellow-400',
+    mp4: 'fa-file-video text-pink-400',
+    mp3: 'fa-file-audio text-green-400',
+    json: 'fa-file-code text-cyan-400',
+    xml: 'fa-file-code text-cyan-400',
+    html: 'fa-file-code text-cyan-400',
+    css: 'fa-file-code text-cyan-400',
+    js: 'fa-file-code text-cyan-400'
   };
   return icons[type] || 'fa-file text-blue-400';
 }
@@ -4213,16 +4395,29 @@ function getFileIcon(type) {
 function getFileType(filename) {
   const ext = filename.split('.').pop().toLowerCase();
   const types = { 
-    pdf: 'pdf', 
-    doc: 'doc', 
-    docx: 'doc', 
-    xls: 'xls', 
-    xlsx: 'xls', 
-    png: 'img', 
-    jpg: 'img', 
-    jpeg: 'img', 
-    gif: 'img', 
-    txt: 'txt' 
+    pdf: 'pdf',
+    doc: 'doc',
+    docx: 'doc',
+    xls: 'xls',
+    xlsx: 'xls',
+    ppt: 'ppt',
+    pptx: 'ppt',
+    png: 'img',
+    jpg: 'img',
+    jpeg: 'img',
+    gif: 'img',
+    webp: 'img',
+    svg: 'img',
+    txt: 'txt',
+    zip: 'zip',
+    rar: 'zip',
+    mp4: 'video',
+    mp3: 'audio',
+    json: 'code',
+    xml: 'code',
+    html: 'code',
+    css: 'code',
+    js: 'code'
   };
   return types[ext] || 'unknown';
 }
