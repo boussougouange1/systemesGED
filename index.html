@@ -134,6 +134,35 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
 .rich-toolbar-btn.active{background:rgba(59,130,246,0.3);color:#93c5fd;}
 .folder-drop-target{border:2px dashed rgba(96,165,250,0.4)!important;background:rgba(59,130,246,0.08)!important;}
 .audit-row:hover{background:rgba(59,130,246,0.04);}
+/* Badges pour les permissions */
+.badge-permission-view {
+  background: rgba(59,130,246,0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59,130,246,0.3);
+}
+
+.badge-permission-download {
+  background: rgba(16,185,129,0.2);
+  color: #34d399;
+  border: 1px solid rgba(16,185,129,0.3);
+}
+
+.badge-permission-edit {
+  background: rgba(245,158,11,0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245,158,11,0.3);
+}
+
+/* Animation pour les nouveaux partages */
+@keyframes sharePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); background: rgba(59,130,246,0.1); }
+  100% { transform: scale(1); }
+}
+
+.new-share {
+  animation: sharePulse 0.5s ease;
+}
 </style>
 <base target="_blank">
 </head>
