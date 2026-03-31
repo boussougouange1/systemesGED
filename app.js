@@ -1316,10 +1316,43 @@ function handleDrop(e, zoneId) {
 function handleDocDrop(e) {
   e.preventDefault();
   const dropZone = document.getElementById('docDropZone');
-  if (dropZone) dropZone.classList.remove('drag-over');
+  if (dropZone) {
+    dropZone.classList.remove('drag-over');
+    // Ajouter un effet visuel temporaire
+    dropZone.style.backgroundColor = 'rgba(59,130,246,0.05)';
+    setTimeout(() => {
+      dropZone.style.backgroundColor = '';
+    }, 300);
+  }
+  
   const files = Array.from(e.dataTransfer.files);
-  addFilesToSelection(files);
-  uploadDocument();
+  
+  if (files.length === 0) {
+    showToast('Aucun fichier détecté', 'warning');
+    return;
+  }
+  
+  // Filtrer les fichiers trop volumineux
+  const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
+  const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
+  
+  if (invalidFiles.length > 0) {
+    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
+  }
+  
+  if (validFiles.length === 0) {
+    showToast('Aucun fichier valide à importer', 'warning');
+    return;
+  }
+  
+  addFilesToSelection(validFiles);
+  
+  // Auto-upload après ajout
+  setTimeout(() => {
+    if (G.selectedFiles.length > 0) {
+      uploadDocument();
+    }
+  }, 100);
 }
 
 function handleFileSelect(e) {
@@ -1329,18 +1362,69 @@ function handleFileSelect(e) {
 
 function handleFilePickerSelect(e) {
   const files = Array.from(e.target.files);
-  addFilesToSelection(files);
+  
+  if (files.length === 0) return;
+  
+  // Filtrer les fichiers trop volumineux
+  const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
+  const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
+  
+  if (invalidFiles.length > 0) {
+    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
+  }
+  
+  if (validFiles.length === 0) {
+    showToast('Aucun fichier valide à importer', 'warning');
+    return;
+  }
+  
+  addFilesToSelection(validFiles);
+  
+  // Auto-upload après sélection
+  setTimeout(() => {
+    if (G.selectedFiles.length > 0) {
+      uploadDocument();
+    }
+  }, 100);
+  
+  // Réinitialiser l'input pour permettre de sélectionner à nouveau les mêmes fichiers
+  e.target.value = '';
 }
 
 function addFilesToSelection(files) {
   for (const file of files) {
+    // Vérification de la taille
     if (file.size > CONFIG.maxFileSize) {
-      showToast(`Fichier trop volumineux: ${file.name}`, 'error');
+      showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
       continue;
     }
-    G.selectedFiles.push(file);
+    
+    // Vérifier si le fichier n'est pas déjà dans la sélection
+    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+      G.selectedFiles.push(file);
+    }
   }
   renderSelectedFiles();
+  
+  // Mettre à jour l'affichage de la zone de dépôt
+  const dropZone = document.getElementById('docDropZone');
+  if (dropZone && G.selectedFiles.length > 0) {
+    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
+    setTimeout(() => {
+      dropZone.style.borderColor = '';
+    }, 1000);
+  }
+}
+  renderSelectedFiles();
+  
+  // Mettre à jour l'affichage de la zone de dépôt
+  const dropZone = document.getElementById('docDropZone');
+  if (dropZone && G.selectedFiles.length > 0) {
+    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
+    setTimeout(() => {
+      dropZone.style.borderColor = '';
+    }, 1000);
+  }
 }
 
 function renderSelectedFiles() {
@@ -1402,6 +1486,13 @@ async function uploadDocument() {
     return;
   }
   
+  // Vérifier la connexion Supabase
+  if (!G.supabase) {
+    showToast('Erreur de connexion à la base de données', 'error');
+    return;
+  }
+  
+  // Vérifier le dossier courant
   if (!G.currentFolderId) {
     await setRootFolder();
     if (!G.currentFolderId) {
@@ -1411,29 +1502,57 @@ async function uploadDocument() {
   }
   
   const folderId = G.currentFolderId;
+  let successCount = 0;
+  let errorCount = 0;
   
-  for (const file of G.selectedFiles) {
+  // Afficher une barre de progression
+  const progressContainer = document.getElementById('uploadProgress');
+  const progressBar = document.getElementById('uploadProgressBar');
+  const progressPercent = document.getElementById('uploadPercent');
+  const statusText = document.getElementById('uploadStatusText');
+  
+  if (progressContainer) {
+    progressContainer.classList.remove('hidden');
+  }
+  
+  for (let i = 0; i < G.selectedFiles.length; i++) {
+    const file = G.selectedFiles[i];
     const docId = generateId();
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split('.').pop().toLowerCase();
     const storagePath = `${G.currentUser.companyId}/${docId}.${fileExt}`;
     
+    // Mettre à jour la progression
+    const percent = Math.round(((i + 1) / G.selectedFiles.length) * 100);
+    if (progressBar) progressBar.style.width = `${percent}%`;
+    if (progressPercent) progressPercent.textContent = `${percent}%`;
+    if (statusText) statusText.textContent = `Import de ${file.name}... (${i + 1}/${G.selectedFiles.length})`;
+    
     try {
+      // 1. Upload vers Supabase Storage
       const { error: uploadErr } = await G.supabase.storage
         .from(CONFIG.storageBucket)
-        .upload(storagePath, file);
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
       
-      if (uploadErr) throw uploadErr;
+      if (uploadErr) {
+        console.error('Upload storage error:', uploadErr);
+        throw new Error(`Upload storage: ${uploadErr.message}`);
+      }
       
-      const { data: publicUrl } = G.supabase.storage
+      // 2. Récupérer l'URL publique
+      const { data: publicUrlData } = G.supabase.storage
         .from(CONFIG.storageBucket)
         .getPublicUrl(storagePath);
       
+      // 3. Créer l'entrée en base de données
       const doc = {
         id: docId,
-        name: document.getElementById('docNameInput')?.value || file.name,
+        name: document.getElementById('docNameInput')?.value.trim() || file.name,
         type: getFileType(file.name),
         size: file.size,
-        description: document.getElementById('docDescInput')?.value || '',
+        description: document.getElementById('docDescInput')?.value.trim() || '',
         scope: G._uploadScope || 'company',
         owner_id: G.currentUser.id,
         company_id: G.currentUser.companyId,
@@ -1448,25 +1567,48 @@ async function uploadDocument() {
         deleted_at: null,
         content: '',
         storage_path: storagePath,
-        file_url: publicUrl.publicUrl
+        file_url: publicUrlData.publicUrl
       };
       
       const { error: dbErr } = await G.supabase.from('documents').insert(doc);
-      if (dbErr) throw dbErr;
+      if (dbErr) {
+        console.error('DB insert error:', dbErr);
+        throw new Error(`Base de données: ${dbErr.message}`);
+      }
       
+      // Ajouter à l'état local
       G.documents.unshift(doc);
-      showToast(`${file.name} importé avec succès`, 'success');
+      successCount++;
       
       // Log d'audit
-      await addAuditLog('upload', 'document', doc.id);
+      await addAuditLog('upload', 'document', doc.id, `Fichier: ${file.name}, Taille: ${formatBytes(file.size)}`);
       
     } catch (err) {
-      console.error('Upload error:', err);
-      showToast(`Erreur: ${err.message}`, 'error');
+      console.error(`Erreur upload ${file.name}:`, err);
+      errorCount++;
+      showToast(`Erreur: ${file.name} - ${err.message}`, 'error');
     }
   }
   
+  // Masquer la barre de progression
+  if (progressContainer) {
+    setTimeout(() => {
+      progressContainer.classList.add('hidden');
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressPercent) progressPercent.textContent = '0%';
+    }, 1000);
+  }
+  
+  // Afficher le résumé
+  if (successCount > 0) {
+    showToast(`${successCount} fichier(s) importé(s) avec succès${errorCount > 0 ? `, ${errorCount} erreur(s)` : ''}`, successCount > 0 ? 'success' : 'warning');
+  }
+  
+  // Réinitialiser et rafraîchir
   G.selectedFiles = [];
+  G.uploadTags = [];
+  renderUploadTags();
+  renderSelectedFiles();
   closeUploadModal();
   renderDocuments();
   updateBadges();
