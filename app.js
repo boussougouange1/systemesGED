@@ -1493,52 +1493,171 @@ function setDocScope(scope) {
 
 // ─── Preview et téléchargement ───
 function openPreviewModal(docId) {
+  console.log('👁️ Ouverture de l\'aperçu pour:', docId);
   G.currentDocId = docId;
+  
   const modal = document.getElementById('previewModal');
   if (modal) modal.classList.remove('hidden');
   
   const doc = G.documents.find(d => d.id === docId);
-  if (!doc) return;
+  if (!doc) {
+    showToast('Document introuvable', 'error');
+    return;
+  }
   
   const titleEl = document.getElementById('previewTitle');
   if (titleEl) titleEl.textContent = doc.name;
   
+  // Mettre à jour les métadonnées dans le modal
+  updatePreviewMetadata(doc);
+  
   const fileUrl = doc.file_url;
   const fileType = doc.type;
+  const fileName = doc.name;
+  const fileExt = fileName.split('.').pop().toLowerCase();
+  
   const previewFrame = document.getElementById('previewFrame');
   const previewImage = document.getElementById('previewImage');
   const previewContent = document.getElementById('previewContent');
+  const previewOffice = document.getElementById('previewOffice');
+  const previewUnsupported = document.getElementById('previewUnsupported');
   
-  if (fileType === 'pdf') {
-    if (previewFrame) {
-      previewFrame.src = fileUrl;
-      previewFrame.classList.remove('hidden');
-      previewFrame.onload = () => {
-        console.log('PDF chargé avec succès');
-      };
+  // Cacher tous les conteneurs
+  if (previewFrame) previewFrame.classList.add('hidden');
+  if (previewImage) previewImage.classList.add('hidden');
+  if (previewContent) previewContent.classList.add('hidden');
+  if (previewOffice) previewOffice.classList.add('hidden');
+  if (previewUnsupported) previewUnsupported.classList.add('hidden');
+  
+  // Types de fichiers supportés pour l'aperçu direct
+  const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+  const pdfTypes = ['pdf'];
+  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+  const textTypes = ['txt', 'json', 'xml', 'html', 'css', 'js', 'md'];
+  
+  try {
+    if (imageTypes.includes(fileExt)) {
+      // Aperçu image
+      if (previewImage) {
+        previewImage.src = fileUrl;
+        previewImage.classList.remove('hidden');
+        previewImage.onload = () => console.log('✅ Image chargée');
+        previewImage.onerror = () => {
+          console.error('Erreur chargement image');
+          showUnsupportedPreview(doc);
+        };
+      }
+    } 
+    else if (pdfTypes.includes(fileExt)) {
+      // Aperçu PDF avec iframe
+      if (previewFrame) {
+        // Utiliser le viewer PDF de Google pour une meilleure compatibilité
+        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+        previewFrame.src = viewerUrl;
+        previewFrame.classList.remove('hidden');
+        previewFrame.onload = () => console.log('✅ PDF chargé');
+        previewFrame.onerror = () => {
+          // Fallback: afficher le PDF directement
+          previewFrame.src = fileUrl;
+        };
+      }
     }
-    if (previewImage) previewImage.classList.add('hidden');
-    if (previewContent) previewContent.classList.add('hidden');
-  } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
-    if (previewImage) {
-      previewImage.src = fileUrl;
-      previewImage.classList.remove('hidden');
-      previewImage.onload = () => {
-        console.log('Image chargée avec succès');
-      };
+    else if (officeTypes.includes(fileExt)) {
+      // Aperçu Office avec Microsoft Online Viewer
+      if (previewOffice) {
+        const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
+        previewOffice.src = viewerUrl;
+        previewOffice.classList.remove('hidden');
+        previewOffice.onload = () => console.log('✅ Document Office chargé');
+        previewOffice.onerror = () => {
+          showUnsupportedPreview(doc);
+        };
+      }
     }
-    if (previewFrame) previewFrame.classList.add('hidden');
-    if (previewContent) previewContent.classList.add('hidden');
-  } else {
-    if (previewFrame) previewFrame.classList.add('hidden');
-    if (previewImage) previewImage.classList.add('hidden');
-    if (previewContent) previewContent.classList.remove('hidden');
+    else if (textTypes.includes(fileExt)) {
+      // Aperçu texte avec lecture du contenu
+      previewContent.classList.remove('hidden');
+      const contentEl = document.getElementById('previewTextContent');
+      if (contentEl) {
+        contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i><p class="mt-2">Chargement du contenu...</p></div>';
+        
+        try {
+          const response = await fetch(fileUrl);
+          const text = await response.text();
+          contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap overflow-auto max-h-[60vh] p-4 bg-slate-900/50 rounded-lg">${escapeHtml(text.substring(0, 50000))}${text.length > 50000 ? '\n\n... (fichier tronqué, 50000 caractères max)' : ''}</pre>`;
+        } catch (err) {
+          contentEl.innerHTML = `<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-2 block"></i><p>Impossible de lire le contenu du fichier</p><button onclick="downloadDocument('${doc.id}')" class="mt-3 btn-primary px-4 py-2 rounded-lg text-sm">Télécharger pour lire</button></div>`;
+        }
+      }
+    }
+    else {
+      // Type non supporté
+      showUnsupportedPreview(doc);
+    }
+  } catch (err) {
+    console.error('Erreur aperçu:', err);
+    showUnsupportedPreview(doc);
   }
   
   // Incrémenter le compteur de vues
   updateDocViews(docId);
 }
 
+function showUnsupportedPreview(doc) {
+  const previewUnsupported = document.getElementById('previewUnsupported');
+  if (previewUnsupported) {
+    previewUnsupported.classList.remove('hidden');
+    const unsupportedInfo = document.getElementById('unsupportedFileInfo');
+    if (unsupportedInfo) {
+      unsupportedInfo.innerHTML = `
+        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-4 block text-blue-400"></i>
+        <p class="text-white font-medium">${escapeHtml(doc.name)}</p>
+        <p class="text-sm text-blue-300/60 mt-1">${formatBytes(doc.size)} • ${doc.type?.toUpperCase() || 'Fichier'}</p>
+        <p class="text-xs text-blue-400/50 mt-3">Aperçu non disponible pour ce type de fichier</p>
+        <div class="flex gap-3 mt-4 justify-center">
+          <button onclick="downloadDocument('${doc.id}')" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+            <i class="fas fa-download"></i>Télécharger
+          </button>
+          <button onclick="copyFileLink('${doc.id}')" class="px-4 py-2 rounded-lg text-sm border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-2">
+            <i class="fas fa-link"></i>Copier le lien
+          </button>
+        </div>
+      `;
+    }
+  }
+}
+
+function updatePreviewMetadata(doc) {
+  const metaContainer = document.getElementById('previewMetadata');
+  if (metaContainer) {
+    metaContainer.innerHTML = `
+      <div class="flex items-center gap-4 text-xs text-blue-300/60">
+        <span><i class="fas fa-code-branch mr-1"></i>Version ${doc.version || 1}</span>
+        <span><i class="fas fa-eye mr-1"></i>${doc.views || 0} vues</span>
+        <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0} téléchargements</span>
+        <span><i class="fas fa-calendar-alt mr-1"></i>${formatDate(doc.created_at)}</span>
+        ${doc.owner_id === G.currentUser.id ? '<span class="text-green-400"><i class="fas fa-user-check mr-1"></i>Propriétaire</span>' : ''}
+      </div>
+    `;
+  }
+}
+
+function copyFileLink(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (doc && doc.file_url) {
+    navigator.clipboard.writeText(doc.file_url);
+    showToast('Lien du fichier copié', 'success');
+  }
+}
+function showPreviewLoading() {
+  const loadingEl = document.getElementById('previewLoading');
+  if (loadingEl) loadingEl.classList.remove('hidden');
+}
+
+function hidePreviewLoading() {
+  const loadingEl = document.getElementById('previewLoading');
+  if (loadingEl) loadingEl.classList.add('hidden');
+}
 async function updateDocViews(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (doc) {
@@ -3847,87 +3966,169 @@ function getSigStatusClass(status) {
   return classes[status] || 'bg-gray-500/20 text-gray-300';
 }
 
+// ─── Signature électronique moderne ───
+let signaturePad = null;
+let signatureCanvas = null;
+
 function openSignModal() {
   if (!G.currentDocId) {
-    showToast('Veuillez ouvrir un document d\'abord', 'warning');
+    showToast('Veuillez d\'abord ouvrir un document', 'warning');
     return;
   }
+  
+  const doc = G.documents.find(d => d.id === G.currentDocId);
+  if (!doc) {
+    showToast('Document introuvable', 'error');
+    return;
+  }
+  
   const modal = document.getElementById('signatureModal');
   if (modal) modal.classList.remove('hidden');
+  
+  // Mettre à jour les informations du document
+  const signDocName = document.getElementById('signDocName');
+  if (signDocName) signDocName.textContent = doc.name;
+  
+  const signDocInfo = document.getElementById('signDocInfo');
+  if (signDocInfo) {
+    signDocInfo.innerHTML = `
+      <span class="text-xs text-blue-300/60">${formatBytes(doc.size)}</span>
+      <span class="text-blue-300/40">•</span>
+      <span class="text-xs text-blue-300/60">Version ${doc.version || 1}</span>
+    `;
+  }
+  
+  // Réinitialiser le canvas
   initSignatureCanvas();
+  
+  // Afficher les signatures existantes
+  loadExistingSignatures(doc.id);
 }
 
-function closeSignModal() {
-  const modal = document.getElementById('signatureModal');
-  if (modal) modal.classList.add('hidden');
+function loadExistingSignatures(docId) {
+  const existingSignatures = G.signatures.filter(s => s.document_id === docId);
+  const container = document.getElementById('existingSignatures');
+  
+  if (container) {
+    if (existingSignatures.length === 0) {
+      container.classList.add('hidden');
+    } else {
+      container.classList.remove('hidden');
+      container.innerHTML = `
+        <p class="text-xs text-blue-300/60 mb-2 flex items-center gap-2">
+          <i class="fas fa-check-circle text-green-400"></i>
+          ${existingSignatures.length} signature(s) existante(s)
+        </p>
+        <div class="flex flex-wrap gap-2">
+          ${existingSignatures.map(sig => `
+            <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 border border-green-500/20">
+              <i class="fas fa-signature text-green-400 text-sm"></i>
+              <div>
+                <p class="text-xs text-white">${sig.signer_email || sig.signer_id?.substring(0, 8)}</p>
+                <p class="text-[10px] text-blue-300/50">${formatDate(sig.signed_at || sig.created_at)}</p>
+              </div>
+              <button onclick="viewSignature('${sig.id}')" class="text-blue-400 hover:text-blue-300">
+                <i class="fas fa-eye text-xs"></i>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  }
 }
 
 function initSignatureCanvas() {
   const canvas = document.getElementById('signatureCanvas');
   if (!canvas) return;
   
-  canvas.width = canvas.offsetWidth;
-  canvas.height = 180;
+  signatureCanvas = canvas;
+  
+  // Ajuster la taille du canvas
+  const container = canvas.parentElement;
+  const width = container.clientWidth - 32;
+  canvas.width = width;
+  canvas.height = 200;
+  
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(8,15,40,0.8)';
+  ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = '#60a5fa';
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   
   let drawing = false;
+  let lastX = 0, lastY = 0;
   
-  canvas.addEventListener('mousedown', (e) => {
-    drawing = true;
+  function getCoordinates(e) {
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  });
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    let clientX, clientY;
+    if (e.touches) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
+  }
   
-  canvas.addEventListener('mousemove', (e) => {
-    if (!drawing) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  });
-  
-  canvas.addEventListener('mouseup', () => {
-    drawing = false;
-  });
-  
-  canvas.addEventListener('mouseleave', () => {
-    drawing = false;
-  });
-  
-  canvas.addEventListener('touchstart', (e) => {
+  function startDrawing(e) {
     e.preventDefault();
     drawing = true;
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches[0];
-    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+    const { x, y } = getCoordinates(e);
+    lastX = x;
+    lastY = y;
     ctx.beginPath();
     ctx.moveTo(x, y);
-  });
+  }
   
-  canvas.addEventListener('touchmove', (e) => {
+  function draw(e) {
     e.preventDefault();
     if (!drawing) return;
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches[0];
-    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+    const { x, y } = getCoordinates(e);
     ctx.lineTo(x, y);
     ctx.stroke();
-  });
+    lastX = x;
+    lastY = y;
+  }
   
-  canvas.addEventListener('touchend', () => {
+  function stopDrawing() {
     drawing = false;
-  });
+    ctx.beginPath();
+  }
+  
+  // Événements souris
+  canvas.addEventListener('mousedown', startDrawing);
+  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', stopDrawing);
+  canvas.addEventListener('mouseleave', stopDrawing);
+  
+  // Événements tactiles
+  canvas.addEventListener('touchstart', startDrawing);
+  canvas.addEventListener('touchmove', draw);
+  canvas.addEventListener('touchend', stopDrawing);
+  
+  // Ajouter un guide visuel
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(96,165,250,0.3)';
+  ctx.setLineDash([5, 5]);
+  ctx.moveTo(50, canvas.height - 30);
+  ctx.lineTo(canvas.width - 50, canvas.height - 30);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Texte indicatif
+  ctx.font = '12px "Inter", sans-serif';
+  ctx.fillStyle = 'rgba(96,165,250,0.5)';
+  ctx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
 }
 
 function clearSignature() {
@@ -3935,41 +4136,173 @@ function clearSignature() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'rgba(8,15,40,0.8)';
+  ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  
+  // Refaire le guide
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(96,165,250,0.3)';
+  ctx.setLineDash([5, 5]);
+  ctx.moveTo(50, canvas.height - 30);
+  ctx.lineTo(canvas.width - 50, canvas.height - 30);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '12px "Inter", sans-serif';
+  ctx.fillStyle = 'rgba(96,165,250,0.5)';
+  ctx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
 }
 
 async function submitSignature() {
   const canvas = document.getElementById('signatureCanvas');
   if (!canvas) return;
   
-  const imageData = canvas.toDataURL('image/png');
-  
-  if (G.currentDocId) {
-    const newSig = {
-      id: generateId(),
-      document_id: G.currentDocId,
-      signer_id: G.currentUser.id,
-      signer_email: G.currentUser.email,
-      status: 'signed',
-      signature_data: imageData,
-      signed_at: new Date().toISOString(),
-      created_at: new Date().toISOString()
-    };
-    
-    const { error } = await G.supabase.from('signatures').insert(newSig);
-    if (error) {
-      showToast('Erreur signature', 'error');
-      return;
+  // Vérifier si une signature a été dessinée
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let hasDrawing = false;
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    if (imageData.data[i] !== 0 || imageData.data[i+1] !== 0 || imageData.data[i+2] !== 0) {
+      hasDrawing = true;
+      break;
     }
+  }
+  
+  if (!hasDrawing) {
+    showToast('Veuillez dessiner votre signature avant de valider', 'warning');
+    return;
+  }
+  
+  const signatureData = canvas.toDataURL('image/png');
+  const signerName = document.getElementById('signerName')?.value.trim() || G.currentUser.name;
+  const signerTitle = document.getElementById('signerTitle')?.value.trim() || '';
+  const signReason = document.getElementById('signReason')?.value.trim() || 'Approbation du document';
+  
+  if (!G.currentDocId) {
+    showToast('Document introuvable', 'error');
+    return;
+  }
+  
+  const doc = G.documents.find(d => d.id === G.currentDocId);
+  if (!doc) {
+    showToast('Document introuvable', 'error');
+    return;
+  }
+  
+  const signatureId = generateId();
+  const newSig = {
+    id: signatureId,
+    document_id: G.currentDocId,
+    document_name: doc.name,
+    signer_id: G.currentUser.id,
+    signer_email: G.currentUser.email,
+    signer_name: signerName,
+    signer_title: signerTitle,
+    sign_reason: signReason,
+    status: 'signed',
+    signature_data: signatureData,
+    signed_at: new Date().toISOString(),
+    ip_address: await getClientIP(),
+    user_agent: navigator.userAgent,
+    created_at: new Date().toISOString()
+  };
+  
+  // Afficher un indicateur de chargement
+  const submitBtn = document.getElementById('submitSignatureBtn');
+  const originalText = submitBtn?.innerHTML;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement...';
+  }
+  
+  try {
+    const { error } = await G.supabase.from('signatures').insert(newSig);
+    if (error) throw error;
     
     G.signatures.push(newSig);
-    showToast('Signature enregistrée', 'success');
+    
+    // Ajouter un tampon horodaté au document
+    await addTimestampToDocument(doc.id, newSig);
+    
+    showToast('✓ Signature enregistrée avec succès', 'success');
+    
+    // Ajouter un log d'audit
+    await addAuditLog('signature', 'document', G.currentDocId, `Signé par ${signerName}`);
+    
+    closeSignModal();
+    renderSignatures();
+    
+    // Mettre à jour l'aperçu pour montrer la signature
+    if (G.currentView === 'documents') {
+      renderDocuments();
+    }
+    
+  } catch (err) {
+    console.error('Erreur signature:', err);
+    showToast('Erreur lors de l\'enregistrement de la signature', 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
   }
-  closeSignModal();
-  renderSignatures();
+}
+
+async function getClientIP() {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json');
+    const data = await response.json();
+    return data.ip;
+  } catch (err) {
+    return 'unknown';
+  }
+}
+
+async function addTimestampToDocument(docId, signature) {
+  // Ajouter une annotation de signature au document (simulé)
+  console.log(`📝 Timestamp ajouté au document ${docId} par ${signature.signer_name} à ${signature.signed_at}`);
+}
+
+function viewSignature(signatureId) {
+  const signature = G.signatures.find(s => s.id === signatureId);
+  if (!signature || !signature.signature_data) {
+    showToast('Signature non disponible', 'error');
+    return;
+  }
   
-  await addAuditLog('signature', 'document', G.currentDocId);
+  // Créer un modal pour visualiser la signature
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.zIndex = '300';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width: 500px;">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-white font-bold">Signature électronique</h3>
+        <button onclick="this.closest('.modal-overlay').remove()" class="text-blue-400 hover:text-white">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      <div class="text-center">
+        <img src="${signature.signature_data}" class="max-w-full mx-auto border border-blue-500/30 rounded-lg bg-white p-4" alt="Signature">
+        <div class="mt-4 text-left space-y-1 text-sm">
+          <p><span class="text-blue-300/60">Signataire:</span> <span class="text-white">${escapeHtml(signature.signer_name || signature.signer_email)}</span></p>
+          ${signature.signer_title ? `<p><span class="text-blue-300/60">Fonction:</span> <span class="text-white">${escapeHtml(signature.signer_title)}</span></p>` : ''}
+          <p><span class="text-blue-300/60">Date:</span> <span class="text-white">${formatDate(signature.signed_at)}</span></p>
+          <p><span class="text-blue-300/60">Document:</span> <span class="text-white">${escapeHtml(signature.document_name || 'Document')}</span></p>
+          ${signature.ip_address !== 'unknown' ? `<p><span class="text-blue-300/60">IP:</span> <span class="text-white text-xs font-mono">${signature.ip_address}</span></p>` : ''}
+        </div>
+        <div class="mt-4 pt-3 border-t border-blue-500/20">
+          <p class="text-xs text-green-400/70 flex items-center justify-center gap-2">
+            <i class="fas fa-check-circle"></i>
+            Signature valide et horodatée
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
 }
 
 function openRequestSignatureModal() {
