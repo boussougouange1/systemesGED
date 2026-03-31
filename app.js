@@ -359,17 +359,16 @@ function updateMenuVisibility() {
 
 function updateBadges() {
   const docCount = G.documents.filter(d => !d.is_deleted).length;
+  const wfCount = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
+  const pendingUsersCount = G.users.filter(u => u.status === 'pending_validation').length;
+  const sharedCount = G.shares.filter(s => s.status === 'active' && s.recipient_email === G.currentUser?.email).length;
+  const sentCount = G.shares.filter(s => s.status === 'active' && s.sender_id === G.currentUser?.id).length;
+  
+  // Badges documents
   const docBadge = document.getElementById('d-docsBadge');
   if (docBadge) {
     docBadge.textContent = docCount;
     docBadge.classList.toggle('hidden', docCount === 0);
-  }
-  
-  const wfCount = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
-  const wfBadge = document.getElementById('d-wfBadge');
-  if (wfBadge) {
-    wfBadge.textContent = wfCount;
-    wfBadge.classList.toggle('hidden', wfCount === 0);
   }
   
   const mDocsBadge = document.getElementById('m-docsBadge');
@@ -378,11 +377,55 @@ function updateBadges() {
     mDocsBadge.classList.toggle('hidden', docCount === 0);
   }
   
+  // Badges workflows
+  const wfBadge = document.getElementById('d-wfBadge');
+  if (wfBadge) {
+    wfBadge.textContent = wfCount;
+    wfBadge.classList.toggle('hidden', wfCount === 0);
+  }
+  
   const mWfBadge = document.getElementById('m-wfBadge');
   if (mWfBadge) {
     mWfBadge.textContent = wfCount;
     mWfBadge.classList.toggle('hidden', wfCount === 0);
   }
+  
+  // Badges partages
+  const receivedBadge = document.getElementById('receivedCountBadge');
+  if (receivedBadge) {
+    receivedBadge.textContent = sharedCount;
+    receivedBadge.classList.toggle('hidden', sharedCount === 0);
+  }
+  
+  const sentBadge = document.getElementById('sentCountBadge');
+  if (sentBadge) {
+    sentBadge.textContent = sentCount;
+    sentBadge.classList.toggle('hidden', sentCount === 0);
+  }
+  
+  // Badge utilisateurs en attente
+  const pendingBadges = document.querySelectorAll('#d-pendingBadge, #m-pendingBadge');
+  pendingBadges.forEach(badge => {
+    if (pendingUsersCount > 0 && canValidateUsers()) {
+      badge.textContent = pendingUsersCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  });
+  
+  const pendingCountEl = document.getElementById('pendingCount');
+  if (pendingCountEl) pendingCountEl.textContent = pendingUsersCount;
+  
+  // Corbeille badge
+  const trashCount = G.documents.filter(d => d.is_deleted).length;
+  const trashBadge = document.getElementById('trashCount');
+  if (trashBadge) {
+    trashBadge.textContent = trashCount;
+    trashBadge.classList.toggle('hidden', trashCount === 0);
+  }
+  
+  console.log('✅ Badges mis à jour:', { docCount, wfCount, pendingUsersCount, sharedCount });
 }
 
 function updateStorageDisplay() {
@@ -647,50 +690,138 @@ function closeMobileSidebar() {
 
 // ─── Dashboard ───
 function renderDashboard() {
+  console.log('🔄 Rendu du tableau de bord...');
+  
   const totalDocs = G.documents.filter(d => !d.is_deleted).length;
   const activeWorkflows = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
   const sharedCount = G.shares.filter(s => s.status === 'active').length;
   const userCount = G.users.length;
+  const totalViews = G.documents.reduce((sum, d) => sum + (d.views || 0), 0);
+  const activeUsers = G.auditLogs.filter(l => {
+    const logDate = new Date(l.created_at);
+    const today = new Date();
+    return l.action === 'login' && logDate.toDateString() === today.toDateString();
+  }).length;
   
+  // Mise à jour des compteurs
   const totalDocsEl = document.getElementById('totalDocs');
   const dashWorkflowCountEl = document.getElementById('dashWorkflowCount');
   const sharedCountEl = document.getElementById('sharedCount');
   const dashUserCountEl = document.getElementById('dashUserCount');
+  const dashTotalViews = document.getElementById('dashTotalViews');
+  const dashActiveUsers = document.getElementById('dashActiveUsers');
   
   if (totalDocsEl) totalDocsEl.textContent = totalDocs;
   if (dashWorkflowCountEl) dashWorkflowCountEl.textContent = activeWorkflows;
   if (sharedCountEl) sharedCountEl.textContent = sharedCount;
   if (dashUserCountEl) dashUserCountEl.textContent = userCount;
+  if (dashTotalViews) dashTotalViews.textContent = totalViews;
+  if (dashActiveUsers) dashActiveUsers.textContent = activeUsers || userCount;
   
+  // Mise à jour des badges
+  updateBadges();
   updateStorageDisplay();
   renderActivityList();
   renderQuickAccess();
   renderPopularTags();
   renderTeamDocs();
   renderMyWorkflows();
+  
+  console.log('✅ Tableau de bord mis à jour');
 }
 
 function renderActivityList() {
   const list = document.getElementById('activityList');
-  if (!list) return;
+  if (!list) {
+    console.warn('activityList non trouvé');
+    return;
+  }
   
-  const activities = G.auditLogs.slice(0, 10);
+  // Récupérer les activités depuis l'audit log ou créer des activités simulées
+  let activities = [];
+  
+  if (G.auditLogs && G.auditLogs.length > 0) {
+    activities = G.auditLogs.slice(0, 10);
+  } else {
+    // Créer des activités simulées basées sur les données réelles
+    const recentDocs = G.documents.filter(d => !d.is_deleted).slice(0, 5);
+    recentDocs.forEach(doc => {
+      activities.push({
+        action: 'upload',
+        target_type: 'document',
+        target_id: doc.id,
+        details: doc.name,
+        created_at: doc.created_at
+      });
+    });
+    
+    // Ajouter les partages récents
+    const recentShares = G.shares.filter(s => s.status === 'active').slice(0, 3);
+    recentShares.forEach(share => {
+      activities.push({
+        action: 'share',
+        target_type: 'document',
+        target_id: share.document_id,
+        details: `Partagé avec ${share.recipient_email}`,
+        created_at: share.created_at
+      });
+    });
+    
+    // Trier par date décroissante
+    activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    activities = activities.slice(0, 10);
+  }
+  
   if (activities.length === 0) {
-    list.innerHTML = '<div class="text-center py-8 text-blue-300/50"><i class="fas fa-folder-open text-2xl mb-2 block"></i>Aucune activité récente</div>';
+    list.innerHTML = '<div class="text-center py-8 text-blue-300/50"><i class="fas fa-folder-open text-2xl mb-2 block"></i><p>Aucune activité récente</p><p class="text-xs mt-2">Importez des documents pour voir l\'activité</p></div>';
     return;
   }
   
   list.innerHTML = activities.map(act => `
-    <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/10">
-      <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
-        <i class="fas ${getActionIcon(act.action)}"></i>
+    <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/10 hover:bg-blue-900/30 transition-all">
+      <div class="w-8 h-8 rounded-lg ${getActionBgColor(act.action)} flex items-center justify-center">
+        <i class="fas ${getActionIcon(act.action)} text-sm"></i>
       </div>
       <div class="flex-1">
-        <p class="text-sm text-white">${act.action} ${act.target_type || ''}</p>
-        <p class="text-xs text-blue-300/60">${formatDate(act.created_at)}</p>
+        <p class="text-sm text-white">${getActionLabel(act.action)} ${act.target_type ? act.target_type : ''}</p>
+        <p class="text-xs text-blue-300/60">${act.details ? act.details.substring(0, 40) + (act.details.length > 40 ? '...' : '') : ''}</p>
+        <p class="text-xs text-blue-400/50 mt-0.5">${formatDate(act.created_at)}</p>
       </div>
+      ${act.target_id ? `<button onclick="openPreviewModal('${act.target_id}')" class="text-blue-400 hover:text-blue-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-eye"></i></button>` : ''}
     </div>
   `).join('');
+}
+
+function getActionBgColor(action) {
+  const colors = {
+    login: 'bg-green-500/20',
+    logout: 'bg-gray-500/20',
+    upload: 'bg-blue-500/20',
+    download: 'bg-purple-500/20',
+    share: 'bg-cyan-500/20',
+    delete: 'bg-red-500/20',
+    restore: 'bg-green-500/20',
+    view: 'bg-yellow-500/20',
+    workflow: 'bg-orange-500/20',
+    signature: 'bg-pink-500/20'
+  };
+  return colors[action] || 'bg-blue-500/20';
+}
+
+function getActionLabel(action) {
+  const labels = {
+    login: 'Connexion',
+    logout: 'Déconnexion',
+    upload: 'Import de document',
+    download: 'Téléchargement',
+    share: 'Partage de document',
+    delete: 'Suppression',
+    restore: 'Restauration',
+    view: 'Consultation',
+    workflow: 'Workflow',
+    signature: 'Signature'
+  };
+  return labels[action] || action;
 }
 
 function getActionIcon(action) {
@@ -739,26 +870,55 @@ function renderPopularTags() {
 
 function renderTeamDocs() {
   const list = document.getElementById('teamDocsList');
-  if (!list) return;
+  if (!list) {
+    console.warn('teamDocsList non trouvé');
+    return;
+  }
   
-  const docs = G.documents.filter(d => !d.is_deleted && d.scope === 'company').slice(0, 5);
+  // Afficher les documents de l'entreprise ou les documents récents
+  let docs = G.documents.filter(d => !d.is_deleted);
+  
+  // Priorité aux documents d'entreprise
+  const companyDocs = docs.filter(d => d.scope === 'company');
+  if (companyDocs.length > 0) {
+    docs = companyDocs;
+  }
+  
+  docs = docs.slice(0, 5);
+  
   if (docs.length === 0) {
-    list.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-3">Aucun document</p>';
+    list.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fas fa-folder-open text-blue-400/40 text-3xl mb-2 block"></i>
+        <p class="text-blue-300/50 text-sm">Aucun document d'équipe</p>
+        <button onclick="openUploadModal()" class="mt-2 text-xs text-blue-400 hover:text-blue-300">Importer un document →</button>
+      </div>
+    `;
     return;
   }
   
   list.innerHTML = docs.map(doc => `
-    <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-blue-500/10 cursor-pointer" onclick="openPreviewModal('${doc.id}')">
-      <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center ${getFileIcon(doc.type).split(' ')[1]}">
-        <i class="fas ${getFileIcon(doc.type).split(' ')[0]}"></i>
+    <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-blue-500/10 cursor-pointer transition-all group" onclick="openPreviewModal('${doc.id}')">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-lg"></i>
       </div>
-      <div class="flex-1">
-        <p class="text-sm text-white truncate">${doc.name}</p>
-        <p class="text-xs text-blue-300/60">${formatDate(doc.created_at)}</p>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-white font-medium truncate">${escapeHtml(doc.name)}</p>
+        <div class="flex items-center gap-2 mt-0.5">
+          <span class="text-xs text-blue-300/60">${formatBytes(doc.size)}</span>
+          <span class="text-xs text-blue-400/50">•</span>
+          <span class="text-xs text-blue-300/60">${formatDate(doc.created_at)}</span>
+          ${doc.scope === 'company' ? `<span class="collab-badge text-[10px]"><i class="fas fa-building"></i>Équipe</span>` : ''}
+        </div>
       </div>
-      <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-1 text-yellow-400 hover:text-yellow-300" title="Déplacer vers un dossier">
-        <i class="fas fa-folder-open"></i>
-      </button>
+      <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-1.5 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger">
+          <i class="fas fa-download text-xs"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-1.5 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Déplacer">
+          <i class="fas fa-folder-open text-xs"></i>
+        </button>
+      </div>
     </div>
   `).join('');
 }
@@ -768,7 +928,10 @@ function renderMyWorkflows() {
   const badge = document.getElementById('myWorkflowsBadge');
   if (!list) return;
   
-  const myWfs = G.workflows.filter(w => w.assignee_id === G.currentUser.id || w.created_by === G.currentUser.id).slice(0, 5);
+  const myWfs = G.workflows.filter(w => 
+    (w.assignee_id === G.currentUser.id || w.created_by === G.currentUser.id) && 
+    ['pending', 'in_review'].includes(w.status)
+  ).slice(0, 5);
   
   if (badge) {
     if (myWfs.length > 0) {
@@ -780,18 +943,30 @@ function renderMyWorkflows() {
   }
   
   if (myWfs.length === 0) {
-    list.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-3">Aucun workflow assigné</p>';
+    list.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fas fa-project-diagram text-orange-400/40 text-3xl mb-2 block"></i>
+        <p class="text-blue-300/50 text-sm">Aucun workflow assigné</p>
+        <button onclick="openCreateWorkflowModal()" class="mt-2 text-xs text-orange-400 hover:text-orange-300">Créer un workflow →</button>
+      </div>
+    `;
     return;
   }
   
   list.innerHTML = myWfs.map(wf => `
-    <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-orange-500/10 cursor-pointer" onclick="openWfDetail('${wf.id}')">
-      <div class="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400">
-        <i class="fas fa-project-diagram"></i>
+    <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-orange-500/10 cursor-pointer transition-all group" onclick="openWfDetail('${wf.id}')">
+      <div class="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400 flex-shrink-0">
+        <i class="fas fa-project-diagram text-lg"></i>
       </div>
-      <div class="flex-1">
-        <p class="text-sm text-white truncate">${wf.title}</p>
-        <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-white font-medium truncate">${escapeHtml(wf.title)}</p>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+          <span class="text-xs text-blue-300/50">${formatDate(wf.created_at)}</span>
+        </div>
+      </div>
+      <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+        <i class="fas fa-chevron-right text-blue-400/50"></i>
       </div>
     </div>
   `).join('');
@@ -4076,6 +4251,16 @@ function showDocContextMenu(e, docId) {
   if (confirm('Supprimer ce document ?')) deleteDocument(docId);
 }
 
+// ─── Sécurité : Échappement HTML ───
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 // ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
   await initSupabase();
