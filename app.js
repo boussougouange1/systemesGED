@@ -100,22 +100,40 @@ window.G = {
 // ─── Initialisation Supabase ───
 async function initSupabase() {
   try {
-    if (typeof supabase === 'undefined') throw new Error('Supabase library not loaded');
+    if (typeof supabase === 'undefined') {
+      console.error('Supabase library not loaded - vérifiez la connexion internet');
+      showToast('Erreur de chargement de la bibliothèque Supabase', 'error');
+      throw new Error('Supabase library not loaded');
+    }
+    
+    console.log('🔄 Initialisation de Supabase...');
+    
     G.supabase = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
       auth: { 
         autoRefreshToken: true, 
         persistSession: true,
-        detectSessionInUrl: true
+        detectSessionInUrl: true,
+        flowType: 'pkce'
       }
     });
-    const { data: { session } } = await G.supabase.auth.getSession();
+    
+    // Vérifier la connexion
+    const { data: { session }, error: sessionError } = await G.supabase.auth.getSession();
+    if (sessionError) {
+      console.warn('Erreur session:', sessionError);
+    }
+    
     if (session) {
+      console.log('✅ Session existante trouvée');
       await loadUserFromSupabase(session.user);
       return true;
     }
+    
+    console.log('⚠️ Aucune session active');
     return false;
   } catch (e) {
     console.error('Supabase init error:', e);
+    showToast('Erreur de connexion à la base de données', 'error');
     return false;
   }
 }
@@ -449,41 +467,86 @@ function updateStorageDisplay() {
 }
 
 // ─── Authentification ───
+
 async function handleLogin(e) {
   e.preventDefault();
+  e.stopPropagation();
+  
   const email = document.getElementById('loginEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('loginPassword')?.value;
+  
+  console.log('🔐 Tentative de connexion pour:', email);
   
   if (!email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
   
+  // Validation simple de l'email
+  if (!email.includes('@') || !email.includes('.')) {
+    showToast('Email invalide', 'warning');
+    return;
+  }
+  
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
-  if (btn) btn.disabled = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+  }
   if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
 
   try {
-    const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    // Vérifier que Supabase est initialisé
+    if (!G.supabase) {
+      console.error('Supabase non initialisé');
+      await initSupabase();
+    }
+    
+    const { data, error } = await G.supabase.auth.signInWithPassword({ 
+      email, 
+      password 
+    });
+    
+    if (error) {
+      console.error('Erreur connexion:', error);
+      throw error;
+    }
+    
+    console.log('✅ Connexion réussie pour:', data.user?.email);
     
     if (data.user) {
       await loadUserFromSupabase(data.user);
-      showToast(`Bienvenue ${G.currentUser.name}`, 'success');
+      showToast(`Bienvenue ${G.currentUser.name || email}`, 'success');
       switchToMainApp();
+    } else {
+      throw new Error('Aucun utilisateur retourné');
     }
+    
   } catch (err) {
-    console.error(err);
-    showToast('Email ou mot de passe incorrect', 'error');
+    console.error('Erreur handleLogin:', err);
+    let errorMessage = 'Email ou mot de passe incorrect';
+    if (err.message === 'Invalid login credentials') {
+      errorMessage = 'Email ou mot de passe incorrect';
+    } else if (err.message.includes('Email not confirmed')) {
+      errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
+    } else {
+      errorMessage = err.message || 'Erreur de connexion';
+    }
+    showToast(errorMessage, 'error');
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
     if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
   }
 }
-
 async function handleRegister(e) {
   e.preventDefault();
+  e.stopPropagation();
+  
+  console.log('📝 Tentative d\'inscription...');
   
   const lastAttempt = localStorage.getItem('lastRegisterAttempt');
   if (lastAttempt && Date.now() - parseInt(lastAttempt) < 60000) {
@@ -498,8 +561,15 @@ async function handleRegister(e) {
   const email = document.getElementById('regEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('regPassword')?.value;
   
+  console.log('📝 Données:', { firstName, lastName, companyName, email });
+  
   if (!firstName || !lastName || !companyName || !email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
+  
+  if (password.length < 8) {
+    showToast('Le mot de passe doit contenir au moins 8 caractères', 'warning');
     return;
   }
   
@@ -508,19 +578,32 @@ async function handleRegister(e) {
     return;
   }
   
+  // Vérifier que Supabase est initialisé
+  if (!G.supabase) {
+    await initSupabase();
+  }
+  
   const btn = document.getElementById('registerBtn');
   if (btn) {
     btn.disabled = true;
+    btn.style.opacity = '0.7';
     btn.innerHTML = '<span class="spinner mr-2"></span>Inscription...';
   }
 
   try {
-    const companyId = `comp_${Date.now()}`;
+    const companyId = `comp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    console.log('🏢 Création entreprise:', companyId);
+    
+    // 1. Créer l'entreprise
     const { error: compErr } = await G.supabase
       .from('companies')
       .insert({ id: companyId, name: companyName, plan: 'free' });
-    if (compErr) throw compErr;
+    if (compErr) {
+      console.error('Erreur création entreprise:', compErr);
+      throw compErr;
+    }
 
+    // 2. Créer l'utilisateur dans Auth
     const { data, error } = await G.supabase.auth.signUp({
       email,
       password,
@@ -531,21 +614,36 @@ async function handleRegister(e) {
         } 
       }
     });
-    if (error) throw error;
+    if (error) {
+      console.error('Erreur signUp:', error);
+      throw error;
+    }
+    
+    if (!data.user) {
+      throw new Error('Aucun utilisateur créé');
+    }
+    
+    console.log('✅ Utilisateur créé:', data.user.id);
 
+    // 3. Créer le profil
     const { error: profErr } = await G.supabase
       .from('profiles')
       .insert({
         id: data.user.id,
-        email,
+        email: email,
         name: `${firstName} ${lastName}`,
         role: 'admin',
         status: 'pending_validation',
         company_id: companyId,
-        plan: 'free'
+        plan: 'free',
+        created_at: new Date().toISOString()
       });
-    if (profErr) throw profErr;
+    if (profErr) {
+      console.error('Erreur création profil:', profErr);
+      throw profErr;
+    }
 
+    // 4. Créer le dossier racine
     const rootFolderId = `${companyId}_root`;
     const { error: folderErr } = await G.supabase
       .from('folders')
@@ -556,25 +654,41 @@ async function handleRegister(e) {
         company_id: companyId,
         created_at: new Date().toISOString()
       });
-    if (folderErr) console.warn('Erreur création dossier racine:', folderErr);
+    if (folderErr) {
+      console.warn('Erreur création dossier racine:', folderErr);
+      // Non bloquant
+    }
 
-    showToast('Compte créé ! En attente de validation.', 'success');
+    showToast('Compte créé ! En attente de validation par un administrateur.', 'success');
+    
+    // Basculer vers l'onglet connexion
     switchAuthTab('login');
     
+    // Pré-remplir l'email
     const loginEmail = document.getElementById('loginEmail');
     if (loginEmail) loginEmail.value = email;
     
+    console.log('✅ Inscription terminée avec succès');
+    
   } catch (err) {
-    console.error(err);
-    showToast('Erreur inscription: ' + err.message, 'error');
+    console.error('Erreur inscription:', err);
+    let errorMessage = 'Erreur lors de l\'inscription';
+    if (err.message.includes('User already registered')) {
+      errorMessage = 'Cet email est déjà utilisé';
+    } else if (err.message.includes('password')) {
+      errorMessage = 'Le mot de passe doit contenir au moins 6 caractères';
+    } else {
+      errorMessage = err.message || 'Erreur lors de l\'inscription';
+    }
+    showToast(errorMessage, 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
+      btn.style.opacity = '1';
       btn.innerHTML = '<i class="fas fa-user-plus mr-2"></i>Créer mon compte';
     }
   }
 }
-
 async function handleLogout() {
   await G.supabase.auth.signOut();
   G.currentUser = null;
@@ -589,13 +703,28 @@ async function handleLogout() {
 }
 
 function switchToMainApp() {
+  console.log('🔄 Bascule vers l\'application principale');
+  
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
   
-  if (loginScreen) loginScreen.style.display = 'none';
-  if (mainApp) mainApp.style.display = 'block';
+  if (loginScreen) {
+    loginScreen.style.display = 'none';
+    loginScreen.style.opacity = '0';
+  }
+  if (mainApp) {
+    mainApp.style.display = 'block';
+    mainApp.style.opacity = '1';
+  }
+  
+  // Forcer le rafraîchissement des données
+  if (G.currentUser) {
+    loadAllData();
+  }
   
   switchView('dashboard');
+  
+  console.log('✅ Application principale affichée');
 }
 
 function switchAuthTab(tab) {
@@ -4936,6 +5065,30 @@ function escapeHtml(str) {
 }
 // ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
+ window.addEventListener('error', (e) => {
+    console.error('❌ Erreur globale:', {
+      message: e.message,
+      filename: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+      error: e.error
+    });
+    // Optionnel: afficher un toast pour les erreurs critiques
+    if (e.message && !e.message.includes('ResizeObserver')) {
+      // showToast(`Erreur: ${e.message.substring(0, 100)}`, 'error');
+    }
+  });
+  
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('❌ Promesse rejetée non gérée:', {
+      reason: e.reason,
+      promise: e.promise
+    });
+    // Optionnel: afficher un toast
+    // showToast(`Erreur: ${e.reason?.message || 'Promesse rejetée'}`, 'error');
+  });
+  
+  console.log('🚀 Démarrage de l\'application SystemesGED v7.0');
   await initSupabase();
   const { data: { session } } = await G.supabase.auth.getSession();
   
@@ -4950,6 +5103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Exposer toutes les fonctions globalement
+window.handleLogin = handleLogin;
   window.handleLogin = handleLogin;
   window.handleRegister = handleRegister;
   window.handleLogout = handleLogout;
