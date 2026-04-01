@@ -469,24 +469,25 @@ function updateStorageDisplay() {
 // ─── Authentification ───
 
 async function handleLogin(e) {
+  console.log('🚀 handleLogin a été appelé !');
+  console.log('📝 Événement reçu:', e);
+  
   e.preventDefault();
   e.stopPropagation();
   
   const email = document.getElementById('loginEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('loginPassword')?.value;
   
-  console.log('🔐 Tentative de connexion pour:', email);
+  console.log('🔐 Email saisi:', email);
+  console.log('🔐 Mot de passe saisi:', password ? '*****' : 'vide');
   
   if (!email || !password) {
+    console.log('⚠️ Email ou mot de passe vide');
     showToast('Veuillez remplir tous les champs', 'warning');
     return;
   }
   
-  // Validation simple de l'email
-  if (!email.includes('@') || !email.includes('.')) {
-    showToast('Email invalide', 'warning');
-    return;
-  }
+ }
   
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
