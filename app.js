@@ -671,17 +671,22 @@ async function handleRegister(e) {
     console.log('✅ Inscription terminée avec succès');
     
   } catch (err) {
-    console.error('Erreur inscription:', err);
-    let errorMessage = 'Erreur lors de l\'inscription';
-    if (err.message.includes('User already registered')) {
-      errorMessage = 'Cet email est déjà utilisé';
-    } else if (err.message.includes('password')) {
-      errorMessage = 'Le mot de passe doit contenir au moins 6 caractères';
-    } else {
-      errorMessage = err.message || 'Erreur lors de l\'inscription';
-    }
-    showToast(errorMessage, 'error');
-  } finally {
+    console.error('Erreur handleLogin:', err);
+  let errorMessage = 'Email ou mot de passe incorrect';
+  if (err.message === 'Invalid login credentials') {
+    errorMessage = 'Email ou mot de passe incorrect';
+  } else if (err.message === 'Email not confirmed') {
+    errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
+  } else if (err.message === 'User not found') {
+    errorMessage = 'Aucun compte trouvé avec cet email';
+  } else if (err.message.includes('network')) {
+    errorMessage = 'Problème de connexion réseau';
+  } else {
+    errorMessage = err.message || 'Erreur de connexion';
+  }
+  showToast(errorMessage, 'error');
+  } 
+	finally {
     if (btn) {
       btn.disabled = false;
       btn.style.opacity = '1';
@@ -710,11 +715,9 @@ function switchToMainApp() {
   
   if (loginScreen) {
     loginScreen.style.display = 'none';
-    loginScreen.style.opacity = '0';
   }
   if (mainApp) {
     mainApp.style.display = 'block';
-    mainApp.style.opacity = '1';
   }
   
   // Forcer le rafraîchissement des données
@@ -722,6 +725,7 @@ function switchToMainApp() {
     loadAllData();
   }
   
+  // Recharger la vue
   switchView('dashboard');
   
   console.log('✅ Application principale affichée');
@@ -749,13 +753,25 @@ function togglePwdInput(id, btn) {
 }
 
 function demoLogin() {
+  console.log('🔑 Tentative de connexion démo');
+  
   const loginEmail = document.getElementById('loginEmail');
   const loginPassword = document.getElementById('loginPassword');
   
   if (loginEmail) loginEmail.value = 'demo@systemesged.fr';
   if (loginPassword) loginPassword.value = 'Demo123!';
   
-  handleLogin(new Event('submit'));
+  // Créer un événement submit et l'appeler
+  const event = new Event('submit', { bubbles: true, cancelable: true });
+  const form = document.getElementById('loginForm');
+  
+  if (form) {
+    console.log('📝 Formulaire trouvé, déclenchement du submit');
+    form.dispatchEvent(event);
+  } else {
+    console.log('⚠️ Formulaire non trouvé, appel direct de handleLogin');
+    handleLogin(event);
+  }
 }
 
 function oauthLogin(provider) {
@@ -5104,8 +5120,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Exposer toutes les fonctions globalement
 window.handleLogin = handleLogin;
-  window.handleLogin = handleLogin;
-  window.handleRegister = handleRegister;
+window.handleRegister = handleRegister;
+window.handleLogout = handleLogout;
   window.handleLogout = handleLogout;
   window.switchView = switchView;
   window.switchAuthTab = switchAuthTab;
