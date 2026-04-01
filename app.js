@@ -468,82 +468,25 @@ function updateStorageDisplay() {
 
 // ─── Authentification ───
 
-async function handleLogin(e) {
-  console.log('🚀 handleLogin a été appelé !');
-  console.log('📝 Événement reçu:', e);
-  
-  e.preventDefault();
-  e.stopPropagation();
-  
-  const email = document.getElementById('loginEmail')?.value.trim().toLowerCase();
-  const password = document.getElementById('loginPassword')?.value;
-  
-  console.log('🔐 Email saisi:', email);
-  console.log('🔐 Mot de passe saisi:', password ? '*****' : 'vide');
-  
-  if (!email || !password) {
-    console.log('⚠️ Email ou mot de passe vide');
-    showToast('Veuillez remplir tous les champs', 'warning');
-    return;
+function addFilesToSelection(files) {
+  for (const file of files) {
+    if (file.size > CONFIG.maxFileSize) {
+      showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
+      continue;
+    }
+    
+    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+      G.selectedFiles.push(file);
+    }
   }
+  renderSelectedFiles();
   
-  // ⚠️ SUPPRIMEZ L'ACCOLADE CI-DESSUS - CONTINUEZ ICI
-  
-  const btn = document.getElementById('loginBtn');
-  const btnText = document.getElementById('loginBtnText');
-  if (btn) {
-    btn.disabled = true;
-    btn.style.opacity = '0.7';
-  }
-  if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
-
-  try {
-    if (!G.supabase) {
-      console.error('Supabase non initialisé');
-      await initSupabase();
-    }
-    
-    const { data, error } = await G.supabase.auth.signInWithPassword({ 
-      email, 
-      password 
-    });
-    
-    if (error) {
-      console.error('Erreur connexion:', error);
-      throw error;
-    }
-    
-    console.log('✅ Connexion réussie pour:', data.user?.email);
-    
-    if (data.user) {
-      await loadUserFromSupabase(data.user);
-      showToast(`Bienvenue ${G.currentUser.name || email}`, 'success');
-      switchToMainApp();
-    } else {
-      throw new Error('Aucun utilisateur retourné');
-    }
-    
-  } catch (err) {
-    console.error('Erreur handleLogin:', err);
-    let errorMessage = 'Email ou mot de passe incorrect';
-    if (err.message === 'Invalid login credentials') {
-      errorMessage = 'Email ou mot de passe incorrect';
-    } else if (err.message.includes('Email not confirmed')) {
-      errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
-    } else if (err.message === 'User not found') {
-      errorMessage = 'Aucun compte trouvé avec cet email';
-    } else if (err.message.includes('network')) {
-      errorMessage = 'Problème de connexion réseau';
-    } else {
-      errorMessage = err.message || 'Erreur de connexion';
-    }
-    showToast(errorMessage, 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    }
-    if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
+  const dropZone = document.getElementById('docDropZone');
+  if (dropZone && G.selectedFiles.length > 0) {
+    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
+    setTimeout(() => {
+      dropZone.style.borderColor = '';
+    }, 1000);
   }
 }
   if (btn) {
