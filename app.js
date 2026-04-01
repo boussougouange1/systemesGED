@@ -487,8 +487,6 @@ async function handleLogin(e) {
     return;
   }
   
- }
-  
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
   if (btn) {
@@ -1560,7 +1558,7 @@ function addFilesToSelection(files) {
       dropZone.style.borderColor = '';
     }, 1000);
   }
-}
+
   renderSelectedFiles();
   
   // Mettre à jour l'affichage de la zone de dépôt
@@ -5120,9 +5118,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Exposer toutes les fonctions globalement
-window.handleLogin = handleLogin;
-window.handleRegister = handleRegister;
-window.handleLogout = handleLogout;
+// Exposer toutes les fonctions globalement
+  window.handleLogin = handleLogin;
+  window.handleRegister = handleRegister;
   window.handleLogout = handleLogout;
   window.switchView = switchView;
   window.switchAuthTab = switchAuthTab;
