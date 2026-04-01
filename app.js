@@ -85,16 +85,6 @@ window.G = {
       return false;
     }
   });
-  
-  // Désactivé pour éviter les problèmes de performance
-  // setInterval(() => {
-  //   const before = new Date();
-  //   debugger;
-  //   const after = new Date();
-  //   if (after - before > 100) {
-  //     console.clear();
-  //   }
-  // }, 1000);
 })();
 
 // ─── Initialisation Supabase ───
@@ -489,6 +479,23 @@ function addFilesToSelection(files) {
     }, 1000);
   }
 }
+
+async function handleLogin(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  console.log('🔑 Tentative de connexion...');
+  
+  const email = document.getElementById('loginEmail')?.value.trim();
+  const password = document.getElementById('loginPassword')?.value;
+  
+  if (!email || !password) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
+  
+  const btn = document.getElementById('loginBtn');
+  const btnText = document.getElementById('loginBtnText');
   if (btn) {
     btn.disabled = true;
     btn.style.opacity = '0.7';
@@ -541,6 +548,7 @@ function addFilesToSelection(files) {
     if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
   }
 }
+
 async function handleRegister(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -670,22 +678,15 @@ async function handleRegister(e) {
     console.log('✅ Inscription terminée avec succès');
     
   } catch (err) {
-    console.error('Erreur handleLogin:', err);
-  let errorMessage = 'Email ou mot de passe incorrect';
-  if (err.message === 'Invalid login credentials') {
-    errorMessage = 'Email ou mot de passe incorrect';
-  } else if (err.message === 'Email not confirmed') {
-    errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
-  } else if (err.message === 'User not found') {
-    errorMessage = 'Aucun compte trouvé avec cet email';
-  } else if (err.message.includes('network')) {
-    errorMessage = 'Problème de connexion réseau';
-  } else {
-    errorMessage = err.message || 'Erreur de connexion';
-  }
-  showToast(errorMessage, 'error');
-  } 
-	finally {
+    console.error('Erreur handleRegister:', err);
+    let errorMessage = 'Erreur lors de l\'inscription';
+    if (err.message.includes('User already registered')) {
+      errorMessage = 'Cet email est déjà utilisé';
+    } else {
+      errorMessage = err.message || 'Erreur d\'inscription';
+    }
+    showToast(errorMessage, 'error');
+  } finally {
     if (btn) {
       btn.disabled = false;
       btn.style.opacity = '1';
@@ -693,6 +694,7 @@ async function handleRegister(e) {
     }
   }
 }
+
 async function handleLogout() {
   await G.supabase.auth.signOut();
   G.currentUser = null;
@@ -1535,39 +1537,6 @@ function handleFilePickerSelect(e) {
   e.target.value = '';
 }
 
-function addFilesToSelection(files) {
-  for (const file of files) {
-    if (file.size > CONFIG.maxFileSize) {
-      showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
-      continue;
-    }
-    
-    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-      G.selectedFiles.push(file);
-    }
-  }
-  renderSelectedFiles();
-  
-  const dropZone = document.getElementById('docDropZone');
-  if (dropZone && G.selectedFiles.length > 0) {
-    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
-    setTimeout(() => {
-      dropZone.style.borderColor = '';
-    }, 1000);
-  }
-}
-  renderSelectedFiles();
-  
-  // Mettre à jour l'affichage de la zone de dépôt
-  const dropZone = document.getElementById('docDropZone');
-  if (dropZone && G.selectedFiles.length > 0) {
-    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
-    setTimeout(() => {
-      dropZone.style.borderColor = '';
-    }, 1000);
-  }
-}
-
 function renderSelectedFiles() {
   const list = document.getElementById('selectedFilesList');
   if (!list) return;
@@ -1902,6 +1871,7 @@ function openPreviewModal(docId) {
   // Incrémenter le compteur de vues
   updateDocViews(docId);
 }
+
 function updatePreviewMetadata(doc) {
   const metaContainer = document.getElementById('previewMetadata');
   if (metaContainer) {
@@ -1959,6 +1929,7 @@ function hidePreviewLoading() {
   const loadingEl = document.getElementById('previewLoading');
   if (loadingEl) loadingEl.classList.add('hidden');
 }
+
 async function updateDocViews(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (doc) {
@@ -2837,18 +2808,18 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-      </td>
-      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
-      <td class="p-4 hidden md:table-cell">-</td>
-      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
+       </td>
+      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span> </td>
+      <td class="p-4 hidden md:table-cell">- </td>
+      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span> </td>
       <td class="p-4">
         <div class="flex gap-2">
           ${u.status === 'pending_validation' && canValidateUsers() ? `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
           ${canValidateUsers() ? `<button onclick="resetUserPassword('${u.email}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Réinitialiser mot de passe"><i class="fas fa-key"></i></button>` : ''}
           ${canValidateUsers() ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
         </div>
-      </td>
-    </tr>
+       </td>
+     </tr>
   `).join('');
 }
 
@@ -3927,6 +3898,7 @@ function openSignModal() {
   // Afficher les signatures existantes
   loadExistingSignatures(doc.id);
 }
+
 function loadExistingSignatures(docId) {
   const existingSignatures = G.signatures.filter(s => s.document_id === docId);
   const container = document.getElementById('existingSignatures');
@@ -4211,6 +4183,7 @@ function viewSignature(signatureId) {
   `;
   document.body.appendChild(modal);
 }
+
 function openRequestSignatureModal() {
   const modal = document.getElementById('requestSignatureModal');
   if (modal) modal.classList.remove('hidden');
@@ -5075,9 +5048,10 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
 // ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
- window.addEventListener('error', (e) => {
+  window.addEventListener('error', (e) => {
     console.error('❌ Erreur globale:', {
       message: e.message,
       filename: e.filename,
@@ -5085,10 +5059,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       colno: e.colno,
       error: e.error
     });
-    // Optionnel: afficher un toast pour les erreurs critiques
-    if (e.message && !e.message.includes('ResizeObserver')) {
-      // showToast(`Erreur: ${e.message.substring(0, 100)}`, 'error');
-    }
   });
   
   window.addEventListener('unhandledrejection', (e) => {
@@ -5096,8 +5066,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       reason: e.reason,
       promise: e.promise
     });
-    // Optionnel: afficher un toast
-    // showToast(`Erreur: ${e.reason?.message || 'Promesse rejetée'}`, 'error');
   });
   
   console.log('🚀 Démarrage de l\'application SystemesGED v7.0');
@@ -5115,7 +5083,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Exposer toutes les fonctions globalement
-// Exposer toutes les fonctions globalement
   window.handleLogin = handleLogin;
   window.handleRegister = handleRegister;
   window.handleLogout = handleLogout;
