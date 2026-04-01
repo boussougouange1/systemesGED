@@ -487,8 +487,65 @@ async function handleLogin(e) {
     return;
   }
   
+  // ⚠️ SUPPRIMEZ L'ACCOLADE CI-DESSUS - CONTINUEZ ICI
+  
   const btn = document.getElementById('loginBtn');
   const btnText = document.getElementById('loginBtnText');
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+  }
+  if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
+
+  try {
+    if (!G.supabase) {
+      console.error('Supabase non initialisé');
+      await initSupabase();
+    }
+    
+    const { data, error } = await G.supabase.auth.signInWithPassword({ 
+      email, 
+      password 
+    });
+    
+    if (error) {
+      console.error('Erreur connexion:', error);
+      throw error;
+    }
+    
+    console.log('✅ Connexion réussie pour:', data.user?.email);
+    
+    if (data.user) {
+      await loadUserFromSupabase(data.user);
+      showToast(`Bienvenue ${G.currentUser.name || email}`, 'success');
+      switchToMainApp();
+    } else {
+      throw new Error('Aucun utilisateur retourné');
+    }
+    
+  } catch (err) {
+    console.error('Erreur handleLogin:', err);
+    let errorMessage = 'Email ou mot de passe incorrect';
+    if (err.message === 'Invalid login credentials') {
+      errorMessage = 'Email ou mot de passe incorrect';
+    } else if (err.message.includes('Email not confirmed')) {
+      errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
+    } else if (err.message === 'User not found') {
+      errorMessage = 'Aucun compte trouvé avec cet email';
+    } else if (err.message.includes('network')) {
+      errorMessage = 'Problème de connexion réseau';
+    } else {
+      errorMessage = err.message || 'Erreur de connexion';
+    }
+    showToast(errorMessage, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+    if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
+  }
+}
   if (btn) {
     btn.disabled = true;
     btn.style.opacity = '0.7';
@@ -1537,20 +1594,17 @@ function handleFilePickerSelect(e) {
 
 function addFilesToSelection(files) {
   for (const file of files) {
-    // Vérification de la taille
     if (file.size > CONFIG.maxFileSize) {
       showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
       continue;
     }
     
-    // Vérifier si le fichier n'est pas déjà dans la sélection
     if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
       G.selectedFiles.push(file);
     }
   }
   renderSelectedFiles();
   
-  // Mettre à jour l'affichage de la zone de dépôt
   const dropZone = document.getElementById('docDropZone');
   if (dropZone && G.selectedFiles.length > 0) {
     dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
@@ -1558,7 +1612,7 @@ function addFilesToSelection(files) {
       dropZone.style.borderColor = '';
     }, 1000);
   }
-
+}
   renderSelectedFiles();
   
   // Mettre à jour l'affichage de la zone de dépôt
