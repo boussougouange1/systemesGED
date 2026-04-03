@@ -2563,17 +2563,18 @@ function renderWorkflows() {
       <h4 class="text-sm font-semibold ${getWfStatusColor(status)} mb-3">${getWfStatusLabel(status)}</h4>
       <div class="space-y-2">
         ${G.workflows.filter(w => w.status === status).map(wf => `
-          <div class="p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50" onclick="openWfDetail('${wf.id}')">
-            <p class="text-white text-sm font-medium">${wf.title}</p>
-            <p class="text-xs text-blue-300/60">Priorité: ${wf.priority}</p>
-            ${wf.assignee_id ? `<p class="text-xs text-green-400/60 mt-1">Assigné à: ${wf.assignee_id === G.currentUser.id ? 'Moi' : wf.assignee_id.substring(0,8)}</p>` : ''}
+          <div class="p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50 transition-all" onclick="openWfDetail('${wf.id}')">
+            <p class="text-white text-sm font-medium truncate">${escapeHtml(wf.title)}</p>
+            <p class="text-xs text-blue-300/60 mt-1">Priorité: ${wf.priority}</p>
+            ${wf.assignee_id ? `<p class="text-xs text-green-400/60 mt-1">Assigné à: ${G.users.find(u => u.id === wf.assignee_id)?.name || wf.assignee_id.substring(0,8)}</p>` : ''}
+            <p class="text-xs text-blue-400/50 mt-1">Créé le ${formatDate(wf.created_at)}</p>
           </div>
         `).join('')}
       </div>
     </div>
   `).join('');
   
-  // Mettre à jour les statistiques
+  // Mettre à jour les KPIs
   const pendingCount = G.workflows.filter(w => w.status === 'pending').length;
   const inReviewCount = G.workflows.filter(w => w.status === 'in_review').length;
   const approvedCount = G.workflows.filter(w => w.status === 'approved').length;
@@ -2582,14 +2583,25 @@ function renderWorkflows() {
   const wfKpiStrip = document.getElementById('wfKpiStrip');
   if (wfKpiStrip) {
     wfKpiStrip.innerHTML = `
-      <div class="glass-card rounded-xl p-2 text-center"><p class="text-orange-400 text-xl font-bold">${pendingCount}</p><p class="text-xs text-blue-300/60">En attente</p></div>
-      <div class="glass-card rounded-xl p-2 text-center"><p class="text-blue-400 text-xl font-bold">${inReviewCount}</p><p class="text-xs text-blue-300/60">En révision</p></div>
-      <div class="glass-card rounded-xl p-2 text-center"><p class="text-green-400 text-xl font-bold">${approvedCount}</p><p class="text-xs text-blue-300/60">Approuvés</p></div>
-      <div class="glass-card rounded-xl p-2 text-center"><p class="text-red-400 text-xl font-bold">${rejectedCount}</p><p class="text-xs text-blue-300/60">Rejetés</p></div>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('pending')">
+        <p class="text-orange-400 text-xl font-bold">${pendingCount}</p>
+        <p class="text-xs text-blue-300/60">En attente</p>
+      </div>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('in_review')">
+        <p class="text-blue-400 text-xl font-bold">${inReviewCount}</p>
+        <p class="text-xs text-blue-300/60">En révision</p>
+      </div>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('approved')">
+        <p class="text-green-400 text-xl font-bold">${approvedCount}</p>
+        <p class="text-xs text-blue-300/60">Approuvés</p>
+      </div>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('rejected')">
+        <p class="text-red-400 text-xl font-bold">${rejectedCount}</p>
+        <p class="text-xs text-blue-300/60">Rejetés</p>
+      </div>
     `;
   }
 }
-
 function getWfStatusClass(status) {
   const classes = { 
     pending: 'bg-orange-500/20 text-orange-300', 
@@ -2624,27 +2636,34 @@ function openCreateWorkflowModal() {
   const docSelect = document.getElementById('wfDocId');
   if (docSelect) {
     docSelect.innerHTML = '<option value="">-- Aucun --</option>' + 
-      G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${doc.name}</option>`).join('');
+      G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${escapeHtml(doc.name)}</option>`).join('');
   }
   
   const assigneeSelect = document.getElementById('wfAssignee');
   if (assigneeSelect) {
     assigneeSelect.innerHTML = '<option value="">-- Non assigné --</option>' + 
-      G.users.map(user => `<option value="${user.id}">${user.name}</option>`).join('');
+      G.users.filter(u => u.status === 'active').map(user => `<option value="${user.id}">${escapeHtml(user.name)}</option>`).join('');
   }
+  
+  // Réinitialiser les champs
+  const titleInput = document.getElementById('wfTitle');
+  const descInput = document.getElementById('wfDesc');
+  const stepsInput = document.getElementById('wfSteps');
+  const prioritySelect = document.getElementById('wfPriority');
+  const dueDateInput = document.getElementById('wfDueDate');
+  if (titleInput) titleInput.value = '';
+  if (descInput) descInput.value = '';
+  if (stepsInput) stepsInput.value = '';
+  if (prioritySelect) prioritySelect.value = 'medium';
+  if (dueDateInput) dueDateInput.value = '';
   
   const modal = document.getElementById('workflowModal');
   if (modal) modal.classList.remove('hidden');
 }
 
-function closeWorkflowModal() {
-  const modal = document.getElementById('workflowModal');
-  if (modal) modal.classList.add('hidden');
-}
-
 async function createWorkflow(e) {
   e.preventDefault();
-  const title = document.getElementById('wfTitle')?.value;
+  const title = document.getElementById('wfTitle')?.value.trim();
   if (!title) {
     showToast('Veuillez entrer un titre', 'warning');
     return;
@@ -2659,7 +2678,7 @@ async function createWorkflow(e) {
   const newWf = {
     id: generateId(),
     title,
-    description: document.getElementById('wfDesc')?.value || '',
+    description: document.getElementById('wfDesc')?.value.trim() || '',
     priority: document.getElementById('wfPriority')?.value || 'medium',
     status: 'pending',
     assignee_id: document.getElementById('wfAssignee')?.value || null,
@@ -2679,6 +2698,14 @@ async function createWorkflow(e) {
     return;
   }
   
+  G.workflows.unshift(newWf);
+  showToast('Workflow créé avec succès', 'success');
+  closeWorkflowModal();
+  if (G.wfView === 'kanban') renderWorkflows();
+  else renderWorkflowsList();
+  
+  await addAuditLog('workflow_create', 'workflow', newWf.id, `Titre: ${title}`);
+}  
   G.workflows.unshift(newWf);
   showToast('Workflow créé', 'success');
   closeWorkflowModal();
@@ -2705,7 +2732,8 @@ async function actOnWorkflow(action, comment) {
     created_at: new Date().toISOString()
   };
   
-  await G.supabase.from('workflow_actions').insert(actionRecord);
+  const { error: actionError } = await G.supabase.from('workflow_actions').insert(actionRecord);
+  if (actionError) console.error('Erreur enregistrement action:', actionError);
   
   let newStatus = wf.status;
   let newStep = wf.current_step;
@@ -2722,7 +2750,7 @@ async function actOnWorkflow(action, comment) {
     newStatus = 'in_review';
   }
   
-  await G.supabase
+  const { error: updateError } = await G.supabase
     .from('workflows')
     .update({ 
       status: newStatus, 
@@ -2731,97 +2759,114 @@ async function actOnWorkflow(action, comment) {
     })
     .eq('id', G.currentWfId);
   
+  if (updateError) {
+    showToast('Erreur mise à jour workflow: ' + updateError.message, 'error');
+    return;
+  }
+  
+  // Mettre à jour l'objet local
   wf.status = newStatus;
   wf.current_step = newStep;
   
   showToast(`Workflow ${action === 'approve' ? 'approuvé' : action === 'reject' ? 'rejeté' : 'mis à jour'}`, 'success');
-  renderWorkflows();
+  
+  // Rafraîchir l'affichage
+  if (G.wfView === 'kanban') renderWorkflows();
+  else renderWorkflowsList();
   closeWfDetail();
   
   await addAuditLog(`workflow_${action}`, 'workflow', G.currentWfId, `Commentaire: ${commentText || 'Aucun'}`);
 }
 
-function openWfDetail(wfId) {
+async function openWfDetail(wfId) {
   G.currentWfId = wfId;
   const modal = document.getElementById('wfDetailModal');
   if (modal) modal.classList.remove('hidden');
   
   const wf = G.workflows.find(w => w.id === wfId);
-  if (wf) {
-    const titleEl = document.getElementById('wfDetailTitle');
-    if (titleEl) titleEl.textContent = wf.title;
-    
-    const metaEl = document.getElementById('wfDetailMeta');
-    if (metaEl) {
-      metaEl.innerHTML = `
-        <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
-        <span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span>
-        <span class="text-xs text-blue-300/60">Créé le ${formatDate(wf.created_at)}</span>
-        ${wf.assignee_id ? `<span class="text-xs text-green-400/60">Assigné: ${G.users.find(u => u.id === wf.assignee_id)?.name || 'Inconnu'}</span>` : ''}
-      `;
-    }
-    
-    const stepsContainer = document.getElementById('wfDetailSteps');
-    if (stepsContainer) {
-      if (wf.steps && Array.isArray(wf.steps) && wf.steps.length > 0) {
-        stepsContainer.innerHTML = wf.steps.map((step, idx) => `
-          <div class="flex items-center gap-3 p-2 rounded-lg ${idx <= wf.current_step ? 'bg-green-500/10 border border-green-500/30' : 'bg-slate-800/50'}">
-            <div class="w-6 h-6 rounded-full flex items-center justify-center ${idx < wf.current_step ? 'bg-green-500 text-white' : idx === wf.current_step ? 'bg-blue-500 text-white' : 'bg-slate-600 text-gray-400'}">
-              ${idx + 1}
-            </div>
-            <div class="flex-1">
-              <p class="text-white text-sm">${step}</p>
-              ${idx === wf.current_step && wf.status === 'pending' ? '<p class="text-xs text-blue-400">En attente de validation</p>' : ''}
-            </div>
-            ${idx < wf.current_step ? '<i class="fas fa-check-circle text-green-400"></i>' : ''}
-          </div>
-        `).join('');
-        
-        const progress = ((wf.current_step + 1) / wf.steps.length) * 100;
-        const progressBar = document.getElementById('wfDetailProgressBar');
-        const progressText = document.getElementById('wfDetailProgress');
-        if (progressBar) progressBar.style.width = `${progress}%`;
-        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
-      } else {
-        stepsContainer.innerHTML = '<p class="text-blue-300/50 text-sm">Aucune étape définie</p>';
-      }
-    }
-    
-    if (wf.document_id) {
-      const doc = G.documents.find(d => d.id === wf.document_id);
-      const docContainer = document.getElementById('wfDetailDoc');
-      if (docContainer && doc) {
-        docContainer.classList.remove('hidden');
-        docContainer.innerHTML = `
-          <p class="text-xs text-blue-300/60 mb-1">Document lié</p>
-          <div class="flex items-center gap-2 cursor-pointer" onclick="openPreviewModal('${doc.id}')">
-            <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-blue-400"></i>
-            <span class="text-white text-sm">${doc.name}</span>
-          </div>
-        `;
-      }
-    } else {
-      const docContainer = document.getElementById('wfDetailDoc');
-      if (docContainer) docContainer.classList.add('hidden');
-    }
-    
-    const actionsContainer = document.getElementById('wfDetailActions');
-    if (actionsContainer) {
-      const isAssignee = wf.assignee_id === G.currentUser.id;
-      const isCreator = wf.created_by === G.currentUser.id;
-      const isAdmin = G.currentUser.role === 'admin';
-      
-      if ((isAssignee || isCreator || isAdmin) && wf.status === 'pending') {
-        actionsContainer.classList.remove('hidden');
-      } else {
-        actionsContainer.classList.add('hidden');
-      }
-    }
-    
-    loadWorkflowHistory(wfId);
+  if (!wf) return;
+  
+  // Titre
+  const titleEl = document.getElementById('wfDetailTitle');
+  if (titleEl) titleEl.textContent = wf.title;
+  
+  // Métadonnées
+  const metaEl = document.getElementById('wfDetailMeta');
+  if (metaEl) {
+    const assigneeName = wf.assignee_id ? (G.users.find(u => u.id === wf.assignee_id)?.name || 'Inconnu') : 'Non assigné';
+    metaEl.innerHTML = `
+      <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+      <span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span>
+      <span class="text-xs text-blue-300/60">Créé le ${formatDate(wf.created_at)}</span>
+      <span class="text-xs text-blue-300/60">Assigné: ${assigneeName}</span>
+    `;
   }
+  
+  // Étapes
+  const stepsContainer = document.getElementById('wfDetailSteps');
+  if (stepsContainer) {
+    if (wf.steps && Array.isArray(wf.steps) && wf.steps.length > 0) {
+      stepsContainer.innerHTML = wf.steps.map((step, idx) => `
+        <div class="flex items-center gap-3 p-2 rounded-lg ${idx <= wf.current_step ? 'bg-green-500/10 border border-green-500/30' : 'bg-slate-800/50'}">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center ${idx < wf.current_step ? 'bg-green-500 text-white' : idx === wf.current_step ? 'bg-blue-500 text-white' : 'bg-slate-600 text-gray-400'}">
+            ${idx + 1}
+          </div>
+          <div class="flex-1">
+            <p class="text-white text-sm">${escapeHtml(step)}</p>
+            ${idx === wf.current_step && wf.status === 'pending' ? '<p class="text-xs text-blue-400">En attente de validation</p>' : ''}
+          </div>
+          ${idx < wf.current_step ? '<i class="fas fa-check-circle text-green-400"></i>' : ''}
+        </div>
+      `).join('');
+      
+      const progress = wf.steps.length > 0 ? ((wf.current_step + 1) / wf.steps.length) * 100 : 0;
+      const progressBar = document.getElementById('wfDetailProgressBar');
+      const progressText = document.getElementById('wfDetailProgress');
+      if (progressBar) progressBar.style.width = `${progress}%`;
+      if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+    } else {
+      stepsContainer.innerHTML = '<p class="text-blue-300/50 text-sm">Aucune étape définie</p>';
+    }
+  }
+  
+  // Document lié
+  const docContainer = document.getElementById('wfDetailDoc');
+  if (wf.document_id) {
+    const doc = G.documents.find(d => d.id === wf.document_id);
+    if (doc && docContainer) {
+      docContainer.classList.remove('hidden');
+      docContainer.innerHTML = `
+        <p class="text-xs text-blue-300/60 mb-1">Document lié</p>
+        <div class="flex items-center gap-2 cursor-pointer hover:bg-blue-500/10 p-2 rounded-lg transition-colors" onclick="openPreviewModal('${doc.id}')">
+          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-blue-400"></i>
+          <span class="text-white text-sm truncate">${escapeHtml(doc.name)}</span>
+          <i class="fas fa-external-link-alt text-blue-400/50 text-xs ml-auto"></i>
+        </div>
+      `;
+    } else if (docContainer) {
+      docContainer.classList.add('hidden');
+    }
+  } else if (docContainer) {
+    docContainer.classList.add('hidden');
+  }
+  
+  // Actions (boutons approuver/rejeter)
+  const actionsContainer = document.getElementById('wfDetailActions');
+  if (actionsContainer) {
+    const isAssignee = wf.assignee_id === G.currentUser.id;
+    const isCreator = wf.created_by === G.currentUser.id;
+    const isAdmin = G.currentUser.role === 'admin';
+    
+    if ((isAssignee || isCreator || isAdmin) && wf.status === 'pending') {
+      actionsContainer.classList.remove('hidden');
+    } else {
+      actionsContainer.classList.add('hidden');
+    }
+  }
+  
+  // Charger l'historique
+  await loadWorkflowHistory(wfId);
 }
-
 async function loadWorkflowHistory(wfId) {
   const { data: actions, error } = await G.supabase
     .from('workflow_actions')
@@ -2836,18 +2881,23 @@ async function loadWorkflowHistory(wfId) {
     } else {
       historyContainer.innerHTML = actions.map(a => `
         <div class="p-2 border-b border-blue-500/10">
-          <p class="text-white text-xs">${a.profiles?.name || 'Utilisateur'} a ${getActionLabel(a.action)}</p>
-          <p class="text-blue-300/50 text-[10px]">${formatDate(a.created_at)}</p>
-          ${a.comment ? `<p class="text-xs text-blue-300/70 mt-1">"${a.comment}"</p>` : ''}
+          <div class="flex items-center justify-between">
+            <p class="text-white text-xs font-medium">${a.profiles?.name || 'Utilisateur'}</p>
+            <span class="text-blue-300/50 text-[10px]">${formatDate(a.created_at)}</span>
+          </div>
+          <p class="text-blue-300/70 text-xs mt-0.5">${getActionLabel(a.action)}</p>
+          ${a.comment ? `<p class="text-xs text-blue-300/50 mt-1 italic">"${escapeHtml(a.comment)}"</p>` : ''}
         </div>
       `).join('');
     }
   }
 }
-
 async function addWfComment() {
-  const comment = document.getElementById('wfCommentInput')?.value;
-  if (!comment || !G.currentWfId) return;
+  const comment = document.getElementById('wfCommentInput')?.value.trim();
+  if (!comment || !G.currentWfId) {
+    showToast('Veuillez écrire un commentaire', 'warning');
+    return;
+  }
   
   const actionRecord = {
     id: generateId(),
@@ -2859,12 +2909,15 @@ async function addWfComment() {
   };
   
   const { error } = await G.supabase.from('workflow_actions').insert(actionRecord);
-  if (!error) {
-    const input = document.getElementById('wfCommentInput');
-    if (input) input.value = '';
-    loadWorkflowHistory(G.currentWfId);
-    showToast('Commentaire ajouté', 'success');
+  if (error) {
+    showToast('Erreur ajout commentaire', 'error');
+    return;
   }
+  
+  const input = document.getElementById('wfCommentInput');
+  if (input) input.value = '';
+  await loadWorkflowHistory(G.currentWfId);
+  showToast('Commentaire ajouté', 'success');
 }
 
 function getActionLabel(action) {
@@ -2889,25 +2942,47 @@ function filterWorkflows(status) {
       btn.classList.add('text-gray-400', 'border-blue-500/10');
     }
   });
-  renderWorkflows();
+  if (G.wfView === 'kanban') {
+    renderWorkflows();
+  } else {
+    renderWorkflowsList();
+  }
 }
 
 function searchWorkflows(query) {
-  if (!query) {
-    renderWorkflows();
+  if (!query || query.length < 2) {
+    if (G.wfView === 'kanban') renderWorkflows();
+    else renderWorkflowsList();
     return;
   }
   
-  const filtered = G.workflows.filter(w => w.title.toLowerCase().includes(query.toLowerCase()));
-  const container = document.getElementById('wfKanban');
+  const filtered = G.workflows.filter(w => w.title.toLowerCase().includes(query.toLowerCase()) || 
+    (w.description && w.description.toLowerCase().includes(query.toLowerCase())));
   
-  if (container) {
-    container.innerHTML = filtered.map(wf => `
-      <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
-        <p class="text-white font-medium">${wf.title}</p>
-        <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
-      </div>
-    `).join('');
+  const container = document.getElementById('wfKanban');
+  const listContainer = document.getElementById('wfListView');
+  
+  if (G.wfView === 'kanban' && container) {
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="col-span-full text-center py-12 text-blue-300/50">Aucun résultat</div>';
+    } else {
+      container.innerHTML = filtered.map(wf => `
+        <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
+          <p class="text-white font-medium">${escapeHtml(wf.title)}</p>
+          <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+        </div>
+      `).join('');
+    }
+  } else if (listContainer) {
+    if (filtered.length === 0) {
+      listContainer.innerHTML = '<div class="text-center py-12 text-blue-300/50">Aucun résultat</div>';
+    } else {
+      listContainer.innerHTML = filtered.map(wf => `
+        <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
+          <div class="flex justify-between"><span class="text-white font-medium">${escapeHtml(wf.title)}</span><span class="text-xs px-2 py-1 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span></div>
+        </div>
+      `).join('');
+    }
   }
 }
 
@@ -2940,11 +3015,24 @@ function renderWorkflowsList() {
   let filtered = G.workflows;
   if (G.wfFilter) filtered = filtered.filter(w => w.status === G.wfFilter);
   
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-tasks text-4xl mb-2 opacity-20"></i><p>Aucun workflow trouvé</p></div>';
+    return;
+  }
+  
   container.innerHTML = filtered.map(wf => `
-    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
-      <div class="flex items-center justify-between">
-        <div><p class="text-white font-medium">${wf.title}</p><p class="text-xs text-blue-300/60">${formatDate(wf.created_at)}</p></div>
-        <span class="text-xs px-2 py-1 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer hover:border-blue-400/40 transition-all" onclick="openWfDetail('${wf.id}')">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex-1">
+          <p class="text-white font-medium">${escapeHtml(wf.title)}</p>
+          <div class="flex items-center gap-3 mt-1">
+            <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+            <span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span>
+            <span class="text-xs text-blue-300/60">${formatDate(wf.created_at)}</span>
+          </div>
+          ${wf.assignee_id ? `<p class="text-xs text-green-400/60 mt-1">Assigné: ${G.users.find(u => u.id === wf.assignee_id)?.name || 'Inconnu'}</p>` : ''}
+        </div>
+        <i class="fas fa-chevron-right text-blue-400/50"></i>
       </div>
     </div>
   `).join('');
