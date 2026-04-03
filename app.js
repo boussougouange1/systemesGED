@@ -26,6 +26,7 @@ window.G = {
   supabase: null,
   currentUser: null,
   currentCompany: null,
+  currentTagFilter: null,
   documents: [],
   workflows: [],
   users: [],
@@ -192,42 +193,47 @@ async function ensureCompanyExists(companyId, companyName) {
 }
 
 // ─── Gestion du dossier racine ───
-async function setRootFolder() {
-  if (!G.currentUser?.companyId) {
-    console.error('setRootFolder: companyId manquant');
-    return;
+async function setRootFolder(retries = 3) {
+  if (!G.currentUser?.companyId) return false;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const { data: rootFolder, error } = await G.supabase
+      .from('folders')
+      .select('id')
+      .eq('company_id', G.currentUser.companyId)
+      .eq('name', 'Racine')
+      .maybeSingle();
+    
+    if (rootFolder && !error) {
+      G.currentFolderId = rootFolder.id;
+      G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
+      return true;
+    }
+    
+    const newRootId = `${G.currentUser.companyId}_root`;
+    const { error: insertErr } = await G.supabase
+      .from('folders')
+      .insert({
+        id: newRootId,
+        name: 'Racine',
+        parent_id: null,
+        company_id: G.currentUser.companyId,
+        created_at: new Date().toISOString()
+      });
+    
+    if (!insertErr) {
+      G.currentFolderId = newRootId;
+      G.folderPath = [{ id: newRootId, name: 'Racine' }];
+      return true;
+    }
+    
+    console.warn(`Tentative ${attempt} échouée pour créer le dossier racine`, insertErr);
+    if (attempt < retries) await new Promise(r => setTimeout(r, 500));
   }
   
-  const { data: rootFolder, error } = await G.supabase
-    .from('folders')
-    .select('id')
-    .eq('company_id', G.currentUser.companyId)
-    .eq('name', 'Racine')
-    .maybeSingle();
-  
-  if (rootFolder && !error) {
-    G.currentFolderId = rootFolder.id;
-    G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
-    return;
-  }
-  
-  const newRootId = `${G.currentUser.companyId}_root`;
-  const { error: insertErr } = await G.supabase
-    .from('folders')
-    .insert({
-      id: newRootId,
-      name: 'Racine',
-      parent_id: null,
-      company_id: G.currentUser.companyId,
-      created_at: new Date().toISOString()
-    });
-  
-  if (!insertErr) {
-    G.currentFolderId = newRootId;
-    G.folderPath = [{ id: newRootId, name: 'Racine' }];
-  } else {
-    console.error('Erreur création dossier racine:', insertErr);
-  }
+  console.error('Impossible de créer/récupérer le dossier racine');
+  showToast('Erreur d\'initialisation des dossiers', 'error');
+  return false;
 }
 
 // ─── Chargement des données ───
@@ -1129,6 +1135,9 @@ function renderDocuments() {
   console.log('🔄 Rendu des documents, tab:', G.docsTab);
   
   let filtered = G.documents.filter(d => !d.is_deleted);
+  if (G.currentTagFilter) {
+    filtered = filtered.filter(d => d.tags && d.tags.includes(G.currentTagFilter));
+  }
   
   // Filtrer selon l'onglet sélectionné
   if (G.docsTab === 'company') {
@@ -1267,9 +1276,9 @@ function renderDocCard(doc) {
       <!-- Tags et scope -->
       <div class="flex items-center justify-between">
         <div class="flex gap-1 flex-wrap">
-          ${(doc.tags || []).slice(0, 2).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${escapeHtml(t)}</span>`).join('')}
-          ${(doc.tags || []).length > 2 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length - 2}</span>` : ''}
-        </div>
+  ${(doc.tags || []).slice(0, 2).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
+  ${(doc.tags || []).length > 2 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length - 2}</span>` : ''}
+</div>
         ${doc.scope === 'company' ? 
           '<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>' : 
           '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
@@ -1319,9 +1328,8 @@ function renderDocListItem(doc) {
             '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
         </div>
         <div class="flex gap-2 mt-1">
-          ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${escapeHtml(t)}</span>`).join('')}
-        </div>
-      </div>
+  ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
+</div>
       
       <!-- Métadonnées supplémentaires -->
       <div class="hidden sm:flex items-center gap-4 text-xs text-blue-400/50 mr-4">
@@ -1368,17 +1376,17 @@ function switchDocsTab(tab) {
   console.log('🔄 Changement d\'onglet documents:', tab);
   G.docsTab = tab;
   
-  // Mettre à jour l'interface des onglets
-  document.querySelectorAll('.docs-tab').forEach(el => {
-    el.classList.remove('active');
-  });
-  
-  const tabEl = document.getElementById(`docsTab-${tab}`);
-  if (tabEl) {
-    tabEl.classList.add('active');
+  // Afficher un loader
+  const grid = document.getElementById('documentGrid');
+  if (grid) {
+    grid.innerHTML = '<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i><p class="mt-2 text-blue-300/60">Chargement...</p></div>';
   }
   
-  // Mettre à jour le texte du titre
+  // Mettre à jour l'interface des onglets
+  document.querySelectorAll('.docs-tab').forEach(el => el.classList.remove('active'));
+  const tabEl = document.getElementById(`docsTab-${tab}`);
+  if (tabEl) tabEl.classList.add('active');
+  
   const docTitle = document.getElementById('documentsTitle');
   if (docTitle) {
     const titles = {
@@ -1390,8 +1398,8 @@ function switchDocsTab(tab) {
     docTitle.textContent = titles[tab] || 'Documents';
   }
   
-  // Recharger l'affichage
-  renderDocuments();
+  // Recharger avec délai pour l'UI
+  setTimeout(() => renderDocuments(), 50);
 }
 
 function toggleViewMode() {
@@ -1410,6 +1418,7 @@ function clearFilters() {
   const filterDate = document.getElementById('filterDate');
   if (filterType) filterType.value = '';
   if (filterDate) filterDate.value = '';
+  G.currentTagFilter = null;   // Ajout
   renderDocuments();
 }
 
@@ -1420,7 +1429,21 @@ function filterByType(type) {
 }
 
 function filterByTag(tagName) {
-  showToast(`Filtre par tag: ${tagName}`, 'info');
+  G.currentTagFilter = tagName;
+  renderDocuments();
+  showToast(`Filtre appliqué : ${tagName}`, 'info');
+}
+function clearTagFilter() {
+  G.currentTagFilter = null;
+  renderDocuments();
+  showToast('Filtre tag réinitialisé', 'info');
+}
+
+// Réinitialiser le filtre tag
+function clearTagFilter() {
+  G.currentTagFilter = null;
+  renderDocuments();
+  showToast('Filtre tag réinitialisé', 'info');
 }
 
 // ─── Upload ───
@@ -1592,9 +1615,15 @@ function removeUploadTag(idx) {
 
 async function uploadDocument() {
   if (G.selectedFiles.length === 0) {
-    showToast('Veuillez sélectionner au moins un fichier', 'warning');
-    return;
-  }
+  // Calculer l'espace utilisé
+const used = G.documents.reduce((sum, d) => sum + (d.size || 0), 0);
+const limit = CONFIG.plans[G.currentUser.plan].storage;
+const newTotalSize = G.selectedFiles.reduce((sum, f) => sum + f.size, 0);
+
+if (used + newTotalSize > limit) {
+  showToast(`Espace insuffisant. Libre : ${formatBytes(limit - used)}`, 'error');
+  return;
+}
   
   // Vérifier la connexion Supabase
   if (!G.supabase) {
@@ -2040,13 +2069,14 @@ function openMoveModal(docId) {
   const modal = document.getElementById('moveModal');
   if (modal) modal.classList.remove('hidden');
   
-  // Remplir la liste des dossiers
   const folderSelect = document.getElementById('moveFolderSelect');
   if (folderSelect) {
-    folderSelect.innerHTML = '<option value="">-- Sélectionner un dossier --</option>' + 
-      G.folders.filter(f => f.parent_id !== null || f.name !== 'Racine').map(f => 
-        `<option value="${f.id}">${getFolderPath(f.id)}</option>`
-      ).join('');
+    let options = '<option value="__root__">📁 Racine (dossier principal)</option>';
+    options += G.folders
+      .filter(f => f.name !== 'Racine')
+      .map(f => `<option value="${f.id}">📁 ${getFolderPath(f.id)}</option>`)
+      .join('');
+    folderSelect.innerHTML = options;
   }
 }
 
@@ -2067,10 +2097,20 @@ function getFolderPath(folderId, path = '') {
 }
 
 async function confirmMoveDocument() {
-  const folderId = document.getElementById('moveFolderSelect')?.value;
+  let folderId = document.getElementById('moveFolderSelect')?.value;
   if (!folderId) {
     showToast('Veuillez sélectionner un dossier', 'warning');
     return;
+  }
+  
+  // Gestion du dossier racine
+  if (folderId === '__root__') {
+    const rootFolder = G.folders.find(f => f.name === 'Racine' && f.parent_id === null);
+    if (rootFolder) folderId = rootFolder.id;
+    else {
+      showToast('Dossier racine introuvable', 'error');
+      return;
+    }
   }
   
   if (!G.moveModalDocId) return;
@@ -2205,21 +2245,38 @@ function switchShareTab(tab) {
 }
 
 async function shareDocument() {
-  const email = document.getElementById('shareEmail')?.value;
+  const email = document.getElementById('shareEmail')?.value.trim();
   if (!email) {
     showToast('Veuillez entrer un email', 'warning');
     return;
   }
   
+  // Vérifier que l'utilisateur existe dans la même entreprise
   const { data: targetUser, error: userError } = await G.supabase
     .from('profiles')
-    .select('id, company_id')
+    .select('id, company_id, email')
     .eq('email', email)
+    .eq('company_id', G.currentUser.companyId)
     .single();
   
-  if (userError || !targetUser || targetUser.company_id !== G.currentUser.companyId) {
+  if (userError || !targetUser) {
     showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
     return;
+  }
+  
+  // Vérifier si un partage actif existe déjà pour ce document et cet utilisateur
+  const existingShare = G.shares.find(s => s.document_id === G.currentDocId && s.recipient_email === email && s.status === 'active');
+  if (existingShare) {
+    showToast('Ce document est déjà partagé avec cet utilisateur', 'warning');
+    return;
+  }
+  
+  const permission = document.getElementById('sharePermission')?.value || 'view';
+  const expiresIn = parseInt(document.getElementById('shareExpiration')?.value || '0');
+  let expiresAt = null;
+  if (expiresIn > 0) {
+    expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + expiresIn);
   }
   
   const share = {
@@ -2227,59 +2284,132 @@ async function shareDocument() {
     document_id: G.currentDocId,
     sender_id: G.currentUser.id,
     recipient_email: email,
-    permission: document.getElementById('sharePermission')?.value || 'view',
-    expires_at: null,
+    recipient_id: targetUser.id,
+    permission: permission,
+    expires_at: expiresAt ? expiresAt.toISOString() : null,
     status: 'active',
     created_at: new Date().toISOString()
   };
   
   const { error } = await G.supabase.from('shares').insert(share);
   if (error) {
-    showToast('Erreur partage', 'error');
+    showToast('Erreur partage: ' + error.message, 'error');
     return;
   }
   
   G.shares.push(share);
-  showToast('Document partagé avec succès', 'success');
+  showToast(`Document partagé avec ${email} (${permission === 'view' ? 'lecture' : permission === 'download' ? 'téléchargement' : 'modification'})`, 'success');
   closeShareModal();
   updateBadges();
   
-  await addAuditLog('share', 'document', G.currentDocId, `Partagé avec ${email}`);
+  // Ajouter un log d'audit
+  await addAuditLog('share', 'document', G.currentDocId, `Partagé avec ${email} (${permission})`);
+  
+  // Si on est dans l'onglet "Envoyés", rafraîchir l'affichage
+  if (G.sharedTab === 'sent') renderShared();
 }
 
 async function revokeShare(shareId) {
+  if (!confirm('Révoquer ce partage ? Le destinataire n\'aura plus accès au document.')) return;
+  
   const { error } = await G.supabase
     .from('shares')
-    .update({ status: 'revoked' })
+    .update({ status: 'revoked', revoked_at: new Date().toISOString() })
     .eq('id', shareId);
+  
   if (error) {
-    showToast('Erreur révocation', 'error');
-  } else {
-    showToast('Partage révoqué', 'success');
-    loadShareHistory();
+    showToast('Erreur révocation: ' + error.message, 'error');
+    return;
   }
+  
+  // Mettre à jour l'état local
+  const share = G.shares.find(s => s.id === shareId);
+  if (share) share.status = 'revoked';
+  
+  showToast('Partage révoqué', 'success');
+  
+  // Rafraîchir l'affichage selon l'onglet actif
+  if (G.sharedTab === 'sent') {
+    renderShared();
+  } else if (G.sharedTab === 'received') {
+    // Si on est dans l'onglet reçu, on recharge aussi pour mettre à jour les compteurs
+    renderShared();
+  }
+  updateBadges();
 }
 
-async function loadShareHistory() {
+// Pour le destinataire : masquer le partage reçu (ne révoque pas l'accès)
+async function revokeReceivedShare(shareId) {
+  if (!confirm('Retirer ce document de votre liste des partagés ? L\'expéditeur pourra toujours le partager à nouveau.')) return;
+  
+  // Option 1 : on supprime localement (pas de modification côté serveur)
+  G.shares = G.shares.filter(s => s.id !== shareId);
+  renderShared();
+  updateBadges();
+  showToast('Partage retiré de votre vue', 'success');
+  
+  // Option 2 : si on veut vraiment révoquer l'accès (décommenter ci-dessous)
+  /*
+  const { error } = await G.supabase
+    .from('shares')
+    .update({ status: 'revoked_by_recipient' })
+    .eq('id', shareId);
+  if (!error) {
+    G.shares = G.shares.filter(s => s.id !== shareId);
+    renderShared();
+    updateBadges();
+    showToast('Accès révoqué', 'success');
+  } else {
+    showToast('Erreur', 'error');
+  }
+  */
+}
+
+async function refreshShares() {
+  if (!G.currentUser) return;
   const { data: shares, error } = await G.supabase
     .from('shares')
     .select('*, documents!document_id(name)')
-    .eq('document_id', G.currentDocId);
+    .eq('sender_id', G.currentUser.id);
+  if (!error && shares) {
+    // Fusionner avec les reçus ?
+    G.shares = shares;
+    renderShared();
+    updateBadges();
+  }
+}
+async function loadShareHistory(docId = null) {
+  const targetDocId = docId || G.currentDocId;
+  if (!targetDocId) {
+    const historyContainer = document.getElementById('shareHistoryList');
+    if (historyContainer) historyContainer.innerHTML = '<div class="text-center py-8 text-blue-300/40"><p>Sélectionnez un document pour voir son historique</p></div>';
+    return;
+  }
   
-  if (error) return;
+  const { data: shares, error } = await G.supabase
+    .from('shares')
+    .select('*, documents!document_id(name)')
+    .eq('document_id', targetDocId)
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error(error);
+    return;
+  }
   
   const historyContainer = document.getElementById('shareHistoryList');
   if (historyContainer) {
-    if (shares.length === 0) {
-      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucun historique</p>';
+    if (!shares || shares.length === 0) {
+      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucun historique de partage pour ce document</p>';
     } else {
       historyContainer.innerHTML = shares.map(s => `
-        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50">
+        <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-blue-500/20">
           <div>
-            <p class="text-white text-sm">Partagé avec: ${s.recipient_email}</p>
+            <p class="text-white text-sm">Partagé avec : ${escapeHtml(s.recipient_email)}</p>
             <p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>
+            ${s.expires_at ? `<p class="text-xs text-yellow-400/70">Expire le ${formatDate(s.expires_at)}</p>` : ''}
           </div>
-          ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded">Révoquer</button>` : ''}
+          ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30">Révoquer</button>` : ''}
         </div>
       `).join('');
     }
@@ -2317,6 +2447,7 @@ function renderShared() {
   
   if (G.sharedTab === 'received') {
     if (!receivedContainer) return;
+    // Filtrer les partages reçus actifs
     const received = G.shares.filter(s => s.recipient_email === G.currentUser.email && s.status === 'active');
     
     if (received.length === 0) {
@@ -2327,15 +2458,29 @@ function renderShared() {
     
     if (sharedEmptyState) sharedEmptyState.classList.add('hidden');
     receivedContainer.classList.remove('hidden');
-    receivedContainer.innerHTML = received.map(s => `
-      <div class="glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="openPreviewModal('${s.document_id}')">
-        <div class="flex items-center gap-3">
-          <i class="fas fa-share-alt text-purple-400"></i>
-          <div><p class="text-white font-medium">${s.documents?.name || 'Document'}</p><p class="text-xs text-blue-300/60">Partagé par: ${s.sender_id}</p></div>
+    
+    // Récupérer le nom du document depuis G.documents (plus fiable que la jointure)
+    receivedContainer.innerHTML = received.map(s => {
+      const doc = G.documents.find(d => d.id === s.document_id);
+      const docName = doc ? doc.name : 'Document inconnu';
+      return `
+        <div class="glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer hover:border-purple-400/40 transition-all" onclick="openPreviewModal('${s.document_id}')">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-share-alt text-purple-400"></i>
+            <div class="flex-1">
+              <p class="text-white font-medium">${escapeHtml(docName)}</p>
+              <p class="text-xs text-blue-300/60">Partagé par : ${escapeHtml(s.sender_id?.substring(0,8) || 'inconnu')}</p>
+              <p class="text-xs text-blue-400/50 mt-0.5">${formatDate(s.created_at)}</p>
+            </div>
+            <button onclick="event.stopPropagation(); revokeReceivedShare('${s.id}')" class="text-red-400 hover:text-red-300 text-sm p-2" title="Ne plus voir ce partage">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } else {
+    // Partie "Envoyés" (inchangée mais améliorée)
     if (!sentContainer) return;
     const sent = G.shares.filter(s => s.sender_id === G.currentUser.id);
     
@@ -2347,17 +2492,26 @@ function renderShared() {
     
     if (sentEmptyState) sentEmptyState.classList.add('hidden');
     sentContainer.classList.remove('hidden');
-    sentContainer.innerHTML = sent.map(s => `
-      <div class="glass-card rounded-xl p-4 border border-blue-500/20">
-        <div class="flex items-center justify-between">
-          <div><p class="text-white font-medium">${s.documents?.name || 'Document'}</p><p class="text-xs text-blue-300/60">À: ${s.recipient_email}</p></div>
-          <div class="flex gap-2">
-            <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
-            ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="text-xs text-red-400 hover:text-red-300"><i class="fas fa-ban"></i></button>` : ''}
+    
+    sentContainer.innerHTML = sent.map(s => {
+      const doc = G.documents.find(d => d.id === s.document_id);
+      const docName = doc ? doc.name : 'Document inconnu';
+      return `
+        <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex-1">
+              <p class="text-white font-medium">${escapeHtml(docName)}</p>
+              <p class="text-xs text-blue-300/60">À : ${escapeHtml(s.recipient_email)}</p>
+              <p class="text-xs text-blue-400/50 mt-0.5">${formatDate(s.created_at)}</p>
+            </div>
+            <div class="flex gap-2">
+              <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status === 'active' ? 'Actif' : 'Révoqué'}</span>
+              ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded-lg bg-red-500/10" title="Révoquer"><i class="fas fa-ban"></i> Révoquer</button>` : ''}
+            </div>
           </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 }
 
@@ -4956,32 +5110,29 @@ function formatDate(dateString) {
 }
 
 function getFileIcon(type) {
-  const icons = { 
-    pdf: 'fa-file-pdf text-red-400',
-    doc: 'fa-file-word text-blue-400',
-    docx: 'fa-file-word text-blue-400',
-    xls: 'fa-file-excel text-green-400',
-    xlsx: 'fa-file-excel text-green-400',
-    ppt: 'fa-file-powerpoint text-orange-400',
-    pptx: 'fa-file-powerpoint text-orange-400',
-    png: 'fa-file-image text-purple-400',
-    jpg: 'fa-file-image text-purple-400',
-    jpeg: 'fa-file-image text-purple-400',
-    gif: 'fa-file-image text-purple-400',
-    webp: 'fa-file-image text-purple-400',
-    svg: 'fa-file-image text-purple-400',
-    txt: 'fa-file-alt text-gray-400',
-    zip: 'fa-file-archive text-yellow-400',
-    rar: 'fa-file-archive text-yellow-400',
-    mp4: 'fa-file-video text-pink-400',
-    mp3: 'fa-file-audio text-green-400',
-    json: 'fa-file-code text-cyan-400',
-    xml: 'fa-file-code text-cyan-400',
-    html: 'fa-file-code text-cyan-400',
-    css: 'fa-file-code text-cyan-400',
-    js: 'fa-file-code text-cyan-400'
+  const map = {
+    pdf: { icon: 'fa-file-pdf', color: 'text-red-400' },
+    doc: { icon: 'fa-file-word', color: 'text-blue-400' },
+    docx: { icon: 'fa-file-word', color: 'text-blue-400' },
+    xls: { icon: 'fa-file-excel', color: 'text-green-400' },
+    xlsx: { icon: 'fa-file-excel', color: 'text-green-400' },
+    ppt: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
+    pptx: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
+    png: { icon: 'fa-file-image', color: 'text-purple-400' },
+    jpg: { icon: 'fa-file-image', color: 'text-purple-400' },
+    jpeg: { icon: 'fa-file-image', color: 'text-purple-400' },
+    gif: { icon: 'fa-file-image', color: 'text-purple-400' },
+    txt: { icon: 'fa-file-alt', color: 'text-gray-400' },
+    zip: { icon: 'fa-file-archive', color: 'text-yellow-400' },
+    mp4: { icon: 'fa-file-video', color: 'text-pink-400' },
+    mp3: { icon: 'fa-file-audio', color: 'text-green-400' },
+    json: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    html: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    css: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    js: { icon: 'fa-file-code', color: 'text-cyan-400' }
   };
-  return icons[type] || 'fa-file text-blue-400';
+  const m = map[type] || { icon: 'fa-file', color: 'text-blue-400' };
+  return `${m.icon} ${m.color}`;
 }
 
 function getFileType(filename) {
@@ -5255,8 +5406,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.closeNotifPanel = closeNotifPanel;
   window.toggleNotifications = toggleNotifications;
   window.markAllNotifRead = markAllNotifRead;
-  
-  // Nouvelles fonctions
+  window.refreshShares = refreshShares;
   window.openMoveModal = openMoveModal;
   window.closeMoveModal = closeMoveModal;
   window.confirmMoveDocument = confirmMoveDocument;
