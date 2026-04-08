@@ -1,9 +1,39 @@
+<!--
+  SystemesGED v7.0 — index.html CORRIGÉ v7.1
+  ============================================
+  FIX 01 · <base target="_blank"> supprimé — cassait tous les onclick handlers
+  FIX 02 · Scripts Cloudflare obfuscation supprimés + emails résolus en clair
+  FIX 03 · Script inline appelant uploadFile() inexistante supprimé
+  FIX 04 · <input id="fileInput"> dupliqué supprimé (conflit getElementById)
+  FIX 05 · Écouteur de login dupliqué + fichier tronqué sans </html> corrigés
+  FIX 07 · CSP : 'unsafe-eval' ajouté pour Tailwind CDN Play
+  FIX 08 · Ctrl+K / Escape implémentés pour la barre de recherche globale
+  FIX 09 · Active state des boutons sidebar synchronisé avec switchView()
+  FIX 10 · wfKanban grid-cols-5 → grid-cols-4 (seulement 4 statuts workflow)
+  FIX 14 · "Abonnement v6" dupliqué retiré de la sidebar desktop
+  FIX 15 · desktop-sidebar : classe flex manquante
+  FIX 16 · Conteneur layout : overflow-hidden ajouté
+  FIX 18 · Bouton notifications : aria-label + title ajoutés (accessibilité)
+  FIX 22 · roleModal absent → ajouté avec toutes les permissions checkboxes
+  FIX 23 · richEditorModal absent → ajouté avec barre d'outils contenteditable
+  FIX 26 · Bouton racine dossiers : utilise G.currentFolderId au lieu de '__root__'
+  FIX 28 · previewUnsupported : conflit CSS hidden + flex corrigé
+  FIX 29 · signatureCanvas : auto-init via MutationObserver au lieu d'appel manuel
+  FIX 30 · loginPassword : autocomplete="current-password" ajouté
+  FIX 35 · rememberMe checkbox : id ajouté + logique localStorage implémentée
+  FIX 43 · <noscript> warning ajouté
+  FIX 44 · viewport : user-scalable=no supprimé (WCAG accessibilité)
+  FIX 45 · Version v4.0 → v7.0 dans les stats de la page login
+  FIX 46 · Taille fichier : "100 MB" corrigé en "50 MB" (cohérent avec CONFIG)
+  FIX 49 · meta theme-color ajouté pour navigateurs mobiles
+-->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://supabase.io wss://*.supabase.co; img-src 'self' data: blob: https:; object-src 'none'; frame-ancestors 'none';"> 
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://supabase.io wss://*.supabase.co; img-src 'self' data: blob: https:; object-src 'none'; frame-ancestors 'none';"> 
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SystemesGED v7.0 — Plateforme SaaS Collaborative</title>
 <meta name="description" content="SystemesGED — Plateforme GED cloud sécurisée, RGPD conforme, multi-tenant SaaS">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -164,9 +194,10 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
   animation: sharePulse 0.5s ease;
 }
 </style>
-<base target="_blank">
+
 </head>
 <body class="text-gray-100 font-sans antialiased">
+<noscript><div style="position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;z-index:9999;"><p style="color:#60a5fa;font-size:1.1rem;text-align:center;">SystemesGED nécessite JavaScript pour fonctionner.<br>Veuillez l'activer dans votre navigateur.</p></div></noscript>
 
 <!-- TOASTS -->
 <div id="toastContainer" class="toast-container"></div>
@@ -189,13 +220,13 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         </div>
       </div>
       <div class="login-feature"><div class="login-feature-icon" style="background:rgba(59,130,246,0.2);color:#60a5fa"><i class="fas fa-shield-alt"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Sécurité AES-256</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">JWT + Refresh Token, RBAC granulaire</p></div></div>
-      <div class="login-feature"><div class="login-feature-icon" style="background:rgba(16,185,129,0.2);color:#34d399"><i class="fas fa-cloud-upload-alt"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Stockage cloud 100MB/fichier</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Supabase Storage ou AWS S3</p></div></div>
+      <div class="login-feature"><div class="login-feature-icon" style="background:rgba(16,185,129,0.2);color:#34d399"><i class="fas fa-cloud-upload-alt"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Stockage cloud 50 MB/fichier</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Supabase Storage ou AWS S3</p></div></div>
       <div class="login-feature"><div class="login-feature-icon" style="background:rgba(139,92,246,0.2);color:#a78bfa"><i class="fas fa-share-alt"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Partage sécurisé</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Liens avec expiration, contrôle d'accès</p></div></div>
       <div class="login-feature"><div class="login-feature-icon" style="background:rgba(249,115,22,0.2);color:#fb923c"><i class="fas fa-project-diagram"></i></div><div><p style="color:white;font-weight:600;font-size:0.9rem">Workflows de validation</p><p style="color:rgba(147,197,253,0.6);font-size:0.78rem">Approbation multi-étapes + versioning</p></div></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px">
         <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#60a5fa">100%</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">RGPD</p></div>
         <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#34d399">100MB</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Par fichier</p></div>
-        <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v4.0</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p></div>
+        <div style="text-align:center;padding:14px 10px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(96,165,250,0.1)"><p style="font-size:1.4rem;font-weight:800;color:#a78bfa">v7.0</p><p style="font-size:0.7rem;color:rgba(147,197,253,0.6);margin-top:2px">Cloud</p></div>
       </div>
     </div>
   </div>
@@ -213,9 +244,9 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         <p style="color:rgba(147,197,253,0.6);font-size:0.85rem;margin-bottom:20px">Bienvenue ! Connectez-vous à votre espace GED.</p>
         <form id="loginForm" onsubmit="event.preventDefault(); event.stopPropagation(); handleLogin(event); return false;">
   <div class="relative mb-4"><i class="fas fa-envelope input-icon"></i><input id="loginEmail" type="email" class="input-field" placeholder="votre@email.com" required autocomplete="email"></div>
-  <div class="relative mb-4"><i class="fas fa-lock input-icon"></i><input id="loginPassword" type="password" class="input-field" placeholder="Mot de passe" required><button type="button" onclick="togglePwdInput('loginPassword',this)" style="position:absolute;right:1rem;top:50%;transform:translateY(-50%);color:#60a5fa;background:none;border:none;cursor:pointer;"><i class="fas fa-eye"></i></button></div>
+  <div class="relative mb-4"><i class="fas fa-lock input-icon"></i><input id="loginPassword" type="password" class="input-field" placeholder="Mot de passe" required autocomplete="current-password"><button type="button" onclick="togglePwdInput('loginPassword',this)" style="position:absolute;right:1rem;top:50%;transform:translateY(-50%);color:#60a5fa;background:none;border:none;cursor:pointer;"><i class="fas fa-eye"></i></button></div>
   <div class="flex justify-between items-center mb-5">
-    <label class="flex items-center gap-2 text-sm text-blue-300/70 cursor-pointer"><input type="checkbox" class="rounded border-blue-500/30"> Se souvenir de moi</label>
+    <label class="flex items-center gap-2 text-sm text-blue-300/70 cursor-pointer"><input type="checkbox" id="rememberMe" class="rounded border-blue-500/30"> Se souvenir de moi</label>
     <a href="#" onclick="openResetModal(); return false;" class="text-blue-400 text-sm hover:text-blue-300">Mot de passe oublié ?</a>
   </div>
   <button type="submit" id="loginBtn" class="btn-login w-full"><span id="loginBtnText"><i class="fas fa-sign-in-alt mr-2"></i>Se connecter</span></button>
@@ -323,7 +354,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     </div>
     <div class="flex items-center gap-3">
       <div class="relative" id="notifWrap">
-        <button onclick="toggleNotifications()" class="relative p-2 text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 rounded-lg transition-all">
+        <button onclick="toggleNotifications()" class="relative p-2 text-blue-300 hover:text-blue-200 hover:bg-blue-500/10 rounded-lg transition-all" title="Notifications" aria-label="Notifications">
           <i class="fas fa-bell text-lg"></i>
           <span id="notifBadge" class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse hidden"></span>
         </button>
@@ -352,7 +383,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
             <div class="p-2">
               <div class="px-4 py-2 border-b border-blue-500/20 mb-2">
                 <p class="text-sm font-semibold text-white" id="dropdownUserName">Admin</p>
-                <p class="text-xs text-blue-400" id="dropdownUserEmail">admin@example.com</p>
+                <p class="text-xs text-blue-400" id="dropdownUserEmail">admin@systemesged.fr</p>
               </div>
               <button onclick="switchView('settings')" class="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-500/10 text-sm text-gray-300 transition-colors"><i class="fas fa-cog mr-2"></i>Paramètres</button>
               <button onclick="switchView('billing')" class="w-full text-left px-4 py-2 rounded-lg hover:bg-blue-500/10 text-sm text-gray-300 transition-colors"><i class="fas fa-credit-card mr-2"></i>Abonnement</button>
@@ -366,9 +397,9 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
 </header>
 
 <!-- Layout -->
-<div class="flex" style="min-height:calc(100vh - 61px)">
+<div class="flex overflow-hidden" style="min-height:calc(100vh - 61px)">
   <!-- Desktop Sidebar -->
-  <aside class="desktop-sidebar w-64 glass-panel border-r border-blue-500/20 flex-col" style="position:sticky;top:61px;height:calc(100vh - 61px);overflow-y:auto;">
+  <aside class="desktop-sidebar w-64 glass-panel border-r border-blue-500/20 flex flex-col" style="position:sticky;top:61px;height:calc(100vh - 61px);overflow-y:auto;">
     <nav class="p-4 space-y-1 flex-1">
       <button onclick="switchView('dashboard')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="dashboard"><i class="fas fa-chart-pie w-5 text-center text-blue-400"></i><span>Tableau de bord</span></button>
       <button onclick="switchView('documents')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="documents"><i class="fas fa-file-alt w-5 text-center text-blue-400"></i><span>Documents</span><span id="d-docsBadge" class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full hidden">0</span></button>
@@ -396,8 +427,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         <button onclick="switchView('analytics')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="analytics"><i class="fas fa-chart-bar w-5 text-center text-yellow-400"></i><span>Analytics</span></button>
         <button onclick="switchView('folders')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="folders"><i class="fas fa-folder-tree w-5 text-center text-yellow-400"></i><span>Dossiers</span></button>
         <button onclick="switchView('apikeys')" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="apikeys"><i class="fas fa-plug w-5 text-center text-green-400"></i><span>API & Intégrations</span></button>
-        <button onclick="switchView('billing2')" data-role="admin-only" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="billing2"><i class="fas fa-credit-card w-5 text-center text-blue-400"></i><span>Abonnement v6</span></button>
-        <button onclick="switchView('auditv6')" data-role="admin-only" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="auditv6"><i class="fas fa-shield-alt w-5 text-center text-red-400"></i><span>Audit Sécurité</span></button>
+        <button onclick="switchView('auditv6')" data-role="admin-only" class="sidebar-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-300" data-view="auditv6"><i class="fas fa-shield-check w-5 text-center text-red-400"></i><span>Audit Sécurité</span></button>
       </div>
       <div class="pt-3 mt-3 border-t border-blue-500/20">
         <p class="px-4 text-xs font-bold text-pink-400/70 uppercase tracking-wider mb-2">Avancé v7</p>
@@ -430,9 +460,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     <div id="view-dashboard" class="view-section active-view space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h2 class="text-2xl lg:text-3xl font-bold text-white mb-1">Tableau de bord</h2><p id="dashSubtitle" class="text-sm text-blue-300/80">Vue d'ensemble de votre GED</p></div>
-        <button onclick="openUploadModal()" class="btn-primary px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold"><i class="fas fa-plus"></i>Nouveau document</button>
-	<input type="file" id="fileInput" style="display:none">     
- </div>
+        <button onclick="openUploadModal()" class="btn-primary px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold"><i class="fas fa-plus"></i>Nouveau document</button></div>
       <div class="stats-grid">
         <div class="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-blue-400/40 cursor-pointer" onclick="switchView('documents')">
           <div class="flex items-center justify-between mb-4"><div class="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 border border-blue-400/30"><i class="fas fa-file-alt text-2xl"></i></div><span class="text-green-400 text-sm font-bold bg-green-500/10 px-3 py-1 rounded-full" id="docGrowth">+0%</span></div>
@@ -502,7 +530,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
       <div id="docDropZone" class="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all" style="border-color:rgba(96,165,250,0.3);" onclick="document.getElementById('filePickerInput').click()" ondragover="handleDragOver(event,'docDropZone')" ondragleave="handleDragLeave(event,'docDropZone')" ondrop="handleDocDrop(event)">
         <i class="fas fa-cloud-upload-alt text-blue-400 text-2xl mb-2"></i>
         <p class="text-white text-sm font-medium">Glissez vos fichiers ici ou cliquez</p>
-        <p class="text-blue-400/50 text-xs">PDF, Word, Excel, Images… Max 100 MB</p>
+        <p class="text-blue-400/50 text-xs">PDF, Word, Excel, Images… Max 50 MB</p>
       </div>
       <input type="file" id="filePickerInput" class="hidden" multiple onchange="handleFilePickerSelect(event)">
       <div class="doc-grid" id="documentGrid"></div>
@@ -561,7 +589,7 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
         <button onclick="setWfView('list')" id="wfViewList" class="px-3 py-1.5 text-xs rounded-lg text-gray-400 border border-blue-500/10 font-medium hover:border-blue-500/30 flex items-center gap-1"><i class="fas fa-list"></i>Liste</button>
         <span id="wfResultCount" class="ml-auto text-xs text-blue-300/50"></span>
       </div>
-      <div id="wfKanban" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4"></div>
+      <div id="wfKanban" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
       <div id="wfListView" class="hidden space-y-3"></div>
     </div>
 
@@ -794,7 +822,7 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
       <div id="folderBreadcrumb" class="flex items-center gap-1 flex-wrap px-3 py-2 glass-card rounded-xl border border-blue-500/20 min-h-[36px]"></div>
       <div id="folderContentsGrid"></div>
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div class="glass-card rounded-2xl border border-blue-500/20 p-4"><p class="text-xs font-bold text-blue-300/60 uppercase tracking-wider mb-3">Arborescence</p><div class="cursor-pointer" onclick="openFolder('__root__','Racine')"><div class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-blue-500/10 text-blue-300/70 text-xs"><i class="fas fa-home text-blue-400 text-xs"></i><span>Racine</span></div></div><div id="folderSidebarTree" class="space-y-0.5 mt-1"></div></div>
+        <div class="glass-card rounded-2xl border border-blue-500/20 p-4"><p class="text-xs font-bold text-blue-300/60 uppercase tracking-wider mb-3">Arborescence</p><div class="cursor-pointer" onclick="G && G.currentUser ? openFolder(G.folders.find(f=>f.name==='Racine'&&!f.parent_id)?.id||G.currentFolderId,'Racine') : null"><div class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-blue-500/10 text-blue-300/70 text-xs"><i class="fas fa-home text-blue-400 text-xs"></i><span>Racine</span></div></div><div id="folderSidebarTree" class="space-y-0.5 mt-1"></div></div>
         <div class="lg:col-span-3"><div class="doc-grid" id="folderDocGrid"></div></div>
       </div>
     </div>
@@ -816,7 +844,7 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
       <div id="billingV6Content"><p class="text-blue-300/50 text-sm text-center py-8">Chargement...</p></div>
     </div>
 
-       <!-- ══ AUDIT SÉCURITÉ v6 (SUITE) -->
+    <!-- ══ AUDIT SÉCURITÉ v6 (SUITE) -->
     <div id="view-auditv6" class="view-section space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -1447,7 +1475,7 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
       <i class="fas fa-cloud-upload-alt text-blue-400 text-3xl mb-2"></i>
       <p class="text-white font-medium mb-1">Glissez-déposez vos fichiers</p>
       <p class="text-blue-400/60 text-sm">ou cliquez pour parcourir</p>
-      <p class="text-blue-400/40 text-xs mt-2">PDF, Word, Excel, Images… · Max 100 MB par fichier</p>
+      <p class="text-blue-400/40 text-xs mt-2">PDF, Word, Excel, Images… · Max 50 MB par fichier</p>
     </div>
     <input type="file" id="fileInput" class="hidden" multiple onchange="handleFileSelect(event)">
     <div id="selectedFilesList" class="space-y-2 mb-4 max-h-40 overflow-y-auto"></div>
@@ -1906,7 +1934,7 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
       </div>
       
       <!-- Message pour fichiers non supportés -->
-      <div id="previewUnsupported" class="hidden flex flex-col items-center justify-center h-[65vh] text-center p-8">
+      <div id="previewUnsupported" class="hidden items-center justify-center h-[65vh] text-center p-8" style="display:none;flex-direction:column;">
         <div id="unsupportedFileInfo"></div>
       </div>
       
@@ -2033,43 +2061,164 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
   </div>
 </div>
 <script src="app.js" defer></script>
+<!-- fileInput is handled inside the upload modal via handleFileSelect() -->
+
 <script>
-
-// 🔥 CONNECTER INPUT FILE À L'UPLOAD
-document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('fileInput');
-
-  if (input) {
-    input.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      uploadFile(file);
-    });
+// Ctrl+K → focus global search
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const s = document.getElementById('globalSearch');
+    if (s) { s.focus(); s.select(); }
+  }
+  // Escape → close search dropdown
+  if (e.key === 'Escape') {
+    const d = document.getElementById('searchDropdown');
+    if (d) d.classList.add('hidden');
+    const g = document.getElementById('globalSearch');
+    if (g) g.blur();
   }
 });
+// Close search dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('.flex-1.max-w-xl');
+  const drop = document.getElementById('searchDropdown');
+  if (drop && wrap && !wrap.contains(e.target)) drop.classList.add('hidden');
+});
 </script>
+
 <script>
-// Écouteur de secours pour le formulaire de login
+// Sync sidebar active state on view switch
+(function() {
+  const _origSwitchView = window.switchView;
+  // Override after app.js loads
+  document.addEventListener('DOMContentLoaded', function() {
+    const originalFn = window.switchView;
+    if (!originalFn) return;
+    window.switchView = function(viewName) {
+      originalFn(viewName);
+      // Update desktop sidebar
+      document.querySelectorAll('[data-view]').forEach(el => {
+        el.classList.toggle('active', el.dataset.view === viewName);
+      });
+      // Update bottom nav
+      document.querySelectorAll('[data-bnav]').forEach(el => {
+        const isActive = el.dataset.bnav === viewName;
+        el.classList.toggle('text-blue-400', isActive);
+        el.classList.toggle('text-blue-400/60', !isActive);
+      });
+    };
+  });
+})();
+</script>
+
+<!-- ════ ROLE MODAL -->
+<div id="roleModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="roleModalTitle" class="text-white font-bold flex items-center gap-2"><i class="fas fa-user-shield text-red-400"></i>Modifier le rôle</h3>
+      <button onclick="closeRoleModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="space-y-4">
+      <input type="hidden" id="roleModalKey">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Nom du rôle</label>
+        <input id="roleModalName" type="text" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="Nom du rôle">
+      </div>
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-2">Permissions</label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_read" class="rounded"> Lecture (read)</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_write" class="rounded"> Écriture (write)</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_delete" class="rounded"> Suppression (delete)</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_users" class="rounded"> Gestion utilisateurs</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_logs" class="rounded"> Accès aux logs</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_api" class="rounded"> API & Clés</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_billing" class="rounded"> Facturation</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer"><input type="checkbox" id="perm_signatures" class="rounded"> Signatures</label>
+          <label class="flex items-center gap-2 text-sm text-blue-300 cursor-pointer col-span-2"><input type="checkbox" id="perm_validate_users" class="rounded"> Valider les inscriptions</label>
+        </div>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button onclick="closeRoleModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10 border border-blue-500/30">Annuler</button>
+        <button onclick="saveRole()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-save mr-2"></i>Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ RICH EDITOR MODAL -->
+<div id="richEditorModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:900px;width:95vw;max-height:90vh;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-edit text-blue-400"></i>Éditeur de document</h3>
+      <div class="flex gap-2">
+        <button onclick="_saveRichContent()" class="btn-primary px-4 py-2 rounded-lg text-white text-sm flex items-center gap-2"><i class="fas fa-save"></i>Sauvegarder</button>
+        <button onclick="closeRichEditor()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-1 p-2 rounded-xl mb-3" style="background:rgba(8,15,40,0.5);border:1px solid rgba(96,165,250,0.15);">
+      <button onclick="document.execCommand('bold')" class="rich-toolbar-btn" title="Gras"><i class="fas fa-bold"></i></button>
+      <button onclick="document.execCommand('italic')" class="rich-toolbar-btn" title="Italique"><i class="fas fa-italic"></i></button>
+      <button onclick="document.execCommand('underline')" class="rich-toolbar-btn" title="Souligné"><i class="fas fa-underline"></i></button>
+      <button onclick="document.execCommand('strikeThrough')" class="rich-toolbar-btn" title="Barré"><i class="fas fa-strikethrough"></i></button>
+      <span class="w-px bg-blue-500/20 mx-1"></span>
+      <button onclick="document.execCommand('formatBlock',false,'h1')" class="rich-toolbar-btn" title="Titre 1">H1</button>
+      <button onclick="document.execCommand('formatBlock',false,'h2')" class="rich-toolbar-btn" title="Titre 2">H2</button>
+      <button onclick="document.execCommand('formatBlock',false,'h3')" class="rich-toolbar-btn" title="Titre 3">H3</button>
+      <span class="w-px bg-blue-500/20 mx-1"></span>
+      <button onclick="document.execCommand('insertUnorderedList')" class="rich-toolbar-btn" title="Liste"><i class="fas fa-list-ul"></i></button>
+      <button onclick="document.execCommand('insertOrderedList')" class="rich-toolbar-btn" title="Liste numérotée"><i class="fas fa-list-ol"></i></button>
+      <span class="w-px bg-blue-500/20 mx-1"></span>
+      <button onclick="document.execCommand('justifyLeft')" class="rich-toolbar-btn" title="Gauche"><i class="fas fa-align-left"></i></button>
+      <button onclick="document.execCommand('justifyCenter')" class="rich-toolbar-btn" title="Centre"><i class="fas fa-align-center"></i></button>
+      <button onclick="document.execCommand('justifyRight')" class="rich-toolbar-btn" title="Droite"><i class="fas fa-align-right"></i></button>
+    </div>
+    <div id="richEditorContent" contenteditable="true" class="rich-editor-content rounded-xl" oninput="_onRichEditorInput()" style="background:rgba(8,15,40,0.5);border:1px solid rgba(96,165,250,0.15);overflow-y:auto;max-height:60vh;" placeholder="Commencez à écrire votre document...">
+    </div>
+  </div>
+</div>
+
+<script>
+// Auto-init signature canvas when modal is shown (MutationObserver)
 document.addEventListener('DOMContentLoaded', function() {
+  const sigModal = document.getElementById('signatureModal');
+  if (!sigModal) return;
+  const observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+      if (m.attributeName === 'class') {
+        if (!sigModal.classList.contains('hidden') && typeof initSignatureCanvas === 'function') {
+          initSignatureCanvas();
+        }
+      }
+    });
+  });
+  observer.observe(sigModal, { attributes: true });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Restore remembered email
+  const remembered = localStorage.getItem('ged_remember_email');
+  const emailInput = document.getElementById('loginEmail');
+  const rememberBox = document.getElementById('rememberMe');
+  if (remembered && emailInput) {
+    emailInput.value = remembered;
+    if (rememberBox) rememberBox.checked = true;
+  }
+  // Save email on login form submit
   const loginForm = document.getElementById('loginForm');
   if (loginForm) {
-    loginForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🔐 Submit intercepté par écouteur de secours');
-      if (typeof handleLogin === 'function') {
-        handleLogin(e);
+    loginForm.addEventListener('submit', function() {
+      if (rememberBox && rememberBox.checked && emailInput) {
+        localStorage.setItem('ged_remember_email', emailInput.value);
       } else {
-        console.error('handleLogin n\'est pas défini');
+        localStorage.removeItem('ged_remember_email');
       }
-      return false;
     });
   }
-  
-  // Vérifier que handleLogin est bien défini
-  console.log('handleLogin existe ?', typeof handleLogin);
 });
 </script>
-</body>
-</html>
 </body>
 </html>
