@@ -100,40 +100,22 @@ window.G = {
 // ─── Initialisation Supabase ───
 async function initSupabase() {
   try {
-    if (typeof supabase === 'undefined') {
-      console.error('Supabase library not loaded - vérifiez la connexion internet');
-      showToast('Erreur de chargement de la bibliothèque Supabase', 'error');
-      throw new Error('Supabase library not loaded');
-    }
-    
-    console.log('🔄 Initialisation de Supabase...');
-    
+    if (typeof supabase === 'undefined') throw new Error('Supabase library not loaded');
     G.supabase = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
       auth: { 
         autoRefreshToken: true, 
         persistSession: true,
-        detectSessionInUrl: true,
-        flowType: 'pkce'
+        detectSessionInUrl: true
       }
     });
-    
-    // Vérifier la connexion
-    const { data: { session }, error: sessionError } = await G.supabase.auth.getSession();
-    if (sessionError) {
-      console.warn('Erreur session:', sessionError);
-    }
-    
+    const { data: { session } } = await G.supabase.auth.getSession();
     if (session) {
-      console.log('✅ Session existante trouvée');
       await loadUserFromSupabase(session.user);
       return true;
     }
-    
-    console.log('⚠️ Aucune session active');
     return false;
   } catch (e) {
     console.error('Supabase init error:', e);
-    showToast('Erreur de connexion à la base de données', 'error');
     return false;
   }
 }
@@ -467,85 +449,41 @@ function updateStorageDisplay() {
 }
 
 // ─── Authentification ───
-
-function addFilesToSelection(files) {
-  for (const file of files) {
-    if (file.size > CONFIG.maxFileSize) {
-      showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
-      continue;
-    }
-    
-    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-      G.selectedFiles.push(file);
-    }
-  }
-  renderSelectedFiles();
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail')?.value.trim().toLowerCase();
+  const password = document.getElementById('loginPassword')?.value;
   
-  const dropZone = document.getElementById('docDropZone');
-  if (dropZone && G.selectedFiles.length > 0) {
-    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
-    setTimeout(() => {
-      dropZone.style.borderColor = '';
-    }, 1000);
+  if (!email || !password) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
   }
-}
-  if (btn) {
-    btn.disabled = true;
-    btn.style.opacity = '0.7';
-  }
+  
+  const btn = document.getElementById('loginBtn');
+  const btnText = document.getElementById('loginBtnText');
+  if (btn) btn.disabled = true;
   if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
 
   try {
-    // Vérifier que Supabase est initialisé
-    if (!G.supabase) {
-      console.error('Supabase non initialisé');
-      await initSupabase();
-    }
-    
-    const { data, error } = await G.supabase.auth.signInWithPassword({ 
-      email, 
-      password 
-    });
-    
-    if (error) {
-      console.error('Erreur connexion:', error);
-      throw error;
-    }
-    
-    console.log('✅ Connexion réussie pour:', data.user?.email);
+    const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
     
     if (data.user) {
       await loadUserFromSupabase(data.user);
-      showToast(`Bienvenue ${G.currentUser.name || email}`, 'success');
+      showToast(`Bienvenue ${G.currentUser.name}`, 'success');
       switchToMainApp();
-    } else {
-      throw new Error('Aucun utilisateur retourné');
     }
-    
   } catch (err) {
-    console.error('Erreur handleLogin:', err);
-    let errorMessage = 'Email ou mot de passe incorrect';
-    if (err.message === 'Invalid login credentials') {
-      errorMessage = 'Email ou mot de passe incorrect';
-    } else if (err.message.includes('Email not confirmed')) {
-      errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
-    } else {
-      errorMessage = err.message || 'Erreur de connexion';
-    }
-    showToast(errorMessage, 'error');
+    console.error(err);
+    showToast('Email ou mot de passe incorrect', 'error');
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    }
+    if (btn) btn.disabled = false;
     if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
   }
 }
+
 async function handleRegister(e) {
   e.preventDefault();
-  e.stopPropagation();
-  
-  console.log('📝 Tentative d\'inscription...');
   
   const lastAttempt = localStorage.getItem('lastRegisterAttempt');
   if (lastAttempt && Date.now() - parseInt(lastAttempt) < 60000) {
@@ -560,15 +498,8 @@ async function handleRegister(e) {
   const email = document.getElementById('regEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('regPassword')?.value;
   
-  console.log('📝 Données:', { firstName, lastName, companyName, email });
-  
   if (!firstName || !lastName || !companyName || !email || !password) {
     showToast('Veuillez remplir tous les champs', 'warning');
-    return;
-  }
-  
-  if (password.length < 8) {
-    showToast('Le mot de passe doit contenir au moins 8 caractères', 'warning');
     return;
   }
   
@@ -577,32 +508,19 @@ async function handleRegister(e) {
     return;
   }
   
-  // Vérifier que Supabase est initialisé
-  if (!G.supabase) {
-    await initSupabase();
-  }
-  
   const btn = document.getElementById('registerBtn');
   if (btn) {
     btn.disabled = true;
-    btn.style.opacity = '0.7';
     btn.innerHTML = '<span class="spinner mr-2"></span>Inscription...';
   }
 
   try {
-    const companyId = `comp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    console.log('🏢 Création entreprise:', companyId);
-    
-    // 1. Créer l'entreprise
+    const companyId = `comp_${Date.now()}`;
     const { error: compErr } = await G.supabase
       .from('companies')
       .insert({ id: companyId, name: companyName, plan: 'free' });
-    if (compErr) {
-      console.error('Erreur création entreprise:', compErr);
-      throw compErr;
-    }
+    if (compErr) throw compErr;
 
-    // 2. Créer l'utilisateur dans Auth
     const { data, error } = await G.supabase.auth.signUp({
       email,
       password,
@@ -613,36 +531,21 @@ async function handleRegister(e) {
         } 
       }
     });
-    if (error) {
-      console.error('Erreur signUp:', error);
-      throw error;
-    }
-    
-    if (!data.user) {
-      throw new Error('Aucun utilisateur créé');
-    }
-    
-    console.log('✅ Utilisateur créé:', data.user.id);
+    if (error) throw error;
 
-    // 3. Créer le profil
     const { error: profErr } = await G.supabase
       .from('profiles')
       .insert({
         id: data.user.id,
-        email: email,
+        email,
         name: `${firstName} ${lastName}`,
         role: 'admin',
         status: 'pending_validation',
         company_id: companyId,
-        plan: 'free',
-        created_at: new Date().toISOString()
+        plan: 'free'
       });
-    if (profErr) {
-      console.error('Erreur création profil:', profErr);
-      throw profErr;
-    }
+    if (profErr) throw profErr;
 
-    // 4. Créer le dossier racine
     const rootFolderId = `${companyId}_root`;
     const { error: folderErr } = await G.supabase
       .from('folders')
@@ -653,46 +556,25 @@ async function handleRegister(e) {
         company_id: companyId,
         created_at: new Date().toISOString()
       });
-    if (folderErr) {
-      console.warn('Erreur création dossier racine:', folderErr);
-      // Non bloquant
-    }
+    if (folderErr) console.warn('Erreur création dossier racine:', folderErr);
 
-    showToast('Compte créé ! En attente de validation par un administrateur.', 'success');
-    
-    // Basculer vers l'onglet connexion
+    showToast('Compte créé ! En attente de validation.', 'success');
     switchAuthTab('login');
     
-    // Pré-remplir l'email
     const loginEmail = document.getElementById('loginEmail');
     if (loginEmail) loginEmail.value = email;
     
-    console.log('✅ Inscription terminée avec succès');
-    
   } catch (err) {
-    console.error('Erreur handleLogin:', err);
-  let errorMessage = 'Email ou mot de passe incorrect';
-  if (err.message === 'Invalid login credentials') {
-    errorMessage = 'Email ou mot de passe incorrect';
-  } else if (err.message === 'Email not confirmed') {
-    errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
-  } else if (err.message === 'User not found') {
-    errorMessage = 'Aucun compte trouvé avec cet email';
-  } else if (err.message.includes('network')) {
-    errorMessage = 'Problème de connexion réseau';
-  } else {
-    errorMessage = err.message || 'Erreur de connexion';
-  }
-  showToast(errorMessage, 'error');
-  } 
-	finally {
+    console.error(err);
+    showToast('Erreur inscription: ' + err.message, 'error');
+  } finally {
     if (btn) {
       btn.disabled = false;
-      btn.style.opacity = '1';
       btn.innerHTML = '<i class="fas fa-user-plus mr-2"></i>Créer mon compte';
     }
   }
 }
+
 async function handleLogout() {
   await G.supabase.auth.signOut();
   G.currentUser = null;
@@ -707,27 +589,13 @@ async function handleLogout() {
 }
 
 function switchToMainApp() {
-  console.log('🔄 Bascule vers l\'application principale');
-  
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
   
-  if (loginScreen) {
-    loginScreen.style.display = 'none';
-  }
-  if (mainApp) {
-    mainApp.style.display = 'block';
-  }
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (mainApp) mainApp.style.display = 'block';
   
-  // Forcer le rafraîchissement des données
-  if (G.currentUser) {
-    loadAllData();
-  }
-  
-  // Recharger la vue
   switchView('dashboard');
-  
-  console.log('✅ Application principale affichée');
 }
 
 function switchAuthTab(tab) {
@@ -752,25 +620,13 @@ function togglePwdInput(id, btn) {
 }
 
 function demoLogin() {
-  console.log('🔑 Tentative de connexion démo');
-  
   const loginEmail = document.getElementById('loginEmail');
   const loginPassword = document.getElementById('loginPassword');
   
   if (loginEmail) loginEmail.value = 'demo@systemesged.fr';
   if (loginPassword) loginPassword.value = 'Demo123!';
   
-  // Créer un événement submit et l'appeler
-  const event = new Event('submit', { bubbles: true, cancelable: true });
-  const form = document.getElementById('loginForm');
-  
-  if (form) {
-    console.log('📝 Formulaire trouvé, déclenchement du submit');
-    form.dispatchEvent(event);
-  } else {
-    console.log('⚠️ Formulaire non trouvé, appel direct de handleLogin');
-    handleLogin(event);
-  }
+  handleLogin(new Event('submit'));
 }
 
 function oauthLogin(provider) {
@@ -1460,43 +1316,10 @@ function handleDrop(e, zoneId) {
 function handleDocDrop(e) {
   e.preventDefault();
   const dropZone = document.getElementById('docDropZone');
-  if (dropZone) {
-    dropZone.classList.remove('drag-over');
-    // Ajouter un effet visuel temporaire
-    dropZone.style.backgroundColor = 'rgba(59,130,246,0.05)';
-    setTimeout(() => {
-      dropZone.style.backgroundColor = '';
-    }, 300);
-  }
-  
+  if (dropZone) dropZone.classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files);
-  
-  if (files.length === 0) {
-    showToast('Aucun fichier détecté', 'warning');
-    return;
-  }
-  
-  // Filtrer les fichiers trop volumineux
-  const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
-  const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
-  
-  if (invalidFiles.length > 0) {
-    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
-  }
-  
-  if (validFiles.length === 0) {
-    showToast('Aucun fichier valide à importer', 'warning');
-    return;
-  }
-  
-  addFilesToSelection(validFiles);
-  
-  // Auto-upload après ajout
-  setTimeout(() => {
-    if (G.selectedFiles.length > 0) {
-      uploadDocument();
-    }
-  }, 100);
+  addFilesToSelection(files);
+  uploadDocument();
 }
 
 function handleFileSelect(e) {
@@ -1506,66 +1329,18 @@ function handleFileSelect(e) {
 
 function handleFilePickerSelect(e) {
   const files = Array.from(e.target.files);
-  
-  if (files.length === 0) return;
-  
-  // Filtrer les fichiers trop volumineux
-  const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
-  const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
-  
-  if (invalidFiles.length > 0) {
-    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
-  }
-  
-  if (validFiles.length === 0) {
-    showToast('Aucun fichier valide à importer', 'warning');
-    return;
-  }
-  
-  addFilesToSelection(validFiles);
-  
-  // Auto-upload après sélection
-  setTimeout(() => {
-    if (G.selectedFiles.length > 0) {
-      uploadDocument();
-    }
-  }, 100);
-  
-  // Réinitialiser l'input pour permettre de sélectionner à nouveau les mêmes fichiers
-  e.target.value = '';
+  addFilesToSelection(files);
 }
 
 function addFilesToSelection(files) {
   for (const file of files) {
     if (file.size > CONFIG.maxFileSize) {
-      showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
+      showToast(`Fichier trop volumineux: ${file.name}`, 'error');
       continue;
     }
-    
-    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-      G.selectedFiles.push(file);
-    }
+    G.selectedFiles.push(file);
   }
   renderSelectedFiles();
-  
-  const dropZone = document.getElementById('docDropZone');
-  if (dropZone && G.selectedFiles.length > 0) {
-    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
-    setTimeout(() => {
-      dropZone.style.borderColor = '';
-    }, 1000);
-  }
-}
-  renderSelectedFiles();
-  
-  // Mettre à jour l'affichage de la zone de dépôt
-  const dropZone = document.getElementById('docDropZone');
-  if (dropZone && G.selectedFiles.length > 0) {
-    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
-    setTimeout(() => {
-      dropZone.style.borderColor = '';
-    }, 1000);
-  }
 }
 
 function renderSelectedFiles() {
@@ -1627,13 +1402,6 @@ async function uploadDocument() {
     return;
   }
   
-  // Vérifier la connexion Supabase
-  if (!G.supabase) {
-    showToast('Erreur de connexion à la base de données', 'error');
-    return;
-  }
-  
-  // Vérifier le dossier courant
   if (!G.currentFolderId) {
     await setRootFolder();
     if (!G.currentFolderId) {
@@ -1643,57 +1411,29 @@ async function uploadDocument() {
   }
   
   const folderId = G.currentFolderId;
-  let successCount = 0;
-  let errorCount = 0;
   
-  // Afficher une barre de progression
-  const progressContainer = document.getElementById('uploadProgress');
-  const progressBar = document.getElementById('uploadProgressBar');
-  const progressPercent = document.getElementById('uploadPercent');
-  const statusText = document.getElementById('uploadStatusText');
-  
-  if (progressContainer) {
-    progressContainer.classList.remove('hidden');
-  }
-  
-  for (let i = 0; i < G.selectedFiles.length; i++) {
-    const file = G.selectedFiles[i];
+  for (const file of G.selectedFiles) {
     const docId = generateId();
-    const fileExt = file.name.split('.').pop().toLowerCase();
+    const fileExt = file.name.split('.').pop();
     const storagePath = `${G.currentUser.companyId}/${docId}.${fileExt}`;
     
-    // Mettre à jour la progression
-    const percent = Math.round(((i + 1) / G.selectedFiles.length) * 100);
-    if (progressBar) progressBar.style.width = `${percent}%`;
-    if (progressPercent) progressPercent.textContent = `${percent}%`;
-    if (statusText) statusText.textContent = `Import de ${file.name}... (${i + 1}/${G.selectedFiles.length})`;
-    
     try {
-      // 1. Upload vers Supabase Storage
       const { error: uploadErr } = await G.supabase.storage
         .from(CONFIG.storageBucket)
-        .upload(storagePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+        .upload(storagePath, file);
       
-      if (uploadErr) {
-        console.error('Upload storage error:', uploadErr);
-        throw new Error(`Upload storage: ${uploadErr.message}`);
-      }
+      if (uploadErr) throw uploadErr;
       
-      // 2. Récupérer l'URL publique
-      const { data: publicUrlData } = G.supabase.storage
+      const { data: publicUrl } = G.supabase.storage
         .from(CONFIG.storageBucket)
         .getPublicUrl(storagePath);
       
-      // 3. Créer l'entrée en base de données
       const doc = {
         id: docId,
-        name: document.getElementById('docNameInput')?.value.trim() || file.name,
+        name: document.getElementById('docNameInput')?.value || file.name,
         type: getFileType(file.name),
         size: file.size,
-        description: document.getElementById('docDescInput')?.value.trim() || '',
+        description: document.getElementById('docDescInput')?.value || '',
         scope: G._uploadScope || 'company',
         owner_id: G.currentUser.id,
         company_id: G.currentUser.companyId,
@@ -1708,48 +1448,25 @@ async function uploadDocument() {
         deleted_at: null,
         content: '',
         storage_path: storagePath,
-        file_url: publicUrlData.publicUrl
+        file_url: publicUrl.publicUrl
       };
       
       const { error: dbErr } = await G.supabase.from('documents').insert(doc);
-      if (dbErr) {
-        console.error('DB insert error:', dbErr);
-        throw new Error(`Base de données: ${dbErr.message}`);
-      }
+      if (dbErr) throw dbErr;
       
-      // Ajouter à l'état local
       G.documents.unshift(doc);
-      successCount++;
+      showToast(`${file.name} importé avec succès`, 'success');
       
       // Log d'audit
-      await addAuditLog('upload', 'document', doc.id, `Fichier: ${file.name}, Taille: ${formatBytes(file.size)}`);
+      await addAuditLog('upload', 'document', doc.id);
       
     } catch (err) {
-      console.error(`Erreur upload ${file.name}:`, err);
-      errorCount++;
-      showToast(`Erreur: ${file.name} - ${err.message}`, 'error');
+      console.error('Upload error:', err);
+      showToast(`Erreur: ${err.message}`, 'error');
     }
   }
   
-  // Masquer la barre de progression
-  if (progressContainer) {
-    setTimeout(() => {
-      progressContainer.classList.add('hidden');
-      if (progressBar) progressBar.style.width = '0%';
-      if (progressPercent) progressPercent.textContent = '0%';
-    }, 1000);
-  }
-  
-  // Afficher le résumé
-  if (successCount > 0) {
-    showToast(`${successCount} fichier(s) importé(s) avec succès${errorCount > 0 ? `, ${errorCount} erreur(s)` : ''}`, successCount > 0 ? 'success' : 'warning');
-  }
-  
-  // Réinitialiser et rafraîchir
   G.selectedFiles = [];
-  G.uploadTags = [];
-  renderUploadTags();
-  renderSelectedFiles();
   closeUploadModal();
   renderDocuments();
   updateBadges();
@@ -1776,189 +1493,52 @@ function setDocScope(scope) {
 
 // ─── Preview et téléchargement ───
 function openPreviewModal(docId) {
-  console.log('👁️ Ouverture de l\'aperçu pour:', docId);
   G.currentDocId = docId;
-  
   const modal = document.getElementById('previewModal');
   if (modal) modal.classList.remove('hidden');
   
   const doc = G.documents.find(d => d.id === docId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
+  if (!doc) return;
   
-  // Afficher le chargement
-  showPreviewLoading();
-  
-  // Mettre à jour le titre
   const titleEl = document.getElementById('previewTitle');
   if (titleEl) titleEl.textContent = doc.name;
   
-  // Mettre à jour les métadonnées
-  updatePreviewMetadata(doc);
-  
   const fileUrl = doc.file_url;
   const fileType = doc.type;
-  const fileName = doc.name;
-  const fileExt = fileName.split('.').pop().toLowerCase();
-  
-  // Récupérer les éléments
   const previewFrame = document.getElementById('previewFrame');
   const previewImage = document.getElementById('previewImage');
   const previewContent = document.getElementById('previewContent');
-  const previewOffice = document.getElementById('previewOffice');
-  const previewUnsupported = document.getElementById('previewUnsupported');
   
-  // Cacher tous les conteneurs
-  if (previewFrame) previewFrame.classList.add('hidden');
-  if (previewImage) previewImage.classList.add('hidden');
-  if (previewContent) previewContent.classList.add('hidden');
-  if (previewOffice) previewOffice.classList.add('hidden');
-  if (previewUnsupported) previewUnsupported.classList.add('hidden');
-  
-  // Types de fichiers supportés
-  const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
-  const pdfTypes = ['pdf'];
-  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
-  const textTypes = ['txt', 'json', 'xml', 'html', 'css', 'js', 'md'];
-  
-  try {
-    if (imageTypes.includes(fileExt)) {
-      // Aperçu image
-      if (previewImage) {
-        previewImage.src = fileUrl;
-        previewImage.classList.remove('hidden');
-        previewImage.onload = () => {
-          hidePreviewLoading();
-          console.log('✅ Image chargée');
-        };
-        previewImage.onerror = () => {
-          hidePreviewLoading();
-          showUnsupportedPreview(doc);
-        };
-      }
-    } 
-    else if (pdfTypes.includes(fileExt)) {
-      // Aperçu PDF
-      if (previewFrame) {
-        previewFrame.src = fileUrl;
-        previewFrame.classList.remove('hidden');
-        previewFrame.onload = () => {
-          hidePreviewLoading();
-          console.log('✅ PDF chargé');
-        };
-        previewFrame.onerror = () => {
-          hidePreviewLoading();
-          showUnsupportedPreview(doc);
-        };
-      }
+  if (fileType === 'pdf') {
+    if (previewFrame) {
+      previewFrame.src = fileUrl;
+      previewFrame.classList.remove('hidden');
+      previewFrame.onload = () => {
+        console.log('PDF chargé avec succès');
+      };
     }
-    else if (officeTypes.includes(fileExt)) {
-      // Aperçu Office
-      if (previewOffice) {
-        previewOffice.src = fileUrl;
-        previewOffice.classList.remove('hidden');
-        previewOffice.onload = () => {
-          hidePreviewLoading();
-          console.log('✅ Document Office chargé');
-        };
-        previewOffice.onerror = () => {
-          hidePreviewLoading();
-          showUnsupportedPreview(doc);
-        };
-      }
+    if (previewImage) previewImage.classList.add('hidden');
+    if (previewContent) previewContent.classList.add('hidden');
+  } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileType)) {
+    if (previewImage) {
+      previewImage.src = fileUrl;
+      previewImage.classList.remove('hidden');
+      previewImage.onload = () => {
+        console.log('Image chargée avec succès');
+      };
     }
-    else if (textTypes.includes(fileExt)) {
-      // Aperçu texte
-      previewContent.classList.remove('hidden');
-      const contentEl = document.getElementById('previewTextContent');
-      if (contentEl) {
-        contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i><p class="mt-2">Chargement du contenu...</p></div>';
-        
-        fetch(fileUrl)
-          .then(response => response.text())
-          .then(text => {
-            hidePreviewLoading();
-            contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap overflow-auto max-h-[60vh] p-4 bg-slate-900/50 rounded-lg">${escapeHtml(text.substring(0, 50000))}${text.length > 50000 ? '\n\n... (fichier tronqué)' : ''}</pre>`;
-          })
-          .catch(() => {
-            hidePreviewLoading();
-            contentEl.innerHTML = `<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-2 block"></i><p>Impossible de lire le contenu</p><button onclick="downloadDocument('${doc.id}')" class="mt-3 btn-primary px-4 py-2 rounded-lg text-sm">Télécharger</button></div>`;
-          });
-      }
-    }
-    else {
-      // Type non supporté
-      hidePreviewLoading();
-      showUnsupportedPreview(doc);
-    }
-  } catch (err) {
-    console.error('Erreur aperçu:', err);
-    hidePreviewLoading();
-    showUnsupportedPreview(doc);
+    if (previewFrame) previewFrame.classList.add('hidden');
+    if (previewContent) previewContent.classList.add('hidden');
+  } else {
+    if (previewFrame) previewFrame.classList.add('hidden');
+    if (previewImage) previewImage.classList.add('hidden');
+    if (previewContent) previewContent.classList.remove('hidden');
   }
   
   // Incrémenter le compteur de vues
   updateDocViews(docId);
 }
-function updatePreviewMetadata(doc) {
-  const metaContainer = document.getElementById('previewMetadata');
-  if (metaContainer) {
-    metaContainer.innerHTML = `
-      <div class="flex items-center gap-4 text-xs text-blue-300/60 flex-wrap">
-        <span><i class="fas fa-code-branch mr-1"></i>Version ${doc.version || 1}</span>
-        <span><i class="fas fa-eye mr-1"></i>${doc.views || 0} vues</span>
-        <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0} téléchargements</span>
-        <span><i class="fas fa-calendar-alt mr-1"></i>${formatDate(doc.created_at)}</span>
-        <span><i class="fas fa-database mr-1"></i>${formatBytes(doc.size)}</span>
-        ${doc.owner_id === G.currentUser.id ? '<span class="text-green-400"><i class="fas fa-user-check mr-1"></i>Propriétaire</span>' : ''}
-      </div>
-    `;
-  }
-}
 
-function showUnsupportedPreview(doc) {
-  const previewUnsupported = document.getElementById('previewUnsupported');
-  if (previewUnsupported) {
-    previewUnsupported.classList.remove('hidden');
-    const unsupportedInfo = document.getElementById('unsupportedFileInfo');
-    if (unsupportedInfo) {
-      unsupportedInfo.innerHTML = `
-        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-4 block text-blue-400"></i>
-        <p class="text-white font-medium">${escapeHtml(doc.name)}</p>
-        <p class="text-sm text-blue-300/60 mt-1">${formatBytes(doc.size)} • ${doc.type?.toUpperCase() || 'Fichier'}</p>
-        <p class="text-xs text-blue-400/50 mt-3">Aperçu non disponible pour ce type de fichier</p>
-        <div class="flex gap-3 mt-4 justify-center">
-          <button onclick="downloadDocument('${doc.id}')" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
-            <i class="fas fa-download"></i>Télécharger
-          </button>
-          <button onclick="copyFileLink('${doc.id}')" class="px-4 py-2 rounded-lg text-sm border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-2">
-            <i class="fas fa-link"></i>Copier le lien
-          </button>
-        </div>
-      `;
-    }
-  }
-}
-
-function copyFileLink(docId) {
-  const doc = G.documents.find(d => d.id === docId);
-  if (doc && doc.file_url) {
-    navigator.clipboard.writeText(doc.file_url);
-    showToast('Lien du fichier copié', 'success');
-  }
-}
-
-function showPreviewLoading() {
-  const loadingEl = document.getElementById('previewLoading');
-  if (loadingEl) loadingEl.classList.remove('hidden');
-}
-
-function hidePreviewLoading() {
-  const loadingEl = document.getElementById('previewLoading');
-  if (loadingEl) loadingEl.classList.add('hidden');
-}
 async function updateDocViews(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (doc) {
@@ -3889,72 +3469,12 @@ function getSigStatusClass(status) {
 
 function openSignModal() {
   if (!G.currentDocId) {
-    showToast('Veuillez d\'abord ouvrir un document', 'warning');
+    showToast('Veuillez ouvrir un document d\'abord', 'warning');
     return;
   }
-  
-  const doc = G.documents.find(d => d.id === G.currentDocId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
   const modal = document.getElementById('signatureModal');
   if (modal) modal.classList.remove('hidden');
-  
-  // Mettre à jour les informations du document
-  const signDocName = document.getElementById('signDocName');
-  if (signDocName) signDocName.textContent = doc.name;
-  
-  const signDocInfo = document.getElementById('signDocInfo');
-  if (signDocInfo) {
-    signDocInfo.innerHTML = `
-      <span class="text-xs text-blue-300/60">${formatBytes(doc.size)}</span>
-      <span class="text-blue-300/40">•</span>
-      <span class="text-xs text-blue-300/60">Version ${doc.version || 1}</span>
-    `;
-  }
-  
-  // Pré-remplir le nom du signataire
-  const signerNameInput = document.getElementById('signerName');
-  if (signerNameInput) {
-    signerNameInput.value = G.currentUser.name || '';
-  }
-  
-  // Réinitialiser le canvas
   initSignatureCanvas();
-  
-  // Afficher les signatures existantes
-  loadExistingSignatures(doc.id);
-}
-function loadExistingSignatures(docId) {
-  const existingSignatures = G.signatures.filter(s => s.document_id === docId);
-  const container = document.getElementById('existingSignatures');
-  
-  if (container) {
-    if (existingSignatures.length === 0) {
-      container.classList.add('hidden');
-    } else {
-      container.classList.remove('hidden');
-      container.innerHTML = `
-        <p class="text-xs text-blue-300/60 mb-2 flex items-center gap-2">
-          <i class="fas fa-check-circle text-green-400"></i>
-          ${existingSignatures.length} signature(s) existante(s)
-        </p>
-        <div class="flex flex-wrap gap-2">
-          ${existingSignatures.map(sig => `
-            <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 border border-green-500/20 cursor-pointer hover:bg-slate-700/50 transition-all" onclick="viewSignature('${sig.id}')">
-              <i class="fas fa-signature text-green-400 text-sm"></i>
-              <div>
-                <p class="text-xs text-white">${escapeHtml(sig.signer_name || sig.signer_email || sig.signer_id?.substring(0, 8))}</p>
-                <p class="text-[10px] text-blue-300/50">${formatDate(sig.signed_at || sig.created_at)}</p>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-  }
 }
 
 function closeSignModal() {
@@ -3962,255 +3482,116 @@ function closeSignModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-let signatureCanvas = null;
-let signatureCtx = null;
-let isDrawing = false;
-
 function initSignatureCanvas() {
   const canvas = document.getElementById('signatureCanvas');
   if (!canvas) return;
   
-  signatureCanvas = canvas;
+  canvas.width = canvas.offsetWidth;
+  canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(8,15,40,0.8)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
   
-  // Définir la taille du canvas
-  const container = canvas.parentElement;
-  const width = Math.min(container.clientWidth - 32, 550);
-  canvas.width = width;
-  canvas.height = 200;
+  let drawing = false;
   
-  signatureCtx = canvas.getContext('2d');
-  signatureCtx.fillStyle = '#0f172a';
-  signatureCtx.fillRect(0, 0, canvas.width, canvas.height);
-  signatureCtx.strokeStyle = '#60a5fa';
-  signatureCtx.lineWidth = 2;
-  signatureCtx.lineCap = 'round';
-  signatureCtx.lineJoin = 'round';
-  
-  // Ajouter un guide visuel
-  signatureCtx.beginPath();
-  signatureCtx.strokeStyle = 'rgba(96,165,250,0.3)';
-  signatureCtx.setLineDash([5, 5]);
-  signatureCtx.moveTo(50, canvas.height - 30);
-  signatureCtx.lineTo(canvas.width - 50, canvas.height - 30);
-  signatureCtx.stroke();
-  signatureCtx.setLineDash([]);
-  
-  // Texte indicatif
-  signatureCtx.font = '12px "Inter", sans-serif';
-  signatureCtx.fillStyle = 'rgba(96,165,250,0.5)';
-  signatureCtx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
-  
-  let lastX = 0, lastY = 0;
-  
-  function getCoordinates(e) {
+  canvas.addEventListener('mousedown', (e) => {
+    drawing = true;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    let clientX, clientY;
-    if (e.touches) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-    return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
-  }
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  });
   
-  function startDrawing(e) {
+  canvas.addEventListener('mousemove', (e) => {
+    if (!drawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  });
+  
+  canvas.addEventListener('mouseup', () => {
+    drawing = false;
+  });
+  
+  canvas.addEventListener('mouseleave', () => {
+    drawing = false;
+  });
+  
+  canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    isDrawing = true;
-    const { x, y } = getCoordinates(e);
-    lastX = x;
-    lastY = y;
-    signatureCtx.beginPath();
-    signatureCtx.moveTo(x, y);
-  }
+    drawing = true;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  });
   
-  function draw(e) {
+  canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
-    if (!isDrawing) return;
-    const { x, y } = getCoordinates(e);
-    signatureCtx.lineTo(x, y);
-    signatureCtx.stroke();
-    lastX = x;
-    lastY = y;
-  }
+    if (!drawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  });
   
-  function stopDrawing() {
-    isDrawing = false;
-    signatureCtx.beginPath();
-  }
-  
-  // Événements souris
-  canvas.addEventListener('mousedown', startDrawing);
-  canvas.addEventListener('mousemove', draw);
-  canvas.addEventListener('mouseup', stopDrawing);
-  canvas.addEventListener('mouseleave', stopDrawing);
-  
-  // Événements tactiles
-  canvas.addEventListener('touchstart', startDrawing);
-  canvas.addEventListener('touchmove', draw);
-  canvas.addEventListener('touchend', stopDrawing);
+  canvas.addEventListener('touchend', () => {
+    drawing = false;
+  });
 }
 
 function clearSignature() {
   const canvas = document.getElementById('signatureCanvas');
-  if (!canvas || !signatureCtx) return;
-  
-  signatureCtx.clearRect(0, 0, canvas.width, canvas.height);
-  signatureCtx.fillStyle = '#0f172a';
-  signatureCtx.fillRect(0, 0, canvas.width, canvas.height);
-  signatureCtx.strokeStyle = '#60a5fa';
-  signatureCtx.lineWidth = 2;
-  
-  // Refaire le guide
-  signatureCtx.beginPath();
-  signatureCtx.strokeStyle = 'rgba(96,165,250,0.3)';
-  signatureCtx.setLineDash([5, 5]);
-  signatureCtx.moveTo(50, canvas.height - 30);
-  signatureCtx.lineTo(canvas.width - 50, canvas.height - 30);
-  signatureCtx.stroke();
-  signatureCtx.setLineDash([]);
-  signatureCtx.font = '12px "Inter", sans-serif';
-  signatureCtx.fillStyle = 'rgba(96,165,250,0.5)';
-  signatureCtx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(8,15,40,0.8)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 async function submitSignature() {
   const canvas = document.getElementById('signatureCanvas');
   if (!canvas) return;
   
-  // Vérifier si une signature a été dessinée
-  const ctx = canvas.getContext('2d');
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  let hasDrawing = false;
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    if (imageData.data[i] !== 0 || imageData.data[i+1] !== 0 || imageData.data[i+2] !== 0) {
-      hasDrawing = true;
-      break;
-    }
-  }
+  const imageData = canvas.toDataURL('image/png');
   
-  if (!hasDrawing) {
-    showToast('Veuillez dessiner votre signature avant de valider', 'warning');
-    return;
-  }
-  
-  const signatureData = canvas.toDataURL('image/png');
-  const signerName = document.getElementById('signerName')?.value.trim() || G.currentUser.name;
-  const signerTitle = document.getElementById('signerTitle')?.value.trim() || '';
-  const signReason = document.getElementById('signReason')?.value.trim() || 'Approbation du document';
-  
-  if (!G.currentDocId) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  const doc = G.documents.find(d => d.id === G.currentDocId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  // Afficher un indicateur de chargement
-  const submitBtn = document.getElementById('submitSignatureBtn');
-  const originalText = submitBtn?.innerHTML;
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement...';
-  }
-  
-  try {
+  if (G.currentDocId) {
     const newSig = {
       id: generateId(),
       document_id: G.currentDocId,
-      document_name: doc.name,
       signer_id: G.currentUser.id,
       signer_email: G.currentUser.email,
-      signer_name: signerName,
-      signer_title: signerTitle,
-      sign_reason: signReason,
       status: 'signed',
-      signature_data: signatureData,
+      signature_data: imageData,
       signed_at: new Date().toISOString(),
       created_at: new Date().toISOString()
     };
     
     const { error } = await G.supabase.from('signatures').insert(newSig);
-    if (error) throw error;
+    if (error) {
+      showToast('Erreur signature', 'error');
+      return;
+    }
     
     G.signatures.push(newSig);
-    showToast('✓ Signature enregistrée avec succès', 'success');
-    
-    // Ajouter un log d'audit
-    await addAuditLog('signature', 'document', G.currentDocId, `Signé par ${signerName}`);
-    
-    closeSignModal();
-    renderSignatures();
-    
-  } catch (err) {
-    console.error('Erreur signature:', err);
-    showToast('Erreur lors de l\'enregistrement de la signature', 'error');
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
-    }
+    showToast('Signature enregistrée', 'success');
   }
+  closeSignModal();
+  renderSignatures();
+  
+  await addAuditLog('signature', 'document', G.currentDocId);
 }
 
-function viewSignature(signatureId) {
-  const signature = G.signatures.find(s => s.id === signatureId);
-  if (!signature || !signature.signature_data) {
-    showToast('Signature non disponible', 'error');
-    return;
-  }
-  
-  // Créer un modal pour visualiser la signature
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.style.zIndex = '300';
-  modal.innerHTML = `
-    <div class="modal-box" style="max-width: 500px;">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-blue-500/20 flex items-center justify-center">
-            <i class="fas fa-signature text-green-400"></i>
-          </div>
-          <div>
-            <h3 class="text-white font-bold">Signature électronique</h3>
-            <p class="text-xs text-blue-300/60">Document certifié</p>
-          </div>
-        </div>
-        <button onclick="this.closest('.modal-overlay').remove()" class="text-blue-400 hover:text-white p-2 rounded-lg">
-          <i class="fas fa-times text-xl"></i>
-        </button>
-      </div>
-      <div class="text-center">
-        <img src="${signature.signature_data}" class="max-w-full mx-auto border border-blue-500/30 rounded-lg bg-white p-4" alt="Signature">
-        <div class="mt-4 text-left space-y-1 text-sm bg-slate-900/50 rounded-xl p-4">
-          <p><span class="text-blue-300/60">Signataire:</span> <span class="text-white font-medium">${escapeHtml(signature.signer_name || signature.signer_email)}</span></p>
-          ${signature.signer_title ? `<p><span class="text-blue-300/60">Fonction:</span> <span class="text-white">${escapeHtml(signature.signer_title)}</span></p>` : ''}
-          <p><span class="text-blue-300/60">Raison:</span> <span class="text-white">${escapeHtml(signature.sign_reason || 'Approbation')}</span></p>
-          <p><span class="text-blue-300/60">Date:</span> <span class="text-white">${formatDate(signature.signed_at)}</span></p>
-          <p><span class="text-blue-300/60">Document:</span> <span class="text-white">${escapeHtml(signature.document_name || 'Document')}</span></p>
-          <div class="mt-3 pt-2 border-t border-blue-500/20">
-            <p class="text-xs text-green-400/70 flex items-center gap-2">
-              <i class="fas fa-check-circle"></i>
-              Signature valide et horodatée
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
 function openRequestSignatureModal() {
   const modal = document.getElementById('requestSignatureModal');
   if (modal) modal.classList.remove('hidden');
@@ -5077,30 +4458,6 @@ function escapeHtml(str) {
 }
 // ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
- window.addEventListener('error', (e) => {
-    console.error('❌ Erreur globale:', {
-      message: e.message,
-      filename: e.filename,
-      lineno: e.lineno,
-      colno: e.colno,
-      error: e.error
-    });
-    // Optionnel: afficher un toast pour les erreurs critiques
-    if (e.message && !e.message.includes('ResizeObserver')) {
-      // showToast(`Erreur: ${e.message.substring(0, 100)}`, 'error');
-    }
-  });
-  
-  window.addEventListener('unhandledrejection', (e) => {
-    console.error('❌ Promesse rejetée non gérée:', {
-      reason: e.reason,
-      promise: e.promise
-    });
-    // Optionnel: afficher un toast
-    // showToast(`Erreur: ${e.reason?.message || 'Promesse rejetée'}`, 'error');
-  });
-  
-  console.log('🚀 Démarrage de l\'application SystemesGED v7.0');
   await initSupabase();
   const { data: { session } } = await G.supabase.auth.getSession();
   
@@ -5115,7 +4472,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Exposer toutes les fonctions globalement
-// Exposer toutes les fonctions globalement
   window.handleLogin = handleLogin;
   window.handleRegister = handleRegister;
   window.handleLogout = handleLogout;
