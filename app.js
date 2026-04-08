@@ -26,7 +26,6 @@ window.G = {
   supabase: null,
   currentUser: null,
   currentCompany: null,
-  currentTagFilter: null,
   documents: [],
   workflows: [],
   users: [],
@@ -63,42 +62,73 @@ window.G = {
   moveModalDocId: null,
   collabModalDocId: null,
   collabUsers: [],
+  
+  // Variables d'audit
   auditFilter: { days: 30, severity: '', action: '' },
   logFilter: 'all',
   auditCurrentPage: 1,
   auditPageSize: 20
 };
 
-// ─── Protection anti-copie ───
+// ─── Protection anti-copie et sécurité ───
 (function protectApplication() {
-  document.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
+  document.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    return false;
+  });
+  
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) || (e.ctrlKey && (e.key === 'u' || e.key === 'U'))) {
+    if (e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) ||
+        (e.ctrlKey && (e.key === 'u' || e.key === 'U'))) {
       e.preventDefault();
       return false;
     }
   });
+  
+  // Désactivé pour éviter les problèmes de performance
+  // setInterval(() => {
+  //   const before = new Date();
+  //   debugger;
+  //   const after = new Date();
+  //   if (after - before > 100) {
+  //     console.clear();
+  //   }
+  // }, 1000);
 })();
 
 // ─── Initialisation Supabase ───
 async function initSupabase() {
   try {
     if (typeof supabase === 'undefined') {
-      console.error('Supabase library not loaded');
+      console.error('Supabase library not loaded - vérifiez la connexion internet');
       showToast('Erreur de chargement de la bibliothèque Supabase', 'error');
       throw new Error('Supabase library not loaded');
     }
+    
     console.log('🔄 Initialisation de Supabase...');
+    
     G.supabase = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
-      auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: 'pkce' }
+      auth: { 
+        autoRefreshToken: true, 
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce'
+      }
     });
+    
+    // Vérifier la connexion
     const { data: { session }, error: sessionError } = await G.supabase.auth.getSession();
-    if (sessionError) console.warn('Erreur session:', sessionError);
+    if (sessionError) {
+      console.warn('Erreur session:', sessionError);
+    }
+    
     if (session) {
       console.log('✅ Session existante trouvée');
       await loadUserFromSupabase(session.user);
       return true;
     }
+    
     console.log('⚠️ Aucune session active');
     return false;
   } catch (e) {
@@ -110,6 +140,7 @@ async function initSupabase() {
 
 async function loadUserFromSupabase(user) {
   if (!user) return false;
+  
   const sysAdmin = CONFIG.systemAdmins.find(a => a.email === user.email);
   if (sysAdmin) {
     G.currentUser = {
@@ -127,12 +158,18 @@ async function loadUserFromSupabase(user) {
     await loadAllData();
     return true;
   }
+  
   const { data: profile, error } = await G.supabase
     .from('profiles')
     .select('*, companies!company_id(name, plan)')
     .eq('id', user.id)
     .single();
-  if (error) { console.error('Erreur chargement profil:', error); return false; }
+  
+  if (error) {
+    console.error('Erreur chargement profil:', error);
+    return false;
+  }
+  
   G.currentUser = {
     id: user.id,
     email: profile.email,
@@ -144,82 +181,151 @@ async function loadUserFromSupabase(user) {
     status: profile.status,
     isSystemAdmin: false
   };
+  
   await loadAllData();
   return true;
 }
 
 async function ensureCompanyExists(companyId, companyName) {
-  const { data: existing } = await G.supabase.from('companies').select('id').eq('id', companyId).single();
+  const { data: existing } = await G.supabase
+    .from('companies')
+    .select('id')
+    .eq('id', companyId)
+    .single();
   if (!existing) {
-    await G.supabase.from('companies').insert({ id: companyId, name: companyName, plan: 'enterprise' });
+    await G.supabase.from('companies').insert({ 
+      id: companyId, 
+      name: companyName, 
+      plan: 'enterprise' 
+    });
   }
 }
 
-// ─── Dossier racine ───
-async function setRootFolder(retries = 3) {
-  if (!G.currentUser?.companyId) return false;
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const { data: rootFolder, error } = await G.supabase
-      .from('folders')
-      .select('id')
-      .eq('company_id', G.currentUser.companyId)
-      .eq('name', 'Racine')
-      .maybeSingle();
-    if (rootFolder && !error) {
-      G.currentFolderId = rootFolder.id;
-      G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
-      return true;
-    }
-    const newRootId = `${G.currentUser.companyId}_root`;
-    const { error: insertErr } = await G.supabase.from('folders').insert({
-      id: newRootId, name: 'Racine', parent_id: null, company_id: G.currentUser.companyId, created_at: new Date().toISOString()
-    });
-    if (!insertErr) {
-      G.currentFolderId = newRootId;
-      G.folderPath = [{ id: newRootId, name: 'Racine' }];
-      return true;
-    }
-    console.warn(`Tentative ${attempt} échouée pour créer le dossier racine`, insertErr);
-    if (attempt < retries) await new Promise(r => setTimeout(r, 500));
+// ─── Gestion du dossier racine ───
+async function setRootFolder() {
+  if (!G.currentUser?.companyId) {
+    console.error('setRootFolder: companyId manquant');
+    return;
   }
-  console.error('Impossible de créer/récupérer le dossier racine');
-  showToast('Erreur d\'initialisation des dossiers', 'error');
-  return false;
+  
+  const { data: rootFolder, error } = await G.supabase
+    .from('folders')
+    .select('id')
+    .eq('company_id', G.currentUser.companyId)
+    .eq('name', 'Racine')
+    .maybeSingle();
+  
+  if (rootFolder && !error) {
+    G.currentFolderId = rootFolder.id;
+    G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
+    return;
+  }
+  
+  const newRootId = `${G.currentUser.companyId}_root`;
+  const { error: insertErr } = await G.supabase
+    .from('folders')
+    .insert({
+      id: newRootId,
+      name: 'Racine',
+      parent_id: null,
+      company_id: G.currentUser.companyId,
+      created_at: new Date().toISOString()
+    });
+  
+  if (!insertErr) {
+    G.currentFolderId = newRootId;
+    G.folderPath = [{ id: newRootId, name: 'Racine' }];
+  } else {
+    console.error('Erreur création dossier racine:', insertErr);
+  }
 }
 
 // ─── Chargement des données ───
 async function loadAllData() {
   if (!G.currentUser?.companyId) return;
   const companyId = G.currentUser.companyId;
-  const { data: docs } = await G.supabase.from('documents').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+
+  const { data: docs } = await G.supabase
+    .from('documents')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false });
   G.documents = docs || [];
-  const { data: wfs } = await G.supabase.from('workflows').select('*').eq('company_id', companyId);
+
+  const { data: wfs } = await G.supabase
+    .from('workflows')
+    .select('*')
+    .eq('company_id', companyId);
   G.workflows = wfs || [];
-  const { data: users } = await G.supabase.from('profiles').select('*').eq('company_id', companyId);
+
+  const { data: users } = await G.supabase
+    .from('profiles')
+    .select('*')
+    .eq('company_id', companyId);
   G.users = users || [];
-  const { data: tags } = await G.supabase.from('tags').select('*').eq('company_id', companyId);
+
+  const { data: tags } = await G.supabase
+    .from('tags')
+    .select('*')
+    .eq('company_id', companyId);
   G.tags = tags || [];
-  const { data: shares } = await G.supabase.from('shares').select('*, documents!document_id(name)').eq('sender_id', G.currentUser.id);
+
+  const { data: shares } = await G.supabase
+    .from('shares')
+    .select('*, documents!document_id(name)')
+    .eq('sender_id', G.currentUser.id);
   G.shares = shares || [];
-  const { data: folders } = await G.supabase.from('folders').select('*').eq('company_id', companyId);
+
+  const { data: folders } = await G.supabase
+    .from('folders')
+    .select('*')
+    .eq('company_id', companyId);
   G.folders = folders || [];
-  const { data: signatures } = await G.supabase.from('signatures').select('*').eq('signer_id', G.currentUser.id);
+
+  const { data: signatures } = await G.supabase
+    .from('signatures')
+    .select('*')
+    .eq('signer_id', G.currentUser.id);
   G.signatures = signatures || [];
-  const { data: rules } = await G.supabase.from('automation_rules').select('*').eq('company_id', companyId);
+
+  const { data: rules } = await G.supabase
+    .from('automation_rules')
+    .select('*')
+    .eq('company_id', companyId);
   G.automationRules = rules || [];
-  const { data: keys } = await G.supabase.from('api_keys').select('*').eq('user_id', G.currentUser.id);
+
+  const { data: keys } = await G.supabase
+    .from('api_keys')
+    .select('*')
+    .eq('user_id', G.currentUser.id);
   G.apiKeys = keys || [];
-  const { data: backups } = await G.supabase.from('backups').select('*').eq('company_id', companyId);
+
+  const { data: backups } = await G.supabase
+    .from('backups')
+    .select('*')
+    .eq('company_id', companyId);
   G.backups = backups || [];
-  const { data: audit } = await G.supabase.from('audit_logs').select('*').eq('user_id', G.currentUser.id).order('created_at', { ascending: false }).limit(50);
+
+  const { data: audit } = await G.supabase
+    .from('audit_logs')
+    .select('*')
+    .eq('user_id', G.currentUser.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
   G.auditLogs = audit || [];
-  const { data: syslogs } = await G.supabase.from('system_logs').select('*').order('created_at', { ascending: false }).limit(50);
+
+  const { data: syslogs } = await G.supabase
+    .from('system_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
   G.systemLogs = syslogs || [];
+  
   await setRootFolder();
   updateUI();
 }
 
-// ─── UI ───
+// ─── UI Updates ───
 function updateUI() {
   updateUserDisplay();
   updateBadges();
@@ -227,9 +333,11 @@ function updateUI() {
   updateMenuVisibility();
   if (canValidateUsers()) updatePendingUsersCount();
 }
+
 function updateUserDisplay() {
   if (!G.currentUser) return;
-  const els = {
+  
+  const elements = {
     userNameDisplay: document.getElementById('userNameDisplay'),
     userRoleDisplay: document.getElementById('userRoleDisplay'),
     userAvatarInitial: document.getElementById('userAvatarInitial'),
@@ -240,65 +348,116 @@ function updateUserDisplay() {
     companyAvatar: document.getElementById('companyAvatar'),
     planBadge: document.getElementById('planBadge')
   };
-  if (els.userNameDisplay) els.userNameDisplay.textContent = G.currentUser.name;
-  if (els.userRoleDisplay) els.userRoleDisplay.textContent = G.roles[G.currentUser.role]?.name || G.currentUser.role;
-  if (els.userAvatarInitial) els.userAvatarInitial.textContent = G.currentUser.name.charAt(0).toUpperCase();
-  if (els.dropdownUserName) els.dropdownUserName.textContent = G.currentUser.name;
-  if (els.dropdownUserEmail) els.dropdownUserEmail.textContent = G.currentUser.email;
-  if (els.companyNameLabel) els.companyNameLabel.textContent = G.currentUser.companyName || 'Entreprise';
-  if (els.companyPlanLabel) els.companyPlanLabel.textContent = `Plan ${G.currentUser.plan}`;
-  if (els.companyAvatar) els.companyAvatar.textContent = (G.currentUser.companyName || 'E').charAt(0).toUpperCase();
-  if (els.planBadge) {
-    els.planBadge.textContent = G.currentUser.plan.toUpperCase();
-    els.planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan}`;
+
+  if (elements.userNameDisplay) elements.userNameDisplay.textContent = G.currentUser.name;
+  if (elements.userRoleDisplay) elements.userRoleDisplay.textContent = G.roles[G.currentUser.role]?.name || G.currentUser.role;
+  if (elements.userAvatarInitial) elements.userAvatarInitial.textContent = G.currentUser.name.charAt(0).toUpperCase();
+  if (elements.dropdownUserName) elements.dropdownUserName.textContent = G.currentUser.name;
+  if (elements.dropdownUserEmail) elements.dropdownUserEmail.textContent = G.currentUser.email;
+  if (elements.companyNameLabel) elements.companyNameLabel.textContent = G.currentUser.companyName || 'Entreprise';
+  if (elements.companyPlanLabel) elements.companyPlanLabel.textContent = `Plan ${G.currentUser.plan}`;
+  if (elements.companyAvatar) elements.companyAvatar.textContent = (G.currentUser.companyName || 'E').charAt(0).toUpperCase();
+  if (elements.planBadge) {
+    elements.planBadge.textContent = G.currentUser.plan.toUpperCase();
+    elements.planBadge.className = `hidden sm:inline badge-plan badge-${G.currentUser.plan}`;
   }
 }
+
 function updateMenuVisibility() {
   const isAdmin = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
   const isManager = G.currentUser?.role === 'manager' || isAdmin;
-  document.querySelectorAll('[data-role="admin-only"]').forEach(el => el.style.display = isAdmin ? 'flex' : 'none');
-  document.querySelectorAll('[data-role="manager-only"]').forEach(el => el.style.display = isManager ? 'flex' : 'none');
+  
+  document.querySelectorAll('[data-role="admin-only"]').forEach(el => {
+    el.style.display = isAdmin ? 'flex' : 'none';
+  });
+  document.querySelectorAll('[data-role="manager-only"]').forEach(el => {
+    el.style.display = isManager ? 'flex' : 'none';
+  });
 }
+
 function updateBadges() {
   const docCount = G.documents.filter(d => !d.is_deleted).length;
   const wfCount = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
   const pendingUsersCount = G.users.filter(u => u.status === 'pending_validation').length;
   const sharedCount = G.shares.filter(s => s.status === 'active' && s.recipient_email === G.currentUser?.email).length;
   const sentCount = G.shares.filter(s => s.status === 'active' && s.sender_id === G.currentUser?.id).length;
+  
+  // Badges documents
   const docBadge = document.getElementById('d-docsBadge');
-  if (docBadge) { docBadge.textContent = docCount; docBadge.classList.toggle('hidden', docCount === 0); }
+  if (docBadge) {
+    docBadge.textContent = docCount;
+    docBadge.classList.toggle('hidden', docCount === 0);
+  }
+  
   const mDocsBadge = document.getElementById('m-docsBadge');
-  if (mDocsBadge) { mDocsBadge.textContent = docCount; mDocsBadge.classList.toggle('hidden', docCount === 0); }
+  if (mDocsBadge) {
+    mDocsBadge.textContent = docCount;
+    mDocsBadge.classList.toggle('hidden', docCount === 0);
+  }
+  
+  // Badges workflows
   const wfBadge = document.getElementById('d-wfBadge');
-  if (wfBadge) { wfBadge.textContent = wfCount; wfBadge.classList.toggle('hidden', wfCount === 0); }
+  if (wfBadge) {
+    wfBadge.textContent = wfCount;
+    wfBadge.classList.toggle('hidden', wfCount === 0);
+  }
+  
   const mWfBadge = document.getElementById('m-wfBadge');
-  if (mWfBadge) { mWfBadge.textContent = wfCount; mWfBadge.classList.toggle('hidden', wfCount === 0); }
+  if (mWfBadge) {
+    mWfBadge.textContent = wfCount;
+    mWfBadge.classList.toggle('hidden', wfCount === 0);
+  }
+  
+  // Badges partages
   const receivedBadge = document.getElementById('receivedCountBadge');
-  if (receivedBadge) { receivedBadge.textContent = sharedCount; receivedBadge.classList.toggle('hidden', sharedCount === 0); }
+  if (receivedBadge) {
+    receivedBadge.textContent = sharedCount;
+    receivedBadge.classList.toggle('hidden', sharedCount === 0);
+  }
+  
   const sentBadge = document.getElementById('sentCountBadge');
-  if (sentBadge) { sentBadge.textContent = sentCount; sentBadge.classList.toggle('hidden', sentCount === 0); }
+  if (sentBadge) {
+    sentBadge.textContent = sentCount;
+    sentBadge.classList.toggle('hidden', sentCount === 0);
+  }
+  
+  // Badge utilisateurs en attente
   const pendingBadges = document.querySelectorAll('#d-pendingBadge, #m-pendingBadge');
   pendingBadges.forEach(badge => {
-    if (pendingUsersCount > 0 && canValidateUsers()) { badge.textContent = pendingUsersCount; badge.classList.remove('hidden'); }
-    else badge.classList.add('hidden');
+    if (pendingUsersCount > 0 && canValidateUsers()) {
+      badge.textContent = pendingUsersCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
   });
+  
   const pendingCountEl = document.getElementById('pendingCount');
   if (pendingCountEl) pendingCountEl.textContent = pendingUsersCount;
+  
+  // Corbeille badge
   const trashCount = G.documents.filter(d => d.is_deleted).length;
   const trashBadge = document.getElementById('trashCount');
-  if (trashBadge) { trashBadge.textContent = trashCount; trashBadge.classList.toggle('hidden', trashCount === 0); }
+  if (trashBadge) {
+    trashBadge.textContent = trashCount;
+    trashBadge.classList.toggle('hidden', trashCount === 0);
+  }
+  
   console.log('✅ Badges mis à jour:', { docCount, wfCount, pendingUsersCount, sharedCount });
 }
+
 function updateStorageDisplay() {
   const used = G.documents.reduce((sum, d) => sum + (d.size || 0), 0);
   const limit = CONFIG.plans[G.currentUser.plan].storage;
   const percent = Math.min(100, Math.round((used / limit) * 100));
+  
   const storagePercent = document.getElementById('storagePercent');
   const storageBar = document.getElementById('storageBar');
   const storageText = document.getElementById('storageText');
   const mobileStoragePercent = document.getElementById('mobileStoragePercent');
   const mobileStorageBar = document.getElementById('mobileStorageBar');
   const mobileStorageText = document.getElementById('mobileStorageText');
+  
   if (storagePercent) storagePercent.textContent = `${percent}%`;
   if (storageBar) storageBar.style.width = `${percent}%`;
   if (storageText) storageText.textContent = `${formatBytes(used)} / ${formatBytes(limit)}`;
@@ -308,170 +467,364 @@ function updateStorageDisplay() {
 }
 
 // ─── Authentification ───
+
 function addFilesToSelection(files) {
   for (const file of files) {
     if (file.size > CONFIG.maxFileSize) {
       showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
       continue;
     }
-    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) G.selectedFiles.push(file);
+    
+    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+      G.selectedFiles.push(file);
+    }
   }
   renderSelectedFiles();
+  
   const dropZone = document.getElementById('docDropZone');
   if (dropZone && G.selectedFiles.length > 0) {
     dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
-    setTimeout(() => dropZone.style.borderColor = '', 1000);
+    setTimeout(() => {
+      dropZone.style.borderColor = '';
+    }, 1000);
   }
 }
-async function handleLogin(e) {
-  e.preventDefault(); e.stopPropagation();
-  console.log('🔑 Tentative de connexion...');
-  const email = document.getElementById('loginEmail')?.value.trim();
-  const password = document.getElementById('loginPassword')?.value;
-  if (!email || !password) { showToast('Veuillez remplir tous les champs', 'warning'); return; }
-  const btn = document.getElementById('loginBtn');
-  const btnText = document.getElementById('loginBtnText');
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+  }
   if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Connexion...';
+
   try {
-    if (!G.supabase) await initSupabase();
-    const { data, error } = await G.supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    // Vérifier que Supabase est initialisé
+    if (!G.supabase) {
+      console.error('Supabase non initialisé');
+      await initSupabase();
+    }
+    
+    const { data, error } = await G.supabase.auth.signInWithPassword({ 
+      email, 
+      password 
+    });
+    
+    if (error) {
+      console.error('Erreur connexion:', error);
+      throw error;
+    }
+    
     console.log('✅ Connexion réussie pour:', data.user?.email);
+    
     if (data.user) {
       await loadUserFromSupabase(data.user);
       showToast(`Bienvenue ${G.currentUser.name || email}`, 'success');
       switchToMainApp();
-    } else throw new Error('Aucun utilisateur retourné');
+    } else {
+      throw new Error('Aucun utilisateur retourné');
+    }
+    
   } catch (err) {
-    console.error(err);
+    console.error('Erreur handleLogin:', err);
     let errorMessage = 'Email ou mot de passe incorrect';
-    if (err.message === 'Invalid login credentials') errorMessage = 'Email ou mot de passe incorrect';
-    else if (err.message.includes('Email not confirmed')) errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
-    else errorMessage = err.message || 'Erreur de connexion';
+    if (err.message === 'Invalid login credentials') {
+      errorMessage = 'Email ou mot de passe incorrect';
+    } else if (err.message.includes('Email not confirmed')) {
+      errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
+    } else {
+      errorMessage = err.message || 'Erreur de connexion';
+    }
     showToast(errorMessage, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
     if (btnText) btnText.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Se connecter';
   }
 }
 async function handleRegister(e) {
-  e.preventDefault(); e.stopPropagation();
+  e.preventDefault();
+  e.stopPropagation();
+  
   console.log('📝 Tentative d\'inscription...');
+  
   const lastAttempt = localStorage.getItem('lastRegisterAttempt');
-  if (lastAttempt && Date.now() - parseInt(lastAttempt) < 60000) { showToast('Veuillez attendre une minute avant de réessayer', 'warning'); return; }
+  if (lastAttempt && Date.now() - parseInt(lastAttempt) < 60000) {
+    showToast('Veuillez attendre une minute avant de réessayer', 'warning');
+    return;
+  }
   localStorage.setItem('lastRegisterAttempt', Date.now().toString());
+  
   const firstName = document.getElementById('regFirst')?.value.trim();
   const lastName = document.getElementById('regLast')?.value.trim();
   const companyName = document.getElementById('regCompany')?.value.trim();
   const email = document.getElementById('regEmail')?.value.trim().toLowerCase();
   const password = document.getElementById('regPassword')?.value;
-  if (!firstName || !lastName || !companyName || !email || !password) { showToast('Veuillez remplir tous les champs', 'warning'); return; }
-  if (password.length < 8) { showToast('Le mot de passe doit contenir au moins 8 caractères', 'warning'); return; }
-  if (CONFIG.systemAdmins.some(a => a.email === email)) { showToast('Cet email est réservé', 'error'); return; }
-  if (!G.supabase) await initSupabase();
+  
+  console.log('📝 Données:', { firstName, lastName, companyName, email });
+  
+  if (!firstName || !lastName || !companyName || !email || !password) {
+    showToast('Veuillez remplir tous les champs', 'warning');
+    return;
+  }
+  
+  if (password.length < 8) {
+    showToast('Le mot de passe doit contenir au moins 8 caractères', 'warning');
+    return;
+  }
+  
+  if (CONFIG.systemAdmins.some(a => a.email === email)) {
+    showToast('Cet email est réservé', 'error');
+    return;
+  }
+  
+  // Vérifier que Supabase est initialisé
+  if (!G.supabase) {
+    await initSupabase();
+  }
+  
   const btn = document.getElementById('registerBtn');
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; btn.innerHTML = '<span class="spinner mr-2"></span>Inscription...'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    btn.innerHTML = '<span class="spinner mr-2"></span>Inscription...';
+  }
+
   try {
     const companyId = `comp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     console.log('🏢 Création entreprise:', companyId);
-    const { error: compErr } = await G.supabase.from('companies').insert({ id: companyId, name: companyName, plan: 'free' });
-    if (compErr) throw compErr;
-    const { data, error } = await G.supabase.auth.signUp({ email, password, options: { data: { name: `${firstName} ${lastName}`, company_id: companyId } } });
-    if (error) throw error;
-    if (!data.user) throw new Error('Aucun utilisateur créé');
+    
+    // 1. Créer l'entreprise
+    const { error: compErr } = await G.supabase
+      .from('companies')
+      .insert({ id: companyId, name: companyName, plan: 'free' });
+    if (compErr) {
+      console.error('Erreur création entreprise:', compErr);
+      throw compErr;
+    }
+
+    // 2. Créer l'utilisateur dans Auth
+    const { data, error } = await G.supabase.auth.signUp({
+      email,
+      password,
+      options: { 
+        data: { 
+          name: `${firstName} ${lastName}`, 
+          company_id: companyId 
+        } 
+      }
+    });
+    if (error) {
+      console.error('Erreur signUp:', error);
+      throw error;
+    }
+    
+    if (!data.user) {
+      throw new Error('Aucun utilisateur créé');
+    }
+    
     console.log('✅ Utilisateur créé:', data.user.id);
-    const { error: profErr } = await G.supabase.from('profiles').insert({ id: data.user.id, email: email, name: `${firstName} ${lastName}`, role: 'admin', status: 'pending_validation', company_id: companyId, plan: 'free', created_at: new Date().toISOString() });
-    if (profErr) throw profErr;
+
+    // 3. Créer le profil
+    const { error: profErr } = await G.supabase
+      .from('profiles')
+      .insert({
+        id: data.user.id,
+        email: email,
+        name: `${firstName} ${lastName}`,
+        role: 'admin',
+        status: 'pending_validation',
+        company_id: companyId,
+        plan: 'free',
+        created_at: new Date().toISOString()
+      });
+    if (profErr) {
+      console.error('Erreur création profil:', profErr);
+      throw profErr;
+    }
+
+    // 4. Créer le dossier racine
     const rootFolderId = `${companyId}_root`;
-    await G.supabase.from('folders').insert({ id: rootFolderId, name: 'Racine', parent_id: null, company_id: companyId, created_at: new Date().toISOString() }).catch(err => console.warn('Erreur création dossier racine:', err));
+    const { error: folderErr } = await G.supabase
+      .from('folders')
+      .insert({
+        id: rootFolderId,
+        name: 'Racine',
+        parent_id: null,
+        company_id: companyId,
+        created_at: new Date().toISOString()
+      });
+    if (folderErr) {
+      console.warn('Erreur création dossier racine:', folderErr);
+      // Non bloquant
+    }
+
     showToast('Compte créé ! En attente de validation par un administrateur.', 'success');
+    
+    // Basculer vers l'onglet connexion
     switchAuthTab('login');
+    
+    // Pré-remplir l'email
     const loginEmail = document.getElementById('loginEmail');
     if (loginEmail) loginEmail.value = email;
+    
     console.log('✅ Inscription terminée avec succès');
+    
   } catch (err) {
-    console.error(err);
-    let errorMessage = 'Erreur lors de l\'inscription';
-    if (err.message.includes('User already registered')) errorMessage = 'Cet email est déjà utilisé';
-    else errorMessage = err.message || 'Erreur d\'inscription';
-    showToast(errorMessage, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '<i class="fas fa-user-plus mr-2"></i>Créer mon compte'; }
+    console.error('Erreur handleLogin:', err);
+  let errorMessage = 'Email ou mot de passe incorrect';
+  if (err.message === 'Invalid login credentials') {
+    errorMessage = 'Email ou mot de passe incorrect';
+  } else if (err.message === 'Email not confirmed') {
+    errorMessage = 'Veuillez confirmer votre email avant de vous connecter';
+  } else if (err.message === 'User not found') {
+    errorMessage = 'Aucun compte trouvé avec cet email';
+  } else if (err.message.includes('network')) {
+    errorMessage = 'Problème de connexion réseau';
+  } else {
+    errorMessage = err.message || 'Erreur de connexion';
+  }
+  showToast(errorMessage, 'error');
+  } 
+	finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.innerHTML = '<i class="fas fa-user-plus mr-2"></i>Créer mon compte';
+    }
   }
 }
 async function handleLogout() {
   await G.supabase.auth.signOut();
   G.currentUser = null;
+  
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
+  
   if (loginScreen) loginScreen.style.display = 'block';
   if (mainApp) mainApp.style.display = 'none';
+  
   showToast('Déconnexion réussie', 'info');
 }
+
 function switchToMainApp() {
   console.log('🔄 Bascule vers l\'application principale');
+  
   const loginScreen = document.getElementById('loginScreen');
   const mainApp = document.getElementById('mainApp');
-  if (loginScreen) loginScreen.style.display = 'none';
-  if (mainApp) mainApp.style.display = 'block';
-  if (G.currentUser) loadAllData();
+  
+  if (loginScreen) {
+    loginScreen.style.display = 'none';
+  }
+  if (mainApp) {
+    mainApp.style.display = 'block';
+  }
+  
+  // Forcer le rafraîchissement des données
+  if (G.currentUser) {
+    loadAllData();
+  }
+  
+  // Recharger la vue
   switchView('dashboard');
+  
   console.log('✅ Application principale affichée');
 }
+
 function switchAuthTab(tab) {
   const loginTab = document.getElementById('tabLogin');
   const regTab = document.getElementById('tabRegister');
   const loginWrapper = document.getElementById('loginFormWrapper');
   const regWrapper = document.getElementById('registerFormWrapper');
+  
   if (loginTab) loginTab.classList.toggle('active', tab === 'login');
   if (regTab) regTab.classList.toggle('active', tab === 'register');
   if (loginWrapper) loginWrapper.style.display = tab === 'login' ? 'block' : 'none';
   if (regWrapper) regWrapper.style.display = tab === 'register' ? 'block' : 'none';
 }
+
 function togglePwdInput(id, btn) {
   const input = document.getElementById(id);
   const icon = btn?.querySelector('i');
   if (!input) return;
+  
   input.type = input.type === 'password' ? 'text' : 'password';
   if (icon) icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
+
 function demoLogin() {
   console.log('🔑 Tentative de connexion démo');
+  
   const loginEmail = document.getElementById('loginEmail');
   const loginPassword = document.getElementById('loginPassword');
+  
   if (loginEmail) loginEmail.value = 'demo@systemesged.fr';
   if (loginPassword) loginPassword.value = 'Demo123!';
+  
+  // Créer un événement submit et l'appeler
   const event = new Event('submit', { bubbles: true, cancelable: true });
   const form = document.getElementById('loginForm');
-  if (form) form.dispatchEvent(event);
-  else handleLogin(event);
+  
+  if (form) {
+    console.log('📝 Formulaire trouvé, déclenchement du submit');
+    form.dispatchEvent(event);
+  } else {
+    console.log('⚠️ Formulaire non trouvé, appel direct de handleLogin');
+    handleLogin(event);
+  }
 }
-function oauthLogin(provider) { showToast(`Connexion ${provider} en développement`, 'info'); }
+
+function oauthLogin(provider) {
+  showToast(`Connexion ${provider} en développement`, 'info');
+}
 
 // ─── Navigation ───
 function switchView(viewName) {
   document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
   const target = document.getElementById(`view-${viewName}`);
   if (target) target.classList.add('active-view');
+  
   G.currentView = viewName;
   closeMobileSidebar();
+  
   const views = {
-    dashboard: renderDashboard, documents: renderDocuments, workflows: renderWorkflows, shared: renderShared,
-    users: renderUsers, tags: renderTags, billing: renderBilling, settings: renderSettings, security: renderSecurity,
-    logs: renderSysLogs, rbac: renderRBAC, analytics: renderAnalytics, folders: renderFolders, signatures: renderSignatures,
-    ai: renderAI, automation: renderAutomation, integrations: renderIntegrations, backups: renderBackups,
-    apikeys: renderApiKeys, billing2: renderBillingV6, auditv6: renderAuditV6, 'search-adv': renderAdvancedSearch,
-    versioning: renderVersioning, search: renderSearchV7, rbacv7: renderRBACV7, 'pending-users': renderPendingUsers
+    dashboard: renderDashboard,
+    documents: renderDocuments,
+    workflows: renderWorkflows,
+    shared: renderShared,
+    users: renderUsers,
+    tags: renderTags,
+    billing: renderBilling,
+    settings: renderSettings,
+    security: renderSecurity,
+    logs: renderSysLogs,
+    rbac: renderRBAC,
+    analytics: renderAnalytics,
+    folders: renderFolders,
+    signatures: renderSignatures,
+    ai: renderAI,
+    automation: renderAutomation,
+    integrations: renderIntegrations,
+    backups: renderBackups,
+    apikeys: renderApiKeys,
+    billing2: renderBillingV6,
+    auditv6: renderAuditV6,
+    'search-adv': renderAdvancedSearch,
+    versioning: renderVersioning,
+    search: renderSearchV7,
+    rbacv7: renderRBACV7,
+    'pending-users': renderPendingUsers
   };
+  
   if (views[viewName]) views[viewName]();
 }
+
 function openMobileSidebar() {
   const sidebar = document.getElementById('mobileSidebar');
   const overlay = document.getElementById('sidebarOverlay');
   if (sidebar) sidebar.classList.add('open');
   if (overlay) overlay.classList.add('active');
 }
+
 function closeMobileSidebar() {
   const sidebar = document.getElementById('mobileSidebar');
   const overlay = document.getElementById('sidebarOverlay');
@@ -479,277 +832,1998 @@ function closeMobileSidebar() {
   if (overlay) overlay.classList.remove('active');
 }
 
-// ==================== DASHBOARD ====================
+// ─── Dashboard ───
 function renderDashboard() {
   console.log('🔄 Rendu du tableau de bord...');
+  
   const totalDocs = G.documents.filter(d => !d.is_deleted).length;
   const activeWorkflows = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
   const sharedCount = G.shares.filter(s => s.status === 'active').length;
   const userCount = G.users.length;
   const totalViews = G.documents.reduce((sum, d) => sum + (d.views || 0), 0);
-  const activeUsers = G.auditLogs.filter(l => l.action === 'login' && new Date(l.created_at).toDateString() === new Date().toDateString()).length;
+  const activeUsers = G.auditLogs.filter(l => {
+    const logDate = new Date(l.created_at);
+    const today = new Date();
+    return l.action === 'login' && logDate.toDateString() === today.toDateString();
+  }).length;
+  
+  // Mise à jour des compteurs
   const totalDocsEl = document.getElementById('totalDocs');
   const dashWorkflowCountEl = document.getElementById('dashWorkflowCount');
   const sharedCountEl = document.getElementById('sharedCount');
   const dashUserCountEl = document.getElementById('dashUserCount');
   const dashTotalViews = document.getElementById('dashTotalViews');
   const dashActiveUsers = document.getElementById('dashActiveUsers');
+  
   if (totalDocsEl) totalDocsEl.textContent = totalDocs;
   if (dashWorkflowCountEl) dashWorkflowCountEl.textContent = activeWorkflows;
   if (sharedCountEl) sharedCountEl.textContent = sharedCount;
   if (dashUserCountEl) dashUserCountEl.textContent = userCount;
   if (dashTotalViews) dashTotalViews.textContent = totalViews;
   if (dashActiveUsers) dashActiveUsers.textContent = activeUsers || userCount;
-  updateBadges(); updateStorageDisplay();
-  renderActivityList(); renderQuickAccess(); renderPopularTags(); renderTeamDocs(); renderMyWorkflows();
+  
+  // Mise à jour des badges
+  updateBadges();
+  updateStorageDisplay();
+  renderActivityList();
+  renderQuickAccess();
+  renderPopularTags();
+  renderTeamDocs();
+  renderMyWorkflows();
+  
   console.log('✅ Tableau de bord mis à jour');
 }
+
 function renderActivityList() {
   const list = document.getElementById('activityList');
-  if (!list) return;
-  let activities = [];
-  if (G.auditLogs && G.auditLogs.length > 0) activities = G.auditLogs.slice(0, 10);
-  else {
-    const recentDocs = G.documents.filter(d => !d.is_deleted).slice(0, 5);
-    recentDocs.forEach(doc => activities.push({ action: 'upload', target_type: 'document', target_id: doc.id, details: doc.name, created_at: doc.created_at }));
-    const recentShares = G.shares.filter(s => s.status === 'active').slice(0, 3);
-    recentShares.forEach(share => activities.push({ action: 'share', target_type: 'document', target_id: share.document_id, details: `Partagé avec ${share.recipient_email}`, created_at: share.created_at }));
-    activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
+  if (!list) {
+    console.warn('activityList non trouvé');
+    return;
   }
+  
+  // Récupérer les activités depuis l'audit log ou créer des activités simulées
+  let activities = [];
+  
+  if (G.auditLogs && G.auditLogs.length > 0) {
+    activities = G.auditLogs.slice(0, 10);
+  } else {
+    // Créer des activités simulées basées sur les données réelles
+    const recentDocs = G.documents.filter(d => !d.is_deleted).slice(0, 5);
+    recentDocs.forEach(doc => {
+      activities.push({
+        action: 'upload',
+        target_type: 'document',
+        target_id: doc.id,
+        details: doc.name,
+        created_at: doc.created_at
+      });
+    });
+    
+    // Ajouter les partages récents
+    const recentShares = G.shares.filter(s => s.status === 'active').slice(0, 3);
+    recentShares.forEach(share => {
+      activities.push({
+        action: 'share',
+        target_type: 'document',
+        target_id: share.document_id,
+        details: `Partagé avec ${share.recipient_email}`,
+        created_at: share.created_at
+      });
+    });
+    
+    // Trier par date décroissante
+    activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    activities = activities.slice(0, 10);
+  }
+  
   if (activities.length === 0) {
     list.innerHTML = '<div class="text-center py-8 text-blue-300/50"><i class="fas fa-folder-open text-2xl mb-2 block"></i><p>Aucune activité récente</p><p class="text-xs mt-2">Importez des documents pour voir l\'activité</p></div>';
     return;
   }
+  
   list.innerHTML = activities.map(act => `
     <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/10 hover:bg-blue-900/30 transition-all">
-      <div class="w-8 h-8 rounded-lg ${getActionBgColor(act.action)} flex items-center justify-center"><i class="fas ${getActionIcon(act.action)} text-sm"></i></div>
-      <div class="flex-1"><p class="text-sm text-white">${getActionLabel(act.action)} ${act.target_type || ''}</p><p class="text-xs text-blue-300/60">${act.details ? act.details.substring(0,40)+(act.details.length>40?'...':'') : ''}</p><p class="text-xs text-blue-400/50 mt-0.5">${formatDate(act.created_at)}</p></div>
+      <div class="w-8 h-8 rounded-lg ${getActionBgColor(act.action)} flex items-center justify-center">
+        <i class="fas ${getActionIcon(act.action)} text-sm"></i>
+      </div>
+      <div class="flex-1">
+        <p class="text-sm text-white">${getActionLabel(act.action)} ${act.target_type ? act.target_type : ''}</p>
+        <p class="text-xs text-blue-300/60">${act.details ? act.details.substring(0, 40) + (act.details.length > 40 ? '...' : '') : ''}</p>
+        <p class="text-xs text-blue-400/50 mt-0.5">${formatDate(act.created_at)}</p>
+      </div>
       ${act.target_id ? `<button onclick="openPreviewModal('${act.target_id}')" class="text-blue-400 hover:text-blue-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-eye"></i></button>` : ''}
     </div>
   `).join('');
 }
-function getActionBgColor(action) { const c={login:'bg-green-500/20',logout:'bg-gray-500/20',upload:'bg-blue-500/20',download:'bg-purple-500/20',share:'bg-cyan-500/20',delete:'bg-red-500/20',restore:'bg-green-500/20',view:'bg-yellow-500/20',workflow:'bg-orange-500/20',signature:'bg-pink-500/20'}; return c[action]||'bg-blue-500/20'; }
-function getActionLabel(action) { const l={login:'Connexion',logout:'Déconnexion',upload:'Import de document',download:'Téléchargement',share:'Partage de document',delete:'Suppression',restore:'Restauration',view:'Consultation',workflow:'Workflow',signature:'Signature'}; return l[action]||action; }
-function getActionIcon(action) { const i={login:'fa-sign-in-alt',logout:'fa-sign-out-alt',upload:'fa-upload',download:'fa-download',share:'fa-share',delete:'fa-trash',restore:'fa-undo',view_change:'fa-eye',validate:'fa-check',reject:'fa-times'}; return i[action]||'fa-circle'; }
+
+function getActionBgColor(action) {
+  const colors = {
+    login: 'bg-green-500/20',
+    logout: 'bg-gray-500/20',
+    upload: 'bg-blue-500/20',
+    download: 'bg-purple-500/20',
+    share: 'bg-cyan-500/20',
+    delete: 'bg-red-500/20',
+    restore: 'bg-green-500/20',
+    view: 'bg-yellow-500/20',
+    workflow: 'bg-orange-500/20',
+    signature: 'bg-pink-500/20'
+  };
+  return colors[action] || 'bg-blue-500/20';
+}
+
+function getActionLabel(action) {
+  const labels = {
+    login: 'Connexion',
+    logout: 'Déconnexion',
+    upload: 'Import de document',
+    download: 'Téléchargement',
+    share: 'Partage de document',
+    delete: 'Suppression',
+    restore: 'Restauration',
+    view: 'Consultation',
+    workflow: 'Workflow',
+    signature: 'Signature'
+  };
+  return labels[action] || action;
+}
+
+function getActionIcon(action) {
+  const icons = { 
+    login: 'fa-sign-in-alt', 
+    logout: 'fa-sign-out-alt', 
+    upload: 'fa-upload', 
+    download: 'fa-download', 
+    share: 'fa-share', 
+    delete: 'fa-trash', 
+    restore: 'fa-undo', 
+    view_change: 'fa-eye', 
+    validate: 'fa-check', 
+    reject: 'fa-times' 
+  };
+  return icons[action] || 'fa-circle';
+}
+
 function renderQuickAccess() {
   const pdfCount = G.documents.filter(d => !d.is_deleted && d.type === 'pdf').length;
   const docCount = G.documents.filter(d => !d.is_deleted && d.type === 'doc').length;
+  
   const quickPdfCount = document.getElementById('quickPdfCount');
   const quickDocCount = document.getElementById('quickDocCount');
+  
   if (quickPdfCount) quickPdfCount.textContent = `${pdfCount} fichier(s)`;
   if (quickDocCount) quickDocCount.textContent = `${docCount} fichier(s)`;
 }
+
 function renderPopularTags() {
   const container = document.getElementById('popularTags');
   if (!container) return;
-  const sorted = [...G.tags].sort((a,b)=>(b.count||0)-(a.count||0)).slice(0,8);
-  if (sorted.length===0) { container.innerHTML='<span class="text-blue-300/50 text-sm">Aucun tag</span>'; return; }
-  container.innerHTML = sorted.map(t => `<span class="tag" style="background:${t.color}20;border-color:${t.color}40;color:${t.color}" onclick="filterByTag('${t.name}')">${t.name}</span>`).join('');
+  
+  const sorted = [...G.tags].sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 8);
+  if (sorted.length === 0) {
+    container.innerHTML = '<span class="text-blue-300/50 text-sm">Aucun tag</span>';
+    return;
+  }
+  
+  container.innerHTML = sorted.map(t => `
+    <span class="tag" style="background:${t.color}20;border-color:${t.color}40;color:${t.color}" onclick="filterByTag('${t.name}')">
+      ${t.name}
+    </span>
+  `).join('');
 }
+
 function renderTeamDocs() {
   const list = document.getElementById('teamDocsList');
-  if (!list) return;
-  let docs = G.documents.filter(d=>!d.is_deleted);
-  const companyDocs = docs.filter(d=>d.scope==='company');
-  if (companyDocs.length>0) docs=companyDocs;
-  docs=docs.slice(0,5);
-  if (docs.length===0) { list.innerHTML=`<div class="text-center py-6"><i class="fas fa-folder-open text-blue-400/40 text-3xl mb-2 block"></i><p class="text-blue-300/50 text-sm">Aucun document d'équipe</p><button onclick="openUploadModal()" class="mt-2 text-xs text-blue-400 hover:text-blue-300">Importer un document →</button></div>`; return; }
-  list.innerHTML = docs.map(doc => `<div class="flex items-center gap-3 p-2 rounded-lg hover:bg-blue-500/10 cursor-pointer transition-all group" onclick="openPreviewModal('${doc.id}')"><div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0"><i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-lg"></i></div><div class="flex-1 min-w-0"><p class="text-sm text-white font-medium truncate">${escapeHtml(doc.name)}</p><div class="flex items-center gap-2 mt-0.5"><span class="text-xs text-blue-300/60">${formatBytes(doc.size)}</span><span class="text-xs text-blue-400/50">•</span><span class="text-xs text-blue-300/60">${formatDate(doc.created_at)}</span>${doc.scope==='company'?'<span class="collab-badge text-[10px]"><i class="fas fa-building"></i>Équipe</span>':''}</div></div><div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-1.5 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger"><i class="fas fa-download text-xs"></i></button><button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-1.5 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Déplacer"><i class="fas fa-folder-open text-xs"></i></button></div></div>`).join('');
+  if (!list) {
+    console.warn('teamDocsList non trouvé');
+    return;
+  }
+  
+  // Afficher les documents de l'entreprise ou les documents récents
+  let docs = G.documents.filter(d => !d.is_deleted);
+  
+  // Priorité aux documents d'entreprise
+  const companyDocs = docs.filter(d => d.scope === 'company');
+  if (companyDocs.length > 0) {
+    docs = companyDocs;
+  }
+  
+  docs = docs.slice(0, 5);
+  
+  if (docs.length === 0) {
+    list.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fas fa-folder-open text-blue-400/40 text-3xl mb-2 block"></i>
+        <p class="text-blue-300/50 text-sm">Aucun document d'équipe</p>
+        <button onclick="openUploadModal()" class="mt-2 text-xs text-blue-400 hover:text-blue-300">Importer un document →</button>
+      </div>
+    `;
+    return;
+  }
+  
+  list.innerHTML = docs.map(doc => `
+    <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-blue-500/10 cursor-pointer transition-all group" onclick="openPreviewModal('${doc.id}')">
+      <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-lg"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-white font-medium truncate">${escapeHtml(doc.name)}</p>
+        <div class="flex items-center gap-2 mt-0.5">
+          <span class="text-xs text-blue-300/60">${formatBytes(doc.size)}</span>
+          <span class="text-xs text-blue-400/50">•</span>
+          <span class="text-xs text-blue-300/60">${formatDate(doc.created_at)}</span>
+          ${doc.scope === 'company' ? `<span class="collab-badge text-[10px]"><i class="fas fa-building"></i>Équipe</span>` : ''}
+        </div>
+      </div>
+      <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-1.5 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger">
+          <i class="fas fa-download text-xs"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-1.5 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Déplacer">
+          <i class="fas fa-folder-open text-xs"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
 }
+
 function renderMyWorkflows() {
   const list = document.getElementById('myWorkflowsList');
   const badge = document.getElementById('myWorkflowsBadge');
   if (!list) return;
-  const myWfs = G.workflows.filter(w => (w.assignee_id===G.currentUser.id || w.created_by===G.currentUser.id) && ['pending','in_review'].includes(w.status)).slice(0,5);
-  if (badge) myWfs.length>0?badge.classList.remove('hidden'):badge.classList.add('hidden');
-  if (myWfs.length===0) { list.innerHTML=`<div class="text-center py-6"><i class="fas fa-project-diagram text-orange-400/40 text-3xl mb-2 block"></i><p class="text-blue-300/50 text-sm">Aucun workflow assigné</p><button onclick="openCreateWorkflowModal()" class="mt-2 text-xs text-orange-400 hover:text-orange-300">Créer un workflow →</button></div>`; return; }
-  list.innerHTML = myWfs.map(wf => `<div class="flex items-center gap-3 p-2 rounded-lg hover:bg-orange-500/10 cursor-pointer transition-all group" onclick="openWfDetail('${wf.id}')"><div class="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400 flex-shrink-0"><i class="fas fa-project-diagram text-lg"></i></div><div class="flex-1 min-w-0"><p class="text-sm text-white font-medium truncate">${escapeHtml(wf.title)}</p><div class="flex items-center gap-2 mt-1"><span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span><span class="text-xs text-blue-300/50">${formatDate(wf.created_at)}</span></div></div><div class="opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-chevron-right text-blue-400/50"></i></div></div>`).join('');
-}
-
-// ==================== DOCUMENTS ====================
-function renderDocuments() {
-  const grid = document.getElementById('documentGrid');
-  if (!grid) return;
-  console.log('🔄 Rendu des documents, tab:', G.docsTab);
-  let filtered = G.documents.filter(d => !d.is_deleted);
-  if (G.currentTagFilter) filtered = filtered.filter(d => d.tags && d.tags.includes(G.currentTagFilter));
-  if (G.docsTab === 'company') filtered = filtered.filter(d => d.scope === 'company');
-  else if (G.docsTab === 'personal') filtered = filtered.filter(d => d.scope === 'personal');
-  else if (G.docsTab === 'mine') filtered = filtered.filter(d => d.owner_id === G.currentUser.id);
-  else if (G.docsTab === 'shared') {
-    const sharedIds = G.shares.filter(s => s.recipient_email === G.currentUser.email && s.status === 'active').map(s => s.document_id);
-    filtered = filtered.filter(d => sharedIds.includes(d.id));
+  
+  const myWfs = G.workflows.filter(w => 
+    (w.assignee_id === G.currentUser.id || w.created_by === G.currentUser.id) && 
+    ['pending', 'in_review'].includes(w.status)
+  ).slice(0, 5);
+  
+  if (badge) {
+    if (myWfs.length > 0) {
+      badge.textContent = myWfs.length;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
   }
-  const typeFilter = document.getElementById('filterType')?.value;
-  if (typeFilter && typeFilter !== '') filtered = filtered.filter(d => d.type === typeFilter);
-  const dateFilter = document.getElementById('filterDate')?.value;
-  if (dateFilter === 'today') filtered = filtered.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
-  else if (dateFilter === 'week') { const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7); filtered = filtered.filter(d => new Date(d.created_at) >= weekAgo); }
-  else if (dateFilter === 'month') { const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate()-30); filtered = filtered.filter(d => new Date(d.created_at) >= monthAgo); }
-  const resultsCount = document.getElementById('resultsCount');
-  if (resultsCount) resultsCount.textContent = `${filtered.length} document${filtered.length>1?'s':''}`;
-  if (filtered.length === 0) {
-    let emptyMessage = '';
-    if (G.docsTab === 'company') emptyMessage = 'Aucun document d\'entreprise. Importez des documents pour les partager avec votre équipe.';
-    else if (G.docsTab === 'personal') emptyMessage = 'Aucun document personnel. Importez vos documents privés.';
-    else if (G.docsTab === 'mine') emptyMessage = 'Vous n\'avez pas encore importé de documents.';
-    else if (G.docsTab === 'shared') emptyMessage = 'Aucun document partagé avec vous.';
-    else emptyMessage = 'Aucun document trouvé.';
-    grid.innerHTML = `<div class="col-span-full text-center py-16"><i class="fas fa-folder-open text-5xl mb-4 block opacity-20 text-blue-400"></i><p class="text-blue-300/60">${emptyMessage}</p><button onclick="openUploadModal()" class="mt-4 btn-primary px-5 py-2 rounded-xl text-white text-sm font-medium inline-flex items-center gap-2"><i class="fas fa-cloud-upload-alt"></i>Importer un document</button></div>`;
+  
+  if (myWfs.length === 0) {
+    list.innerHTML = `
+      <div class="text-center py-6">
+        <i class="fas fa-project-diagram text-orange-400/40 text-3xl mb-2 block"></i>
+        <p class="text-blue-300/50 text-sm">Aucun workflow assigné</p>
+        <button onclick="openCreateWorkflowModal()" class="mt-2 text-xs text-orange-400 hover:text-orange-300">Créer un workflow →</button>
+      </div>
+    `;
     return;
   }
+  
+  list.innerHTML = myWfs.map(wf => `
+    <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-orange-500/10 cursor-pointer transition-all group" onclick="openWfDetail('${wf.id}')">
+      <div class="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center text-orange-400 flex-shrink-0">
+        <i class="fas fa-project-diagram text-lg"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-white font-medium truncate">${escapeHtml(wf.title)}</p>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+          <span class="text-xs text-blue-300/50">${formatDate(wf.created_at)}</span>
+        </div>
+      </div>
+      <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+        <i class="fas fa-chevron-right text-blue-400/50"></i>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─── Documents ───
+function renderDocuments() {
+  const grid = document.getElementById('documentGrid');
+  if (!grid) {
+    console.warn('documentGrid non trouvé');
+    return;
+  }
+  
+  console.log('🔄 Rendu des documents, tab:', G.docsTab);
+  
+  let filtered = G.documents.filter(d => !d.is_deleted);
+  
+  // Filtrer selon l'onglet sélectionné
+  if (G.docsTab === 'company') {
+    filtered = filtered.filter(d => d.scope === 'company');
+  } else if (G.docsTab === 'personal') {
+    filtered = filtered.filter(d => d.scope === 'personal');
+  } else if (G.docsTab === 'mine') {
+    filtered = filtered.filter(d => d.owner_id === G.currentUser.id);
+  } else if (G.docsTab === 'shared') {
+    const sharedIds = G.shares
+      .filter(s => s.recipient_email === G.currentUser.email && s.status === 'active')
+      .map(s => s.document_id);
+    filtered = filtered.filter(d => sharedIds.includes(d.id));
+  }
+  
+  // Filtre par type
+  const typeFilter = document.getElementById('filterType')?.value;
+  if (typeFilter && typeFilter !== '') {
+    filtered = filtered.filter(d => d.type === typeFilter);
+  }
+  
+  // Filtre par date
+  const dateFilter = document.getElementById('filterDate')?.value;
+  if (dateFilter === 'today') {
+    filtered = filtered.filter(d => {
+      const docDate = new Date(d.created_at);
+      const today = new Date();
+      return docDate.toDateString() === today.toDateString();
+    });
+  } else if (dateFilter === 'week') {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    filtered = filtered.filter(d => new Date(d.created_at) >= weekAgo);
+  } else if (dateFilter === 'month') {
+    const monthAgo = new Date();
+    monthAgo.setDate(monthAgo.getDate() - 30);
+    filtered = filtered.filter(d => new Date(d.created_at) >= monthAgo);
+  }
+  
+  // Mettre à jour le compteur
+  const resultsCount = document.getElementById('resultsCount');
+  if (resultsCount) {
+    resultsCount.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
+  }
+  
+  // Afficher un message si aucun document
+  if (filtered.length === 0) {
+    let emptyMessage = '';
+    if (G.docsTab === 'company') {
+      emptyMessage = 'Aucun document d\'entreprise. Importez des documents pour les partager avec votre équipe.';
+    } else if (G.docsTab === 'personal') {
+      emptyMessage = 'Aucun document personnel. Importez vos documents privés.';
+    } else if (G.docsTab === 'mine') {
+      emptyMessage = 'Vous n\'avez pas encore importé de documents.';
+    } else if (G.docsTab === 'shared') {
+      emptyMessage = 'Aucun document partagé avec vous.';
+    } else {
+      emptyMessage = 'Aucun document trouvé.';
+    }
+    
+    grid.innerHTML = `
+      <div class="col-span-full text-center py-16">
+        <i class="fas fa-folder-open text-5xl mb-4 block opacity-20 text-blue-400"></i>
+        <p class="text-blue-300/60">${emptyMessage}</p>
+        <button onclick="openUploadModal()" class="mt-4 btn-primary px-5 py-2 rounded-xl text-white text-sm font-medium inline-flex items-center gap-2">
+          <i class="fas fa-cloud-upload-alt"></i>Importer un document
+        </button>
+      </div>
+    `;
+    return;
+  }
+  
+  // Appliquer le mode d'affichage
   grid.className = G.viewMode === 'grid' ? 'doc-grid' : 'space-y-2';
   grid.innerHTML = filtered.map(doc => G.viewMode === 'grid' ? renderDocCard(doc) : renderDocListItem(doc)).join('');
+  
   console.log(`✅ ${filtered.length} documents affichés`);
 }
+
 function renderDocCard(doc) {
   const isOwner = doc.owner_id === G.currentUser.id;
   const canEdit = isOwner || G.currentUser.role === 'admin' || G.currentUser.role === 'manager';
   const fileIcon = getFileIcon(doc.type);
   const iconClass = fileIcon.split(' ')[0];
   const colorClass = fileIcon.split(' ')[1] || 'text-blue-400';
-  return `<div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer group hover:scale-[1.02] transition-all duration-200" onclick="openPreviewModal('${doc.id}')" draggable="true" ondragstart="handleDocDragStart(event,'${doc.id}')" oncontextmenu="showDocContextMenu(event,'${doc.id}')"><div class="flex items-start justify-between mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center ${colorClass} text-2xl"><i class="fas ${iconClass}"></i></div><div class="opacity-0 group-hover:opacity-100 transition-all duration-200 flex gap-1"><button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger"><i class="fas fa-download"></i></button><button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400" title="Partager"><i class="fas fa-share-alt"></i></button><button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400" title="Inviter à collaborer"><i class="fas fa-users"></i></button><button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Déplacer"><i class="fas fa-folder-open"></i></button>${canEdit?`<button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400" title="Supprimer"><i class="fas fa-trash"></i></button>`:''}</div></div><h4 class="text-white font-semibold text-sm mb-1 truncate" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</h4><p class="text-blue-300/60 text-xs mb-2">${formatBytes(doc.size)} • ${formatDate(doc.created_at)}</p><div class="flex items-center justify-between"><div class="flex gap-1 flex-wrap">${(doc.tags||[]).slice(0,2).map(t=>`<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}${(doc.tags||[]).length>2?`<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length-2}</span>`:''}</div>${doc.scope==='company'?'<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>':'<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}</div><div class="mt-2 pt-2 border-t border-blue-500/10 flex items-center justify-between text-xs"><span class="text-blue-400/50"><i class="fas fa-code-branch mr-1"></i>v${doc.version||1}</span><span class="text-blue-400/50"><i class="fas fa-eye mr-1"></i>${doc.views||0}</span><span class="text-blue-400/50"><i class="fas fa-download mr-1"></i>${doc.downloads||0}</span></div></div>`;
+  
+  return `
+    <div class="document-card glass-card rounded-2xl p-4 border border-blue-500/20 cursor-pointer group hover:scale-[1.02] transition-all duration-200" 
+         onclick="openPreviewModal('${doc.id}')" 
+         draggable="true" 
+         ondragstart="handleDocDragStart(event, '${doc.id}')" 
+         oncontextmenu="showDocContextMenu(event, '${doc.id}')">
+      
+      <!-- En-tête avec icône et actions -->
+      <div class="flex items-start justify-between mb-3">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center ${colorClass} text-2xl">
+          <i class="fas ${iconClass}"></i>
+        </div>
+        <div class="opacity-0 group-hover:opacity-100 transition-all duration-200 flex gap-1">
+          <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-colors" 
+                  title="Télécharger">
+            <i class="fas fa-download"></i>
+          </button>
+          <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-colors" 
+                  title="Partager">
+            <i class="fas fa-share-alt"></i>
+          </button>
+          <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
+                  title="Inviter à collaborer">
+            <i class="fas fa-users"></i>
+          </button>
+          <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400 transition-colors" 
+                  title="Déplacer">
+            <i class="fas fa-folder-open"></i>
+          </button>
+          ${canEdit ? `
+          <button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" 
+                  class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors" 
+                  title="Supprimer">
+            <i class="fas fa-trash"></i>
+          </button>
+          ` : ''}
+        </div>
+      </div>
+      
+      <!-- Informations du document -->
+      <h4 class="text-white font-semibold text-sm mb-1 truncate" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</h4>
+      <p class="text-blue-300/60 text-xs mb-2">
+        ${formatBytes(doc.size)} • ${formatDate(doc.created_at)}
+      </p>
+      
+      <!-- Tags et scope -->
+      <div class="flex items-center justify-between">
+        <div class="flex gap-1 flex-wrap">
+          ${(doc.tags || []).slice(0, 2).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${escapeHtml(t)}</span>`).join('')}
+          ${(doc.tags || []).length > 2 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length - 2}</span>` : ''}
+        </div>
+        ${doc.scope === 'company' ? 
+          '<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>' : 
+          '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
+      </div>
+      
+      <!-- Métadonnées supplémentaires -->
+      <div class="mt-2 pt-2 border-t border-blue-500/10 flex items-center justify-between text-xs">
+        <span class="text-blue-400/50">
+          <i class="fas fa-code-branch mr-1"></i>v${doc.version || 1}
+        </span>
+        <span class="text-blue-400/50">
+          <i class="fas fa-eye mr-1"></i>${doc.views || 0}
+        </span>
+        <span class="text-blue-400/50">
+          <i class="fas fa-download mr-1"></i>${doc.downloads || 0}
+        </span>
+      </div>
+    </div>
+  `;
 }
+
 function renderDocListItem(doc) {
   const isOwner = doc.owner_id === G.currentUser.id;
   const canEdit = isOwner || G.currentUser.role === 'admin' || G.currentUser.role === 'manager';
   const fileIcon = getFileIcon(doc.type);
   const iconClass = fileIcon.split(' ')[0];
   const colorClass = fileIcon.split(' ')[1] || 'text-blue-400';
-  return `<div class="doc-list-item glass-card rounded-xl border border-blue-500/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all cursor-pointer group" onclick="openPreviewModal('${doc.id}')"><div class="doc-icon w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center ${colorClass} flex-shrink-0"><i class="fas ${iconClass} text-xl"></i></div><div class="doc-content flex-1 min-w-0"><h4 class="text-white font-medium text-sm truncate" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</h4><div class="flex items-center gap-3 mt-1"><p class="text-blue-300/60 text-xs">${formatBytes(doc.size)}</p><span class="text-blue-400/40">•</span><p class="text-blue-300/60 text-xs">${formatDate(doc.created_at)}</p>${doc.scope==='company'?'<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>':'<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}</div><div class="flex gap-2 mt-1">${(doc.tags||[]).slice(0,3).map(t=>`<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}</div></div><div class="hidden sm:flex items-center gap-4 text-xs text-blue-400/50 mr-4"><span><i class="fas fa-code-branch mr-1"></i>v${doc.version||1}</span><span><i class="fas fa-eye mr-1"></i>${doc.views||0}</span><span><i class="fas fa-download mr-1"></i>${doc.downloads||0}</span></div><div class="doc-actions flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200"><button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400" title="Télécharger"><i class="fas fa-download"></i></button><button onclick="event.stopPropagation(); openShareModal('${doc.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400" title="Partager"><i class="fas fa-share-alt"></i></button><button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400" title="Inviter à collaborer"><i class="fas fa-users"></i></button><button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Déplacer"><i class="fas fa-folder-open"></i></button>${canEdit?`<button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400" title="Supprimer"><i class="fas fa-trash"></i></button>`:''}</div></div>`;
+  
+  return `
+    <div class="doc-list-item glass-card rounded-xl border border-blue-500/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all cursor-pointer group" 
+         onclick="openPreviewModal('${doc.id}')">
+      
+      <!-- Icône -->
+      <div class="doc-icon w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center ${colorClass} flex-shrink-0">
+        <i class="fas ${iconClass} text-xl"></i>
+      </div>
+      
+      <!-- Contenu principal -->
+      <div class="doc-content flex-1 min-w-0">
+        <h4 class="text-white font-medium text-sm truncate" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</h4>
+        <div class="flex items-center gap-3 mt-1">
+          <p class="text-blue-300/60 text-xs">${formatBytes(doc.size)}</p>
+          <span class="text-blue-400/40">•</span>
+          <p class="text-blue-300/60 text-xs">${formatDate(doc.created_at)}</p>
+          ${doc.scope === 'company' ? 
+            `<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>` : 
+            '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
+        </div>
+        <div class="flex gap-2 mt-1">
+          ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">${escapeHtml(t)}</span>`).join('')}
+        </div>
+      </div>
+      
+      <!-- Métadonnées supplémentaires -->
+      <div class="hidden sm:flex items-center gap-4 text-xs text-blue-400/50 mr-4">
+        <span><i class="fas fa-code-branch mr-1"></i>v${doc.version || 1}</span>
+        <span><i class="fas fa-eye mr-1"></i>${doc.views || 0}</span>
+        <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0}</span>
+      </div>
+      
+      <!-- Actions -->
+      <div class="doc-actions flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+        <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-colors" 
+                title="Télécharger">
+          <i class="fas fa-download"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openShareModal('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-colors" 
+                title="Partager">
+          <i class="fas fa-share-alt"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
+                title="Inviter à collaborer">
+          <i class="fas fa-users"></i>
+        </button>
+        <button onclick="event.stopPropagation(); openMoveModal('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400 transition-colors" 
+                title="Déplacer">
+          <i class="fas fa-folder-open"></i>
+        </button>
+        ${canEdit ? `
+        <button onclick="event.stopPropagation(); deleteDocument('${doc.id}')" 
+                class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors" 
+                title="Supprimer">
+          <i class="fas fa-trash"></i>
+        </button>
+        ` : ''}
+      </div>
+    </div>
+  `;
 }
+
 function switchDocsTab(tab) {
   console.log('🔄 Changement d\'onglet documents:', tab);
   G.docsTab = tab;
-  const grid = document.getElementById('documentGrid');
-  if (grid) grid.innerHTML = '<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i><p class="mt-2 text-blue-300/60">Chargement...</p></div>';
-  document.querySelectorAll('.docs-tab').forEach(el=>el.classList.remove('active'));
+  
+  // Mettre à jour l'interface des onglets
+  document.querySelectorAll('.docs-tab').forEach(el => {
+    el.classList.remove('active');
+  });
+  
   const tabEl = document.getElementById(`docsTab-${tab}`);
-  if (tabEl) tabEl.classList.add('active');
+  if (tabEl) {
+    tabEl.classList.add('active');
+  }
+  
+  // Mettre à jour le texte du titre
   const docTitle = document.getElementById('documentsTitle');
-  if (docTitle) { const titles={company:'Documents de l\'entreprise',personal:'Mes documents personnels',mine:'Mes documents',shared:'Documents partagés avec moi'}; docTitle.textContent=titles[tab]||'Documents'; }
-  setTimeout(()=>renderDocuments(),50);
+  if (docTitle) {
+    const titles = {
+      company: 'Documents de l\'entreprise',
+      personal: 'Mes documents personnels',
+      mine: 'Mes documents',
+      shared: 'Documents partagés avec moi'
+    };
+    docTitle.textContent = titles[tab] || 'Documents';
+  }
+  
+  // Recharger l'affichage
+  renderDocuments();
 }
-function toggleViewMode() { G.viewMode = G.viewMode==='grid'?'list':'grid'; const icon=document.getElementById('viewModeIcon'); if(icon) icon.className=G.viewMode==='grid'?'fas fa-th-large':'fas fa-list'; renderDocuments(); }
-function applyFilters() { renderDocuments(); }
-function clearFilters() { const ft=document.getElementById('filterType'); const fd=document.getElementById('filterDate'); if(ft) ft.value=''; if(fd) fd.value=''; G.currentTagFilter=null; renderDocuments(); }
-function filterByType(type) { const ft=document.getElementById('filterType'); if(ft) ft.value=type; switchView('documents'); }
-function filterByTag(tagName) { G.currentTagFilter=tagName; renderDocuments(); showToast(`Filtre appliqué : ${tagName}`,'info'); }
-function clearTagFilter() { G.currentTagFilter=null; renderDocuments(); showToast('Filtre tag réinitialisé','info'); }
+
+function toggleViewMode() {
+  G.viewMode = G.viewMode === 'grid' ? 'list' : 'grid';
+  const viewModeIcon = document.getElementById('viewModeIcon');
+  if (viewModeIcon) viewModeIcon.className = G.viewMode === 'grid' ? 'fas fa-th-large' : 'fas fa-list';
+  renderDocuments();
+}
+
+function applyFilters() {
+  renderDocuments();
+}
+
+function clearFilters() {
+  const filterType = document.getElementById('filterType');
+  const filterDate = document.getElementById('filterDate');
+  if (filterType) filterType.value = '';
+  if (filterDate) filterDate.value = '';
+  renderDocuments();
+}
+
+function filterByType(type) {
+  const filterType = document.getElementById('filterType');
+  if (filterType) filterType.value = type;
+  switchView('documents');
+}
+
+function filterByTag(tagName) {
+  showToast(`Filtre par tag: ${tagName}`, 'info');
+}
 
 // ─── Upload ───
-function openUploadModal() { const modal=document.getElementById('uploadModal'); if(modal) modal.classList.remove('hidden'); G.selectedFiles=[]; G.uploadTags=[]; renderUploadTags(); renderSelectedFiles(); }
-function closeUploadModal() { const modal=document.getElementById('uploadModal'); if(modal) modal.classList.add('hidden'); G.selectedFiles=[]; }
-function handleDragOver(e,zoneId) { e.preventDefault(); const zone=document.getElementById(zoneId); if(zone) zone.classList.add('drag-over'); }
-function handleDragLeave(e,zoneId) { e.preventDefault(); const zone=document.getElementById(zoneId); if(zone) zone.classList.remove('drag-over'); }
-function handleDrop(e,zoneId) { e.preventDefault(); const zone=document.getElementById(zoneId); if(zone) zone.classList.remove('drag-over'); const files=Array.from(e.dataTransfer.files); addFilesToSelection(files); }
-function handleDocDrop(e) { e.preventDefault(); const dropZone=document.getElementById('docDropZone'); if(dropZone){ dropZone.classList.remove('drag-over'); dropZone.style.backgroundColor='rgba(59,130,246,0.05)'; setTimeout(()=>dropZone.style.backgroundColor='',300); } const files=Array.from(e.dataTransfer.files); if(files.length===0){ showToast('Aucun fichier détecté','warning'); return; } const validFiles=files.filter(f=>f.size<=CONFIG.maxFileSize); const invalidFiles=files.filter(f=>f.size>CONFIG.maxFileSize); if(invalidFiles.length>0) showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`,'warning'); if(validFiles.length===0){ showToast('Aucun fichier valide à importer','warning'); return; } addFilesToSelection(validFiles); setTimeout(()=>{ if(G.selectedFiles.length>0) uploadDocument(); },100); }
-function handleFileSelect(e) { const files=Array.from(e.target.files); addFilesToSelection(files); }
-function handleFilePickerSelect(e) { const files=Array.from(e.target.files); if(files.length===0) return; const validFiles=files.filter(f=>f.size<=CONFIG.maxFileSize); const invalidFiles=files.filter(f=>f.size>CONFIG.maxFileSize); if(invalidFiles.length>0) showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`,'warning'); if(validFiles.length===0){ showToast('Aucun fichier valide à importer','warning'); return; } addFilesToSelection(validFiles); setTimeout(()=>{ if(G.selectedFiles.length>0) uploadDocument(); },100); e.target.value=''; }
-function renderSelectedFiles() { const list=document.getElementById('selectedFilesList'); if(!list) return; if(G.selectedFiles.length===0){ list.innerHTML=''; return; } list.innerHTML=G.selectedFiles.map((file,idx)=>`<div class="flex items-center justify-between p-2 rounded-lg bg-blue-900/30 border border-blue-500/20"><div class="flex items-center gap-2 min-w-0"><i class="fas fa-file text-blue-400"></i><span class="text-sm text-white truncate">${file.name}</span><span class="text-xs text-blue-300/60">${formatBytes(file.size)}</span></div><button onclick="removeFileFromSelection(${idx})" class="p-1 text-red-400 hover:text-red-300"><i class="fas fa-times"></i></button></div>`).join(''); }
-function removeFileFromSelection(idx) { G.selectedFiles.splice(idx,1); renderSelectedFiles(); }
-function addUploadTag() { const input=document.getElementById('tagInput'); const tag=input?.value.trim(); if(tag && !G.uploadTags.includes(tag)){ G.uploadTags.push(tag); if(input) input.value=''; renderUploadTags(); } }
-function renderUploadTags() { const container=document.getElementById('uploadTagsContainer'); if(!container) return; container.innerHTML=G.uploadTags.map((t,i)=>`<span class="tag">${t}<i class="fas fa-times tag-close" onclick="removeUploadTag(${i})"></i></span>`).join(''); }
-function removeUploadTag(idx) { G.uploadTags.splice(idx,1); renderUploadTags(); }
+function openUploadModal() {
+  const modal = document.getElementById('uploadModal');
+  if (modal) modal.classList.remove('hidden');
+  G.selectedFiles = [];
+  G.uploadTags = [];
+  renderUploadTags();
+  renderSelectedFiles();
+}
+
+function closeUploadModal() {
+  const modal = document.getElementById('uploadModal');
+  if (modal) modal.classList.add('hidden');
+  G.selectedFiles = [];
+}
+
+function handleDragOver(e, zoneId) {
+  e.preventDefault();
+  const zone = document.getElementById(zoneId);
+  if (zone) zone.classList.add('drag-over');
+}
+
+function handleDragLeave(e, zoneId) {
+  e.preventDefault();
+  const zone = document.getElementById(zoneId);
+  if (zone) zone.classList.remove('drag-over');
+}
+
+function handleDrop(e, zoneId) {
+  e.preventDefault();
+  const zone = document.getElementById(zoneId);
+  if (zone) zone.classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files);
+  addFilesToSelection(files);
+}
+
+function handleDocDrop(e) {
+  e.preventDefault();
+  const dropZone = document.getElementById('docDropZone');
+  if (dropZone) {
+    dropZone.classList.remove('drag-over');
+    // Ajouter un effet visuel temporaire
+    dropZone.style.backgroundColor = 'rgba(59,130,246,0.05)';
+    setTimeout(() => {
+      dropZone.style.backgroundColor = '';
+    }, 300);
+  }
+  
+  const files = Array.from(e.dataTransfer.files);
+  
+  if (files.length === 0) {
+    showToast('Aucun fichier détecté', 'warning');
+    return;
+  }
+  
+  // Filtrer les fichiers trop volumineux
+  const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
+  const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
+  
+  if (invalidFiles.length > 0) {
+    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
+  }
+  
+  if (validFiles.length === 0) {
+    showToast('Aucun fichier valide à importer', 'warning');
+    return;
+  }
+  
+  addFilesToSelection(validFiles);
+  
+  // Auto-upload après ajout
+  setTimeout(() => {
+    if (G.selectedFiles.length > 0) {
+      uploadDocument();
+    }
+  }, 100);
+}
+
+function handleFileSelect(e) {
+  const files = Array.from(e.target.files);
+  addFilesToSelection(files);
+}
+
+function handleFilePickerSelect(e) {
+  const files = Array.from(e.target.files);
+  
+  if (files.length === 0) return;
+  
+  // Filtrer les fichiers trop volumineux
+  const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
+  const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
+  
+  if (invalidFiles.length > 0) {
+    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
+  }
+  
+  if (validFiles.length === 0) {
+    showToast('Aucun fichier valide à importer', 'warning');
+    return;
+  }
+  
+  addFilesToSelection(validFiles);
+  
+  // Auto-upload après sélection
+  setTimeout(() => {
+    if (G.selectedFiles.length > 0) {
+      uploadDocument();
+    }
+  }, 100);
+  
+  // Réinitialiser l'input pour permettre de sélectionner à nouveau les mêmes fichiers
+  e.target.value = '';
+}
+
+function addFilesToSelection(files) {
+  for (const file of files) {
+    if (file.size > CONFIG.maxFileSize) {
+      showToast(`Fichier trop volumineux: ${file.name} (max ${formatBytes(CONFIG.maxFileSize)})`, 'error');
+      continue;
+    }
+    
+    if (!G.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+      G.selectedFiles.push(file);
+    }
+  }
+  renderSelectedFiles();
+  
+  const dropZone = document.getElementById('docDropZone');
+  if (dropZone && G.selectedFiles.length > 0) {
+    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
+    setTimeout(() => {
+      dropZone.style.borderColor = '';
+    }, 1000);
+  }
+}
+  renderSelectedFiles();
+  
+  // Mettre à jour l'affichage de la zone de dépôt
+  const dropZone = document.getElementById('docDropZone');
+  if (dropZone && G.selectedFiles.length > 0) {
+    dropZone.style.borderColor = 'rgba(34,197,94,0.5)';
+    setTimeout(() => {
+      dropZone.style.borderColor = '';
+    }, 1000);
+  }
+}
+
+function renderSelectedFiles() {
+  const list = document.getElementById('selectedFilesList');
+  if (!list) return;
+  
+  if (G.selectedFiles.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  
+  list.innerHTML = G.selectedFiles.map((file, idx) => `
+    <div class="flex items-center justify-between p-2 rounded-lg bg-blue-900/30 border border-blue-500/20">
+      <div class="flex items-center gap-2 min-w-0">
+        <i class="fas fa-file text-blue-400"></i>
+        <span class="text-sm text-white truncate">${file.name}</span>
+        <span class="text-xs text-blue-300/60">${formatBytes(file.size)}</span>
+      </div>
+      <button onclick="removeFileFromSelection(${idx})" class="p-1 text-red-400 hover:text-red-300"><i class="fas fa-times"></i></button>
+    </div>
+  `).join('');
+}
+
+function removeFileFromSelection(idx) {
+  G.selectedFiles.splice(idx, 1);
+  renderSelectedFiles();
+}
+
+function addUploadTag() {
+  const input = document.getElementById('tagInput');
+  const tag = input?.value.trim();
+  if (tag && !G.uploadTags.includes(tag)) {
+    G.uploadTags.push(tag);
+    if (input) input.value = '';
+    renderUploadTags();
+  }
+}
+
+function renderUploadTags() {
+  const container = document.getElementById('uploadTagsContainer');
+  if (!container) return;
+  
+  container.innerHTML = G.uploadTags.map((t, i) => `
+    <span class="tag">
+      ${t}
+      <i class="fas fa-times tag-close" onclick="removeUploadTag(${i})"></i>
+    </span>
+  `).join('');
+}
+
+function removeUploadTag(idx) {
+  G.uploadTags.splice(idx, 1);
+  renderUploadTags();
+}
+
 async function uploadDocument() {
-  if (G.selectedFiles.length === 0) { showToast('Veuillez sélectionner au moins un fichier','warning'); return; }
-  const used = G.documents.reduce((sum,d)=>sum+(d.size||0),0);
-  const limit = CONFIG.plans[G.currentUser.plan].storage;
-  const newTotalSize = G.selectedFiles.reduce((sum,f)=>sum+f.size,0);
-  if (used+newTotalSize > limit) { showToast(`Espace insuffisant. Libre : ${formatBytes(limit-used)}`,'error'); return; }
-  if (!G.supabase) { showToast('Erreur de connexion à la base de données','error'); return; }
-  if (!G.currentFolderId) { await setRootFolder(); if(!G.currentFolderId){ showToast('Erreur: dossier racine non trouvé','error'); return; } }
+  if (G.selectedFiles.length === 0) {
+    showToast('Veuillez sélectionner au moins un fichier', 'warning');
+    return;
+  }
+  
+  // Vérifier la connexion Supabase
+  if (!G.supabase) {
+    showToast('Erreur de connexion à la base de données', 'error');
+    return;
+  }
+  
+  // Vérifier le dossier courant
+  if (!G.currentFolderId) {
+    await setRootFolder();
+    if (!G.currentFolderId) {
+      showToast('Erreur: dossier racine non trouvé', 'error');
+      return;
+    }
+  }
+  
   const folderId = G.currentFolderId;
-  let successCount=0, errorCount=0;
-  const progressContainer=document.getElementById('uploadProgress');
-  const progressBar=document.getElementById('uploadProgressBar');
-  const progressPercent=document.getElementById('uploadPercent');
-  const statusText=document.getElementById('uploadStatusText');
-  if(progressContainer) progressContainer.classList.remove('hidden');
-  for(let i=0;i<G.selectedFiles.length;i++){
-    const file=G.selectedFiles[i];
-    const docId=generateId();
-    const fileExt=file.name.split('.').pop().toLowerCase();
-    const storagePath=`${G.currentUser.companyId}/${docId}.${fileExt}`;
-    const percent=Math.round(((i+1)/G.selectedFiles.length)*100);
-    if(progressBar) progressBar.style.width=`${percent}%`;
-    if(progressPercent) progressPercent.textContent=`${percent}%`;
-    if(statusText) statusText.textContent=`Import de ${file.name}... (${i+1}/${G.selectedFiles.length})`;
-    try{
-      const {error:uploadErr}=await G.supabase.storage.from(CONFIG.storageBucket).upload(storagePath,file,{cacheControl:'3600',upsert:false});
-      if(uploadErr) throw new Error(`Upload storage: ${uploadErr.message}`);
-      const {data:publicUrlData}=G.supabase.storage.from(CONFIG.storageBucket).getPublicUrl(storagePath);
-      const doc={ id:docId, name:document.getElementById('docNameInput')?.value.trim()||file.name, type:getFileType(file.name), size:file.size, description:document.getElementById('docDescInput')?.value.trim()||'', scope:G._uploadScope||'company', owner_id:G.currentUser.id, company_id:G.currentUser.companyId, folder_id:folderId, tags:G.uploadTags, created_at:new Date().toISOString(), updated_at:new Date().toISOString(), version:1, views:0, downloads:0, is_deleted:false, deleted_at:null, content:'', storage_path:storagePath, file_url:publicUrlData.publicUrl };
-      const {error:dbErr}=await G.supabase.from('documents').insert(doc);
-      if(dbErr) throw new Error(`Base de données: ${dbErr.message}`);
+  let successCount = 0;
+  let errorCount = 0;
+  
+  // Afficher une barre de progression
+  const progressContainer = document.getElementById('uploadProgress');
+  const progressBar = document.getElementById('uploadProgressBar');
+  const progressPercent = document.getElementById('uploadPercent');
+  const statusText = document.getElementById('uploadStatusText');
+  
+  if (progressContainer) {
+    progressContainer.classList.remove('hidden');
+  }
+  
+  for (let i = 0; i < G.selectedFiles.length; i++) {
+    const file = G.selectedFiles[i];
+    const docId = generateId();
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    const storagePath = `${G.currentUser.companyId}/${docId}.${fileExt}`;
+    
+    // Mettre à jour la progression
+    const percent = Math.round(((i + 1) / G.selectedFiles.length) * 100);
+    if (progressBar) progressBar.style.width = `${percent}%`;
+    if (progressPercent) progressPercent.textContent = `${percent}%`;
+    if (statusText) statusText.textContent = `Import de ${file.name}... (${i + 1}/${G.selectedFiles.length})`;
+    
+    try {
+      // 1. Upload vers Supabase Storage
+      const { error: uploadErr } = await G.supabase.storage
+        .from(CONFIG.storageBucket)
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (uploadErr) {
+        console.error('Upload storage error:', uploadErr);
+        throw new Error(`Upload storage: ${uploadErr.message}`);
+      }
+      
+      // 2. Récupérer l'URL publique
+      const { data: publicUrlData } = G.supabase.storage
+        .from(CONFIG.storageBucket)
+        .getPublicUrl(storagePath);
+      
+      // 3. Créer l'entrée en base de données
+      const doc = {
+        id: docId,
+        name: document.getElementById('docNameInput')?.value.trim() || file.name,
+        type: getFileType(file.name),
+        size: file.size,
+        description: document.getElementById('docDescInput')?.value.trim() || '',
+        scope: G._uploadScope || 'company',
+        owner_id: G.currentUser.id,
+        company_id: G.currentUser.companyId,
+        folder_id: folderId,
+        tags: G.uploadTags,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        version: 1,
+        views: 0,
+        downloads: 0,
+        is_deleted: false,
+        deleted_at: null,
+        content: '',
+        storage_path: storagePath,
+        file_url: publicUrlData.publicUrl
+      };
+      
+      const { error: dbErr } = await G.supabase.from('documents').insert(doc);
+      if (dbErr) {
+        console.error('DB insert error:', dbErr);
+        throw new Error(`Base de données: ${dbErr.message}`);
+      }
+      
+      // Ajouter à l'état local
       G.documents.unshift(doc);
       successCount++;
-      await addAuditLog('upload','document',doc.id,`Fichier: ${file.name}, Taille: ${formatBytes(file.size)}`);
-    }catch(err){ console.error(`Erreur upload ${file.name}:`,err); errorCount++; showToast(`Erreur: ${file.name} - ${err.message}`,'error'); }
+      
+      // Log d'audit
+      await addAuditLog('upload', 'document', doc.id, `Fichier: ${file.name}, Taille: ${formatBytes(file.size)}`);
+      
+    } catch (err) {
+      console.error(`Erreur upload ${file.name}:`, err);
+      errorCount++;
+      showToast(`Erreur: ${file.name} - ${err.message}`, 'error');
+    }
   }
-  if(progressContainer) setTimeout(()=>{ progressContainer.classList.add('hidden'); if(progressBar) progressBar.style.width='0%'; if(progressPercent) progressPercent.textContent='0%'; },1000);
-  if(successCount>0) showToast(`${successCount} fichier(s) importé(s) avec succès${errorCount>0?`, ${errorCount} erreur(s)`:''}`,successCount>0?'success':'warning');
-  G.selectedFiles=[]; G.uploadTags=[]; renderUploadTags(); renderSelectedFiles(); closeUploadModal(); renderDocuments(); updateBadges(); updateStorageDisplay();
+  
+  // Masquer la barre de progression
+  if (progressContainer) {
+    setTimeout(() => {
+      progressContainer.classList.add('hidden');
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressPercent) progressPercent.textContent = '0%';
+    }, 1000);
+  }
+  
+  // Afficher le résumé
+  if (successCount > 0) {
+    showToast(`${successCount} fichier(s) importé(s) avec succès${errorCount > 0 ? `, ${errorCount} erreur(s)` : ''}`, successCount > 0 ? 'success' : 'warning');
+  }
+  
+  // Réinitialiser et rafraîchir
+  G.selectedFiles = [];
+  G.uploadTags = [];
+  renderUploadTags();
+  renderSelectedFiles();
+  closeUploadModal();
+  renderDocuments();
+  updateBadges();
+  updateStorageDisplay();
 }
-function setDocScope(scope) { G._uploadScope=scope; const sc=document.getElementById('scopeCompany'); const sp=document.getElementById('scopePersonal'); if(sc&&sp){ if(scope==='company'){ sc.classList.add('bg-blue-500/15','border-blue-500/40','text-blue-300'); sp.classList.remove('bg-blue-500/15','border-blue-500/40','text-blue-300'); sp.classList.add('bg-slate-800/40','border-transparent','text-gray-400'); }else{ sp.classList.add('bg-purple-500/15','border-purple-500/40','text-purple-300'); sc.classList.remove('bg-purple-500/15','border-purple-500/40','text-purple-300'); sc.classList.add('bg-slate-800/40','border-transparent','text-gray-400'); } } }
 
-// ─── Preview et téléchargement ─── (fonctions essentielles, gardées identiques)
-function openPreviewModal(docId) { /* garder le code existant */ G.currentDocId=docId; const modal=document.getElementById('previewModal'); if(modal) modal.classList.remove('hidden'); const doc=G.documents.find(d=>d.id===docId); if(!doc){ showToast('Document introuvable','error'); return; } showPreviewLoading(); const titleEl=document.getElementById('previewTitle'); if(titleEl) titleEl.textContent=doc.name; updatePreviewMetadata(doc); const fileUrl=doc.file_url; const fileExt=doc.name.split('.').pop().toLowerCase(); const previewFrame=document.getElementById('previewFrame'); const previewImage=document.getElementById('previewImage'); const previewContent=document.getElementById('previewContent'); const previewOffice=document.getElementById('previewOffice'); const previewUnsupported=document.getElementById('previewUnsupported'); if(previewFrame) previewFrame.classList.add('hidden'); if(previewImage) previewImage.classList.add('hidden'); if(previewContent) previewContent.classList.add('hidden'); if(previewOffice) previewOffice.classList.add('hidden'); if(previewUnsupported) previewUnsupported.classList.add('hidden'); const imageTypes=['jpg','jpeg','png','gif','webp','svg','bmp']; const pdfTypes=['pdf']; const officeTypes=['doc','docx','xls','xlsx','ppt','pptx']; const textTypes=['txt','json','xml','html','css','js','md']; try{ if(imageTypes.includes(fileExt) && previewImage){ previewImage.src=fileUrl; previewImage.classList.remove('hidden'); previewImage.onload=()=>hidePreviewLoading(); previewImage.onerror=()=>{ hidePreviewLoading(); showUnsupportedPreview(doc); }; } else if(pdfTypes.includes(fileExt) && previewFrame){ previewFrame.src=fileUrl; previewFrame.classList.remove('hidden'); previewFrame.onload=()=>hidePreviewLoading(); previewFrame.onerror=()=>{ hidePreviewLoading(); showUnsupportedPreview(doc); }; } else if(officeTypes.includes(fileExt) && previewOffice){ previewOffice.src=fileUrl; previewOffice.classList.remove('hidden'); previewOffice.onload=()=>hidePreviewLoading(); previewOffice.onerror=()=>{ hidePreviewLoading(); showUnsupportedPreview(doc); }; } else if(textTypes.includes(fileExt) && previewContent){ previewContent.classList.remove('hidden'); const contentEl=document.getElementById('previewTextContent'); if(contentEl){ contentEl.innerHTML='<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i><p class="mt-2">Chargement du contenu...</p></div>'; fetch(fileUrl).then(r=>r.text()).then(text=>{ hidePreviewLoading(); contentEl.innerHTML=`<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap overflow-auto max-h-[60vh] p-4 bg-slate-900/50 rounded-lg">${escapeHtml(text.substring(0,50000))}${text.length>50000?'\n\n... (fichier tronqué)':''}</pre>`; }).catch(()=>{ hidePreviewLoading(); contentEl.innerHTML=`<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-2 block"></i><p>Impossible de lire le contenu</p><button onclick="downloadDocument('${doc.id}')" class="mt-3 btn-primary px-4 py-2 rounded-lg text-sm">Télécharger</button></div>`; }); } } else { hidePreviewLoading(); showUnsupportedPreview(doc); } }catch(err){ console.error(err); hidePreviewLoading(); showUnsupportedPreview(doc); } updateDocViews(docId); }
-function updatePreviewMetadata(doc) { const meta=document.getElementById('previewMetadata'); if(meta) meta.innerHTML=`<div class="flex items-center gap-4 text-xs text-blue-300/60 flex-wrap"><span><i class="fas fa-code-branch mr-1"></i>Version ${doc.version||1}</span><span><i class="fas fa-eye mr-1"></i>${doc.views||0} vues</span><span><i class="fas fa-download mr-1"></i>${doc.downloads||0} téléchargements</span><span><i class="fas fa-calendar-alt mr-1"></i>${formatDate(doc.created_at)}</span><span><i class="fas fa-database mr-1"></i>${formatBytes(doc.size)}</span>${doc.owner_id===G.currentUser.id?'<span class="text-green-400"><i class="fas fa-user-check mr-1"></i>Propriétaire</span>':''}</div>`; }
-function showUnsupportedPreview(doc) { const unsup=document.getElementById('previewUnsupported'); if(unsup){ unsup.classList.remove('hidden'); const info=document.getElementById('unsupportedFileInfo'); if(info) info.innerHTML=`<i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-4 block text-blue-400"></i><p class="text-white font-medium">${escapeHtml(doc.name)}</p><p class="text-sm text-blue-300/60 mt-1">${formatBytes(doc.size)} • ${doc.type?.toUpperCase()||'Fichier'}</p><p class="text-xs text-blue-400/50 mt-3">Aperçu non disponible pour ce type de fichier</p><div class="flex gap-3 mt-4 justify-center"><button onclick="downloadDocument('${doc.id}')" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2"><i class="fas fa-download"></i>Télécharger</button><button onclick="copyFileLink('${doc.id}')" class="px-4 py-2 rounded-lg text-sm border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-2"><i class="fas fa-link"></i>Copier le lien</button></div>`; } }
-function copyFileLink(docId) { const doc=G.documents.find(d=>d.id===docId); if(doc && doc.file_url){ navigator.clipboard.writeText(doc.file_url); showToast('Lien du fichier copié','success'); } }
-function showPreviewLoading() { const el=document.getElementById('previewLoading'); if(el) el.classList.remove('hidden'); }
-function hidePreviewLoading() { const el=document.getElementById('previewLoading'); if(el) el.classList.add('hidden'); }
-async function updateDocViews(docId) { const doc=G.documents.find(d=>d.id===docId); if(doc){ const newViews=(doc.views||0)+1; await G.supabase.from('documents').update({views:newViews}).eq('id',docId); doc.views=newViews; } }
-function closePreviewModal() { const modal=document.getElementById('previewModal'); if(modal) modal.classList.add('hidden'); G.currentDocId=null; }
-async function downloadDocument(docId) { const doc=G.documents.find(d=>d.id===docId); if(!doc) return; try{ const {data,error}=await G.supabase.storage.from(CONFIG.storageBucket).download(doc.storage_path); if(error){ const link=document.createElement('a'); link.href=doc.file_url; link.download=doc.name; document.body.appendChild(link); link.click(); document.body.removeChild(link); }else{ const url=URL.createObjectURL(data); const link=document.createElement('a'); link.href=url; link.download=doc.name; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); } await G.supabase.from('documents').update({downloads:(doc.downloads||0)+1}).eq('id',docId); doc.downloads=(doc.downloads||0)+1; showToast(`Téléchargement: ${doc.name}`,'success'); await addAuditLog('download','document',docId); }catch(err){ console.error(err); showToast(`Erreur de téléchargement: ${err.message}`,'error'); } }
-function downloadCurrentDocument() { if(G.currentDocId) downloadDocument(G.currentDocId); }
-function shareCurrentDocument() { if(G.currentDocId) openShareModal(G.currentDocId); }
-async function deleteDocument(docId) { const doc=G.documents.find(d=>d.id===docId); if(!doc) return; if(doc.owner_id!==G.currentUser.id && G.currentUser.role!=='admin'){ showToast('Permission refusée','error'); return; } const {error}=await G.supabase.from('documents').update({is_deleted:true,deleted_at:new Date().toISOString()}).eq('id',docId); if(error){ showToast('Erreur suppression','error'); return; } doc.is_deleted=true; doc.deleted_at=new Date().toISOString(); renderDocuments(); updateBadges(); showToast('Document déplacé vers la corbeille','success'); await addAuditLog('delete','document',docId); }
+function setDocScope(scope) {
+  G._uploadScope = scope;
+  const scopeCompany = document.getElementById('scopeCompany');
+  const scopePersonal = document.getElementById('scopePersonal');
+  
+  if (scopeCompany && scopePersonal) {
+    if (scope === 'company') {
+      scopeCompany.classList.add('bg-blue-500/15', 'border-blue-500/40', 'text-blue-300');
+      scopePersonal.classList.remove('bg-blue-500/15', 'border-blue-500/40', 'text-blue-300');
+      scopePersonal.classList.add('bg-slate-800/40', 'border-transparent', 'text-gray-400');
+    } else {
+      scopePersonal.classList.add('bg-purple-500/15', 'border-purple-500/40', 'text-purple-300');
+      scopeCompany.classList.remove('bg-purple-500/15', 'border-purple-500/40', 'text-purple-300');
+      scopeCompany.classList.add('bg-slate-800/40', 'border-transparent', 'text-gray-400');
+    }
+  }
+}
+
+// ─── Preview et téléchargement ───
+function openPreviewModal(docId) {
+  console.log('👁️ Ouverture de l\'aperçu pour:', docId);
+  G.currentDocId = docId;
+  
+  const modal = document.getElementById('previewModal');
+  if (modal) modal.classList.remove('hidden');
+  
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) {
+    showToast('Document introuvable', 'error');
+    return;
+  }
+  
+  // Afficher le chargement
+  showPreviewLoading();
+  
+  // Mettre à jour le titre
+  const titleEl = document.getElementById('previewTitle');
+  if (titleEl) titleEl.textContent = doc.name;
+  
+  // Mettre à jour les métadonnées
+  updatePreviewMetadata(doc);
+  
+  const fileUrl = doc.file_url;
+  const fileType = doc.type;
+  const fileName = doc.name;
+  const fileExt = fileName.split('.').pop().toLowerCase();
+  
+  // Récupérer les éléments
+  const previewFrame = document.getElementById('previewFrame');
+  const previewImage = document.getElementById('previewImage');
+  const previewContent = document.getElementById('previewContent');
+  const previewOffice = document.getElementById('previewOffice');
+  const previewUnsupported = document.getElementById('previewUnsupported');
+  
+  // Cacher tous les conteneurs
+  if (previewFrame) previewFrame.classList.add('hidden');
+  if (previewImage) previewImage.classList.add('hidden');
+  if (previewContent) previewContent.classList.add('hidden');
+  if (previewOffice) previewOffice.classList.add('hidden');
+  if (previewUnsupported) previewUnsupported.classList.add('hidden');
+  
+  // Types de fichiers supportés
+  const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+  const pdfTypes = ['pdf'];
+  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+  const textTypes = ['txt', 'json', 'xml', 'html', 'css', 'js', 'md'];
+  
+  try {
+    if (imageTypes.includes(fileExt)) {
+      // Aperçu image
+      if (previewImage) {
+        previewImage.src = fileUrl;
+        previewImage.classList.remove('hidden');
+        previewImage.onload = () => {
+          hidePreviewLoading();
+          console.log('✅ Image chargée');
+        };
+        previewImage.onerror = () => {
+          hidePreviewLoading();
+          showUnsupportedPreview(doc);
+        };
+      }
+    } 
+    else if (pdfTypes.includes(fileExt)) {
+      // Aperçu PDF
+      if (previewFrame) {
+        previewFrame.src = fileUrl;
+        previewFrame.classList.remove('hidden');
+        previewFrame.onload = () => {
+          hidePreviewLoading();
+          console.log('✅ PDF chargé');
+        };
+        previewFrame.onerror = () => {
+          hidePreviewLoading();
+          showUnsupportedPreview(doc);
+        };
+      }
+    }
+    else if (officeTypes.includes(fileExt)) {
+      // Aperçu Office
+      if (previewOffice) {
+        previewOffice.src = fileUrl;
+        previewOffice.classList.remove('hidden');
+        previewOffice.onload = () => {
+          hidePreviewLoading();
+          console.log('✅ Document Office chargé');
+        };
+        previewOffice.onerror = () => {
+          hidePreviewLoading();
+          showUnsupportedPreview(doc);
+        };
+      }
+    }
+    else if (textTypes.includes(fileExt)) {
+      // Aperçu texte
+      previewContent.classList.remove('hidden');
+      const contentEl = document.getElementById('previewTextContent');
+      if (contentEl) {
+        contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i><p class="mt-2">Chargement du contenu...</p></div>';
+        
+        fetch(fileUrl)
+          .then(response => response.text())
+          .then(text => {
+            hidePreviewLoading();
+            contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap overflow-auto max-h-[60vh] p-4 bg-slate-900/50 rounded-lg">${escapeHtml(text.substring(0, 50000))}${text.length > 50000 ? '\n\n... (fichier tronqué)' : ''}</pre>`;
+          })
+          .catch(() => {
+            hidePreviewLoading();
+            contentEl.innerHTML = `<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-2 block"></i><p>Impossible de lire le contenu</p><button onclick="downloadDocument('${doc.id}')" class="mt-3 btn-primary px-4 py-2 rounded-lg text-sm">Télécharger</button></div>`;
+          });
+      }
+    }
+    else {
+      // Type non supporté
+      hidePreviewLoading();
+      showUnsupportedPreview(doc);
+    }
+  } catch (err) {
+    console.error('Erreur aperçu:', err);
+    hidePreviewLoading();
+    showUnsupportedPreview(doc);
+  }
+  
+  // Incrémenter le compteur de vues
+  updateDocViews(docId);
+}
+function updatePreviewMetadata(doc) {
+  const metaContainer = document.getElementById('previewMetadata');
+  if (metaContainer) {
+    metaContainer.innerHTML = `
+      <div class="flex items-center gap-4 text-xs text-blue-300/60 flex-wrap">
+        <span><i class="fas fa-code-branch mr-1"></i>Version ${doc.version || 1}</span>
+        <span><i class="fas fa-eye mr-1"></i>${doc.views || 0} vues</span>
+        <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0} téléchargements</span>
+        <span><i class="fas fa-calendar-alt mr-1"></i>${formatDate(doc.created_at)}</span>
+        <span><i class="fas fa-database mr-1"></i>${formatBytes(doc.size)}</span>
+        ${doc.owner_id === G.currentUser.id ? '<span class="text-green-400"><i class="fas fa-user-check mr-1"></i>Propriétaire</span>' : ''}
+      </div>
+    `;
+  }
+}
+
+function showUnsupportedPreview(doc) {
+  const previewUnsupported = document.getElementById('previewUnsupported');
+  if (previewUnsupported) {
+    previewUnsupported.classList.remove('hidden');
+    const unsupportedInfo = document.getElementById('unsupportedFileInfo');
+    if (unsupportedInfo) {
+      unsupportedInfo.innerHTML = `
+        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-4 block text-blue-400"></i>
+        <p class="text-white font-medium">${escapeHtml(doc.name)}</p>
+        <p class="text-sm text-blue-300/60 mt-1">${formatBytes(doc.size)} • ${doc.type?.toUpperCase() || 'Fichier'}</p>
+        <p class="text-xs text-blue-400/50 mt-3">Aperçu non disponible pour ce type de fichier</p>
+        <div class="flex gap-3 mt-4 justify-center">
+          <button onclick="downloadDocument('${doc.id}')" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+            <i class="fas fa-download"></i>Télécharger
+          </button>
+          <button onclick="copyFileLink('${doc.id}')" class="px-4 py-2 rounded-lg text-sm border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-2">
+            <i class="fas fa-link"></i>Copier le lien
+          </button>
+        </div>
+      `;
+    }
+  }
+}
+
+function copyFileLink(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (doc && doc.file_url) {
+    navigator.clipboard.writeText(doc.file_url);
+    showToast('Lien du fichier copié', 'success');
+  }
+}
+
+function showPreviewLoading() {
+  const loadingEl = document.getElementById('previewLoading');
+  if (loadingEl) loadingEl.classList.remove('hidden');
+}
+
+function hidePreviewLoading() {
+  const loadingEl = document.getElementById('previewLoading');
+  if (loadingEl) loadingEl.classList.add('hidden');
+}
+async function updateDocViews(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (doc) {
+    const newViews = (doc.views || 0) + 1;
+    await G.supabase
+      .from('documents')
+      .update({ views: newViews })
+      .eq('id', docId);
+    doc.views = newViews;
+  }
+}
+
+function closePreviewModal() {
+  const modal = document.getElementById('previewModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentDocId = null;
+}
+
+async function downloadDocument(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  
+  try {
+    // Télécharger le fichier depuis Supabase Storage
+    const { data, error } = await G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .download(doc.storage_path);
+    
+    if (error) {
+      console.error('Erreur téléchargement:', error);
+      // Fallback: utiliser l'URL publique
+      const link = document.createElement('a');
+      link.href = doc.file_url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      // Créer un blob et télécharger
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+    
+    // Mettre à jour le compteur de téléchargements
+    await G.supabase
+      .from('documents')
+      .update({ downloads: (doc.downloads || 0) + 1 })
+      .eq('id', docId);
+    doc.downloads = (doc.downloads || 0) + 1;
+    
+    showToast(`Téléchargement: ${doc.name}`, 'success');
+    
+    // Log d'audit
+    await addAuditLog('download', 'document', docId);
+    
+  } catch (err) {
+    console.error('Erreur téléchargement:', err);
+    showToast(`Erreur de téléchargement: ${err.message}`, 'error');
+  }
+}
+
+function downloadCurrentDocument() {
+  if (G.currentDocId) downloadDocument(G.currentDocId);
+}
+
+function shareCurrentDocument() {
+  if (G.currentDocId) openShareModal(G.currentDocId);
+}
+
+async function deleteDocument(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  
+  if (doc.owner_id !== G.currentUser.id && G.currentUser.role !== 'admin') {
+    showToast('Permission refusée', 'error');
+    return;
+  }
+  
+  const { error } = await G.supabase
+    .from('documents')
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq('id', docId);
+  
+  if (error) {
+    showToast('Erreur suppression', 'error');
+    return;
+  }
+  
+  doc.is_deleted = true;
+  doc.deleted_at = new Date().toISOString();
+  renderDocuments();
+  updateBadges();
+  showToast('Document déplacé vers la corbeille', 'success');
+  
+  // Log d'audit
+  await addAuditLog('delete', 'document', docId);
+}
 
 // ─── Déplacement de documents ───
-function openMoveModal(docId) { G.moveModalDocId=docId; const modal=document.getElementById('moveModal'); if(modal) modal.classList.remove('hidden'); const folderSelect=document.getElementById('moveFolderSelect'); if(folderSelect){ let options='<option value="__root__">📁 Racine (dossier principal)</option>'; options+=G.folders.filter(f=>f.name!=='Racine').map(f=>`<option value="${f.id}">📁 ${getFolderPath(f.id)}</option>`).join(''); folderSelect.innerHTML=options; } }
-function closeMoveModal() { const modal=document.getElementById('moveModal'); if(modal) modal.classList.add('hidden'); G.moveModalDocId=null; }
-function getFolderPath(folderId,path='') { const folder=G.folders.find(f=>f.id===folderId); if(!folder) return path; const newPath=path?`${folder.name} / ${path}`:folder.name; if(folder.parent_id) return getFolderPath(folder.parent_id,newPath); return newPath; }
-async function confirmMoveDocument() { let folderId=document.getElementById('moveFolderSelect')?.value; if(!folderId){ showToast('Veuillez sélectionner un dossier','warning'); return; } if(folderId==='__root__'){ const rootFolder=G.folders.find(f=>f.name==='Racine' && f.parent_id===null); if(rootFolder) folderId=rootFolder.id; else{ showToast('Dossier racine introuvable','error'); return; } } if(!G.moveModalDocId) return; const {error}=await G.supabase.from('documents').update({folder_id:folderId,updated_at:new Date().toISOString()}).eq('id',G.moveModalDocId); if(error){ showToast('Erreur déplacement: '+error.message,'error'); return; } const doc=G.documents.find(d=>d.id===G.moveModalDocId); if(doc) doc.folder_id=folderId; showToast('Document déplacé avec succès','success'); closeMoveModal(); renderDocuments(); if(G.currentView==='folders') renderFolderContents(); }
+function openMoveModal(docId) {
+  G.moveModalDocId = docId;
+  const modal = document.getElementById('moveModal');
+  if (modal) modal.classList.remove('hidden');
+  
+  // Remplir la liste des dossiers
+  const folderSelect = document.getElementById('moveFolderSelect');
+  if (folderSelect) {
+    folderSelect.innerHTML = '<option value="">-- Sélectionner un dossier --</option>' + 
+      G.folders.filter(f => f.parent_id !== null || f.name !== 'Racine').map(f => 
+        `<option value="${f.id}">${getFolderPath(f.id)}</option>`
+      ).join('');
+  }
+}
 
-// ─── Collaboration ───
-function openCollabModal(docId) { G.collabModalDocId=docId; const modal=document.getElementById('collabModal'); if(modal) modal.classList.remove('hidden'); const doc=G.documents.find(d=>d.id===docId); const docInfo=document.getElementById('collabDocInfo'); if(docInfo && doc) docInfo.textContent=doc.name; }
-function closeCollabModal() { const modal=document.getElementById('collabModal'); if(modal) modal.classList.add('hidden'); G.collabModalDocId=null; }
-async function inviteCollaborator() { const email=document.getElementById('collabEmail')?.value.trim(); const permission=document.getElementById('collabPermission')?.value; if(!email){ showToast('Veuillez entrer un email','warning'); return; } if(!G.collabModalDocId) return; const {data:targetUser,error:userError}=await G.supabase.from('profiles').select('id,email,name').eq('email',email).eq('company_id',G.currentUser.companyId).single(); if(userError||!targetUser){ showToast('Cet utilisateur n\'appartient pas à votre entreprise','error'); return; } const share={ id:generateId(), document_id:G.collabModalDocId, sender_id:G.currentUser.id, recipient_email:email, recipient_id:targetUser.id, permission:permission, expires_at:null, status:'active', created_at:new Date().toISOString() }; const {error}=await G.supabase.from('shares').insert(share); if(error){ showToast('Erreur invitation: '+error.message,'error'); return; } G.shares.push(share); showToast(`Invitation envoyée à ${email}`,'success'); await addAuditLog('share_collab','document',G.collabModalDocId,`Invité: ${email} avec permission ${permission}`); closeCollabModal(); document.getElementById('collabEmail').value=''; }
+function closeMoveModal() {
+  const modal = document.getElementById('moveModal');
+  if (modal) modal.classList.add('hidden');
+  G.moveModalDocId = null;
+}
 
-// ==================== PARTAGES ====================
-function openShareModal(docId) { G.currentDocId=docId; const modal=document.getElementById('shareModal'); if(modal) modal.classList.remove('hidden'); const doc=G.documents.find(d=>d.id===docId); const docInfo=document.getElementById('shareDocInfo'); if(docInfo && doc) docInfo.textContent=doc.name; }
-function closeShareModal() { const modal=document.getElementById('shareModal'); if(modal) modal.classList.add('hidden'); G.currentDocId=null; }
-function switchShareTab(tab) { const sendPanel=document.getElementById('sharePanel-send'); const historyPanel=document.getElementById('sharePanel-history'); const sendTab=document.getElementById('shareTab-send'); const historyTab=document.getElementById('shareTab-history'); if(tab==='send'){ if(sendPanel) sendPanel.classList.remove('hidden'); if(historyPanel) historyPanel.classList.add('hidden'); if(sendTab) sendTab.classList.add('border-blue-400','text-blue-400'); if(historyTab) historyTab.classList.remove('border-blue-400','text-blue-400'); }else{ if(sendPanel) sendPanel.classList.add('hidden'); if(historyPanel) historyPanel.classList.remove('hidden'); if(historyTab) historyTab.classList.add('border-blue-400','text-blue-400'); if(sendTab) sendTab.classList.remove('border-blue-400','text-blue-400'); loadShareHistory(); } }
-async function shareDocument() { const email=document.getElementById('shareEmail')?.value.trim(); if(!email){ showToast('Veuillez entrer un email','warning'); return; } const {data:targetUser,error:userError}=await G.supabase.from('profiles').select('id,company_id,email').eq('email',email).eq('company_id',G.currentUser.companyId).single(); if(userError||!targetUser){ showToast('Cet utilisateur n\'appartient pas à votre entreprise','error'); return; } const existingShare=G.shares.find(s=>s.document_id===G.currentDocId && s.recipient_email===email && s.status==='active'); if(existingShare){ showToast('Ce document est déjà partagé avec cet utilisateur','warning'); return; } const permission=document.getElementById('sharePermission')?.value||'view'; const expiresIn=parseInt(document.getElementById('shareExpiration')?.value||'0'); let expiresAt=null; if(expiresIn>0){ expiresAt=new Date(); expiresAt.setDate(expiresAt.getDate()+expiresIn); } const share={ id:generateId(), document_id:G.currentDocId, sender_id:G.currentUser.id, recipient_email:email, recipient_id:targetUser.id, permission:permission, expires_at:expiresAt?expiresAt.toISOString():null, status:'active', created_at:new Date().toISOString() }; const {error}=await G.supabase.from('shares').insert(share); if(error){ showToast('Erreur partage: '+error.message,'error'); return; } G.shares.push(share); showToast(`Document partagé avec ${email} (${permission==='view'?'lecture':permission==='download'?'téléchargement':'modification'})`,'success'); closeShareModal(); updateBadges(); await addAuditLog('share','document',G.currentDocId,`Partagé avec ${email} (${permission})`); if(G.sharedTab==='sent') renderShared(); }
-async function revokeShare(shareId) { if(!confirm('Révoquer ce partage ? Le destinataire n\'aura plus accès au document.')) return; const {error}=await G.supabase.from('shares').update({status:'revoked',revoked_at:new Date().toISOString()}).eq('id',shareId); if(error){ showToast('Erreur révocation: '+error.message,'error'); return; } const share=G.shares.find(s=>s.id===shareId); if(share) share.status='revoked'; showToast('Partage révoqué','success'); if(G.sharedTab==='sent') renderShared(); else if(G.sharedTab==='received') renderShared(); updateBadges(); }
-async function revokeReceivedShare(shareId) { if(!confirm('Retirer ce document de votre liste des partagés ? L\'expéditeur pourra toujours le partager à nouveau.')) return; G.shares=G.shares.filter(s=>s.id!==shareId); renderShared(); updateBadges(); showToast('Partage retiré de votre vue','success'); }
-async function refreshShares() { if(!G.currentUser) return; const {data:shares,error}=await G.supabase.from('shares').select('*, documents!document_id(name)').eq('sender_id',G.currentUser.id); if(!error && shares){ G.shares=shares; renderShared(); updateBadges(); } }
-async function loadShareHistory(docId=null) { const targetDocId=docId||G.currentDocId; if(!targetDocId){ const hist=document.getElementById('shareHistoryList'); if(hist) hist.innerHTML='<div class="text-center py-8 text-blue-300/40"><p>Sélectionnez un document pour voir son historique</p></div>'; return; } const {data:shares,error}=await G.supabase.from('shares').select('*, documents!document_id(name)').eq('document_id',targetDocId).order('created_at',{ascending:false}); if(error){ console.error(error); return; } const hist=document.getElementById('shareHistoryList'); if(hist){ if(!shares||shares.length===0) hist.innerHTML='<p class="text-center py-4 text-blue-300/50">Aucun historique de partage pour ce document</p>'; else hist.innerHTML=shares.map(s=>`<div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-blue-500/20"><div><p class="text-white text-sm">Partagé avec : ${escapeHtml(s.recipient_email)}</p><p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>${s.expires_at?`<p class="text-xs text-yellow-400/70">Expire le ${formatDate(s.expires_at)}</p>`:''}</div>${s.status==='active'?`<button onclick="revokeShare('${s.id}')" class="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30">Révoquer</button>`:''}</div>`).join(''); } }
-function switchSharedTab(tab) { G.sharedTab=tab; const recPanel=document.getElementById('shared-received'); const sentPanel=document.getElementById('shared-sent'); const tabRec=document.getElementById('tab-received'); const tabSent=document.getElementById('tab-sent'); if(recPanel && sentPanel){ if(tab==='received'){ recPanel.classList.remove('hidden'); sentPanel.classList.add('hidden'); if(tabRec) tabRec.classList.add('border-blue-400','text-blue-400'); if(tabSent) tabSent.classList.remove('border-blue-400','text-blue-400'); }else{ recPanel.classList.add('hidden'); sentPanel.classList.remove('hidden'); if(tabSent) tabSent.classList.add('border-blue-400','text-blue-400'); if(tabRec) tabRec.classList.remove('border-blue-400','text-blue-400'); } } renderShared(); }
-function renderShared() { const recCont=document.getElementById('sharedList'); const sentCont=document.getElementById('sentSharesList'); const recEmpty=document.getElementById('sharedEmptyState'); const sentEmpty=document.getElementById('sentEmptyState'); if(G.sharedTab==='received'){ if(!recCont) return; const received=G.shares.filter(s=>s.recipient_email===G.currentUser.email && s.status==='active'); if(received.length===0){ if(recEmpty) recEmpty.classList.remove('hidden'); if(recCont) recCont.classList.add('hidden'); return; } if(recEmpty) recEmpty.classList.add('hidden'); recCont.classList.remove('hidden'); recCont.innerHTML=received.map(s=>{ const doc=G.documents.find(d=>d.id===s.document_id); const docName=doc?doc.name:'Document inconnu'; return `<div class="glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer hover:border-purple-400/40 transition-all" onclick="openPreviewModal('${s.document_id}')"><div class="flex items-center gap-3"><i class="fas fa-share-alt text-purple-400"></i><div class="flex-1"><p class="text-white font-medium">${escapeHtml(docName)}</p><p class="text-xs text-blue-300/60">Partagé par : ${escapeHtml(s.sender_id?.substring(0,8)||'inconnu')}</p><p class="text-xs text-blue-400/50 mt-0.5">${formatDate(s.created_at)}</p></div><button onclick="event.stopPropagation(); revokeReceivedShare('${s.id}')" class="text-red-400 hover:text-red-300 text-sm p-2" title="Ne plus voir ce partage"><i class="fas fa-trash-alt"></i></button></div></div>`; }).join(''); } else { if(!sentCont) return; const sent=G.shares.filter(s=>s.sender_id===G.currentUser.id); if(sent.length===0){ if(sentEmpty) sentEmpty.classList.remove('hidden'); if(sentCont) sentCont.classList.add('hidden'); return; } if(sentEmpty) sentEmpty.classList.add('hidden'); sentCont.classList.remove('hidden'); sentCont.innerHTML=sent.map(s=>{ const doc=G.documents.find(d=>d.id===s.document_id); const docName=doc?doc.name:'Document inconnu'; return `<div class="glass-card rounded-xl p-4 border border-blue-500/20"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex-1"><p class="text-white font-medium">${escapeHtml(docName)}</p><p class="text-xs text-blue-300/60">À : ${escapeHtml(s.recipient_email)}</p><p class="text-xs text-blue-400/50 mt-0.5">${formatDate(s.created_at)}</p></div><div class="flex gap-2"><span class="text-xs px-2 py-1 rounded-full ${s.status==='active'?'bg-green-500/20 text-green-400':'bg-gray-500/20 text-gray-400'}">${s.status==='active'?'Actif':'Révoqué'}</span>${s.status==='active'?`<button onclick="revokeShare('${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded-lg bg-red-500/10" title="Révoquer"><i class="fas fa-ban"></i> Révoquer</button>`:''}</div></div></div>`; }).join(''); } }
-async function generatePublicLink(docId,expiresInDays=7) { try{ const token=generateId(); const expiresAt=new Date(); expiresAt.setDate(expiresAt.getDate()+expiresInDays); const {error}=await G.supabase.from('public_shares').insert({document_id:docId,token:token,expires_at:expiresAt.toISOString(),created_by:G.currentUser.id}); if(error) throw error; const shareUrl=`${window.location.origin}/public/${token}`; const linkInput=document.getElementById('shareLinkInput'); const genDiv=document.getElementById('generatedLink'); if(linkInput) linkInput.value=shareUrl; if(genDiv) genDiv.classList.remove('hidden'); showToast(`Lien public généré`,'success'); return shareUrl; }catch(err){ console.error(err); showToast('Erreur lors de la génération du lien','error'); } }
-function copyShareLink() { const linkInput=document.getElementById('shareLinkInput'); if(linkInput && linkInput.value){ navigator.clipboard.writeText(linkInput.value); showToast('Lien copié dans le presse-papier','success'); } }
+function getFolderPath(folderId, path = '') {
+  const folder = G.folders.find(f => f.id === folderId);
+  if (!folder) return path;
+  const newPath = path ? `${folder.name} / ${path}` : folder.name;
+  if (folder.parent_id) {
+    return getFolderPath(folder.parent_id, newPath);
+  }
+  return newPath;
+}
 
-// ==================== WORKFLOWS ====================
-function renderWorkflows() { const container=document.getElementById('wfKanban'); if(!container) return; let filtered=G.workflows; if(G.wfFilter && G.wfFilter!=='') filtered=filtered.filter(w=>w.status===G.wfFilter); const statuses=['pending','in_review','approved','rejected']; if(filtered.length===0){ container.innerHTML=`<div class="col-span-full text-center py-12 text-blue-300/50"><i class="fas fa-project-diagram text-4xl mb-3 block opacity-20"></i><p>Aucun workflow ${G.wfFilter?'avec ce statut':''}</p><button onclick="openCreateWorkflowModal()" class="mt-3 btn-primary px-4 py-2 rounded-lg text-sm">Créer un workflow</button></div>`; return; } container.innerHTML=statuses.map(status=>{ const wfs=filtered.filter(w=>w.status===status); if(wfs.length===0) return ''; return `<div class="glass-card rounded-xl p-4 border border-blue-500/20"><h4 class="text-sm font-semibold ${getWfStatusColor(status)} mb-3">${getWfStatusLabel(status)} (${wfs.length})</h4><div class="space-y-2">${wfs.map(wf=>`<div class="p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50 transition-all" onclick="openWfDetail('${wf.id}')"><p class="text-white text-sm font-medium truncate">${escapeHtml(wf.title)}</p><p class="text-xs text-blue-300/60">Priorité: ${wf.priority}</p>${wf.assignee_id?`<p class="text-xs text-green-400/60 mt-1">Assigné à: ${G.users.find(u=>u.id===wf.assignee_id)?.name||wf.assignee_id.substring(0,8)}</p>`:''}</div>`).join('')}</div></div>`; }).join(''); const pc=G.workflows.filter(w=>w.status==='pending').length; const ic=G.workflows.filter(w=>w.status==='in_review').length; const ac=G.workflows.filter(w=>w.status==='approved').length; const rc=G.workflows.filter(w=>w.status==='rejected').length; const kpi=document.getElementById('wfKpiStrip'); if(kpi) kpi.innerHTML=`<div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('pending')"><p class="text-orange-400 text-xl font-bold">${pc}</p><p class="text-xs text-blue-300/60">En attente</p></div><div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('in_review')"><p class="text-blue-400 text-xl font-bold">${ic}</p><p class="text-xs text-blue-300/60">En révision</p></div><div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('approved')"><p class="text-green-400 text-xl font-bold">${ac}</p><p class="text-xs text-blue-300/60">Approuvés</p></div><div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('rejected')"><p class="text-red-400 text-xl font-bold">${rc}</p><p class="text-xs text-blue-300/60">Rejetés</p></div>`; }
-function getWfStatusClass(status) { const c={pending:'bg-orange-500/20 text-orange-300',in_review:'bg-blue-500/20 text-blue-300',approved:'bg-green-500/20 text-green-300',rejected:'bg-red-500/20 text-red-300'}; return c[status]||'bg-gray-500/20 text-gray-300'; }
-function getWfStatusLabel(status) { const l={pending:'En attente',in_review:'En révision',approved:'Approuvé',rejected:'Rejeté'}; return l[status]||status; }
-function getWfStatusColor(status) { const c={pending:'text-orange-400',in_review:'text-blue-400',approved:'text-green-400',rejected:'text-red-400'}; return c[status]||'text-gray-400'; }
-function openCreateWorkflowModal() { const docSelect=document.getElementById('wfDocId'); if(docSelect) docSelect.innerHTML='<option value="">-- Aucun --</option>'+G.documents.filter(d=>!d.is_deleted).map(d=>`<option value="${d.id}">${escapeHtml(d.name)}</option>`).join(''); const assigneeSelect=document.getElementById('wfAssignee'); if(assigneeSelect) assigneeSelect.innerHTML='<option value="">-- Non assigné --</option>'+G.users.filter(u=>u.status==='active').map(u=>`<option value="${u.id}">${escapeHtml(u.name)}</option>`).join(''); const titleI=document.getElementById('wfTitle'); const descI=document.getElementById('wfDesc'); const stepsI=document.getElementById('wfSteps'); const prioI=document.getElementById('wfPriority'); const dueI=document.getElementById('wfDueDate'); if(titleI) titleI.value=''; if(descI) descI.value=''; if(stepsI) stepsI.value=''; if(prioI) prioI.value='medium'; if(dueI) dueI.value=''; const modal=document.getElementById('workflowModal'); if(modal) modal.classList.remove('hidden'); }
-function closeWorkflowModal() { const modal=document.getElementById('workflowModal'); if(modal) modal.classList.add('hidden'); }
-async function createWorkflow(e) { e.preventDefault(); const title=document.getElementById('wfTitle')?.value.trim(); if(!title){ showToast('Veuillez entrer un titre','warning'); return; } const stepsInput=document.getElementById('wfSteps')?.value; let steps=[]; if(stepsInput) steps.push(...stepsInput.split(',').map(s=>s.trim()).filter(s=>s)); const newWf={ id:generateId(), title, description:document.getElementById('wfDesc')?.value.trim()||'', priority:document.getElementById('wfPriority')?.value||'medium', status:'pending', assignee_id:document.getElementById('wfAssignee')?.value||null, document_id:document.getElementById('wfDocId')?.value||null, due_date:document.getElementById('wfDueDate')?.value||null, created_by:G.currentUser.id, company_id:G.currentUser.companyId, steps, current_step:0, created_at:new Date().toISOString(), updated_at:new Date().toISOString() }; const {error}=await G.supabase.from('workflows').insert(newWf); if(error){ showToast('Erreur création workflow: '+error.message,'error'); return; } G.workflows.unshift(newWf); showToast('Workflow créé avec succès','success'); closeWorkflowModal(); if(G.wfView==='kanban') renderWorkflows(); else renderWorkflowsList(); await addAuditLog('workflow_create','workflow',newWf.id,`Titre: ${title}`); }
-async function actOnWorkflow(action,comment) { if(!G.currentWfId) return; const wf=G.workflows.find(w=>w.id===G.currentWfId); if(!wf) return; const commentText=document.getElementById('wfDetailComment')?.value||comment||''; const actionRecord={ id:generateId(), workflow_id:G.currentWfId, user_id:G.currentUser.id, action, comment:commentText, step_index:wf.current_step, created_at:new Date().toISOString() }; await G.supabase.from('workflow_actions').insert(actionRecord).catch(e=>console.error(e)); let newStatus=wf.status, newStep=wf.current_step; if(action==='approve'){ if(wf.current_step+1>=(wf.steps?.length||0)) newStatus='approved'; else newStep=wf.current_step+1; }else if(action==='reject') newStatus='rejected'; else if(action==='request_changes') newStatus='in_review'; const {error}=await G.supabase.from('workflows').update({status:newStatus,current_step:newStep,updated_at:new Date().toISOString()}).eq('id',G.currentWfId); if(error){ showToast('Erreur mise à jour workflow: '+error.message,'error'); return; } wf.status=newStatus; wf.current_step=newStep; showToast(`Workflow ${action==='approve'?'approuvé':action==='reject'?'rejeté':'mis à jour'}`,'success'); if(G.wfView==='kanban') renderWorkflows(); else renderWorkflowsList(); closeWfDetail(); await addAuditLog(`workflow_${action}`,'workflow',G.currentWfId,`Commentaire: ${commentText||'Aucun'}`); }
-async function openWfDetail(wfId) { G.currentWfId=wfId; const modal=document.getElementById('wfDetailModal'); if(modal) modal.classList.remove('hidden'); const wf=G.workflows.find(w=>w.id===wfId); if(!wf) return; const titleEl=document.getElementById('wfDetailTitle'); if(titleEl) titleEl.textContent=wf.title; const metaEl=document.getElementById('wfDetailMeta'); if(metaEl){ const assigneeName=wf.assignee_id?(G.users.find(u=>u.id===wf.assignee_id)?.name||'Inconnu'):'Non assigné'; metaEl.innerHTML=`<span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span><span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span><span class="text-xs text-blue-300/60">Créé le ${formatDate(wf.created_at)}</span><span class="text-xs text-blue-300/60">Assigné: ${assigneeName}</span>`; } const stepsCont=document.getElementById('wfDetailSteps'); if(stepsCont){ if(wf.steps && Array.isArray(wf.steps) && wf.steps.length>0){ stepsCont.innerHTML=wf.steps.map((step,idx)=>`<div class="flex items-center gap-3 p-2 rounded-lg ${idx<=wf.current_step?'bg-green-500/10 border border-green-500/30':'bg-slate-800/50'}"><div class="w-6 h-6 rounded-full flex items-center justify-center ${idx<wf.current_step?'bg-green-500 text-white':idx===wf.current_step?'bg-blue-500 text-white':'bg-slate-600 text-gray-400'}">${idx+1}</div><div class="flex-1"><p class="text-white text-sm">${escapeHtml(step)}</p>${idx===wf.current_step && wf.status==='pending'?'<p class="text-xs text-blue-400">En attente de validation</p>':''}</div>${idx<wf.current_step?'<i class="fas fa-check-circle text-green-400"></i>':''}</div>`).join(''); const progress=wf.steps.length>0?((wf.current_step+1)/wf.steps.length)*100:0; const pBar=document.getElementById('wfDetailProgressBar'); const pText=document.getElementById('wfDetailProgress'); if(pBar) pBar.style.width=`${progress}%`; if(pText) pText.textContent=`${Math.round(progress)}%`; }else stepsCont.innerHTML='<p class="text-blue-300/50 text-sm">Aucune étape définie</p>'; } const docCont=document.getElementById('wfDetailDoc'); if(wf.document_id){ const doc=G.documents.find(d=>d.id===wf.document_id); if(doc && docCont){ docCont.classList.remove('hidden'); docCont.innerHTML=`<p class="text-xs text-blue-300/60 mb-1">Document lié</p><div class="flex items-center gap-2 cursor-pointer hover:bg-blue-500/10 p-2 rounded-lg transition-colors" onclick="openPreviewModal('${doc.id}')"><i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-blue-400"></i><span class="text-white text-sm truncate">${escapeHtml(doc.name)}</span><i class="fas fa-external-link-alt text-blue-400/50 text-xs ml-auto"></i></div>`; } else if(docCont) docCont.classList.add('hidden'); }else if(docCont) docCont.classList.add('hidden'); const actionsCont=document.getElementById('wfDetailActions'); if(actionsCont){ const isAssignee=wf.assignee_id===G.currentUser.id; const isCreator=wf.created_by===G.currentUser.id; const isAdmin=G.currentUser.role==='admin'; if((isAssignee||isCreator||isAdmin) && wf.status==='pending') actionsCont.classList.remove('hidden'); else actionsCont.classList.add('hidden'); } await loadWorkflowHistory(wfId); }
-async function loadWorkflowHistory(wfId) { const {data:actions,error}=await G.supabase.from('workflow_actions').select('*, profiles!user_id(name)').eq('workflow_id',wfId).order('created_at',{ascending:false}); const hist=document.getElementById('wfDetailHistory'); if(hist){ if(!actions||actions.length===0) hist.innerHTML='<p class="text-center py-4 text-blue-300/50">Aucune activité</p>'; else hist.innerHTML=actions.map(a=>`<div class="p-2 border-b border-blue-500/10"><div class="flex items-center justify-between"><p class="text-white text-xs font-medium">${a.profiles?.name||'Utilisateur'}</p><span class="text-blue-300/50 text-[10px]">${formatDate(a.created_at)}</span></div><p class="text-blue-300/70 text-xs mt-0.5">${getActionLabel(a.action)}</p>${a.comment?`<p class="text-xs text-blue-300/50 mt-1 italic">"${escapeHtml(a.comment)}"</p>`:''}</div>`).join(''); } }
-async function addWfComment() { const comment=document.getElementById('wfCommentInput')?.value.trim(); if(!comment||!G.currentWfId){ showToast('Veuillez écrire un commentaire','warning'); return; } const actionRecord={ id:generateId(), workflow_id:G.currentWfId, user_id:G.currentUser.id, action:'comment', comment, created_at:new Date().toISOString() }; const {error}=await G.supabase.from('workflow_actions').insert(actionRecord); if(error){ showToast('Erreur ajout commentaire','error'); return; } const input=document.getElementById('wfCommentInput'); if(input) input.value=''; await loadWorkflowHistory(G.currentWfId); showToast('Commentaire ajouté','success'); }
-function closeWfDetail() { const modal=document.getElementById('wfDetailModal'); if(modal) modal.classList.add('hidden'); G.currentWfId=null; }
-function filterWorkflows(status) { G.wfFilter=status; document.querySelectorAll('.wf-filter-btn').forEach(btn=>{ if(btn.dataset.wf===status){ btn.classList.add('bg-blue-500/20','text-blue-300','border-blue-500/30'); btn.classList.remove('text-gray-400','border-blue-500/10'); }else{ btn.classList.remove('bg-blue-500/20','text-blue-300','border-blue-500/30'); btn.classList.add('text-gray-400','border-blue-500/10'); } }); if(G.wfView==='kanban') renderWorkflows(); else renderWorkflowsList(); }
-function searchWorkflows(query) { if(!query||query.length<2){ if(G.wfView==='kanban') renderWorkflows(); else renderWorkflowsList(); return; } const filtered=G.workflows.filter(w=>w.title.toLowerCase().includes(query.toLowerCase())||(w.description&&w.description.toLowerCase().includes(query.toLowerCase()))); const container=document.getElementById('wfKanban'); const listCont=document.getElementById('wfListView'); if(G.wfView==='kanban' && container){ if(filtered.length===0) container.innerHTML='<div class="col-span-full text-center py-12 text-blue-300/50">Aucun résultat</div>'; else container.innerHTML=filtered.map(wf=>`<div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')"><p class="text-white font-medium">${escapeHtml(wf.title)}</p><span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span></div>`).join(''); }else if(listCont){ if(filtered.length===0) listCont.innerHTML='<div class="text-center py-12 text-blue-300/50">Aucun résultat</div>'; else listCont.innerHTML=filtered.map(wf=>`<div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')"><div class="flex justify-between"><span class="text-white font-medium">${escapeHtml(wf.title)}</span><span class="text-xs px-2 py-1 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span></div></div>`).join(''); } }
-function setWfView(view) { G.wfView=view; const kanban=document.getElementById('wfKanban'); const listView=document.getElementById('wfListView'); const btnK=document.getElementById('wfViewKanban'); const btnL=document.getElementById('wfViewList'); if(view==='kanban'){ if(kanban) kanban.classList.remove('hidden'); if(listView) listView.classList.add('hidden'); if(btnK) btnK.classList.add('bg-blue-500/20','text-blue-300','border-blue-500/20'); if(btnL) btnL.classList.remove('bg-blue-500/20','text-blue-300','border-blue-500/20'); renderWorkflows(); }else{ if(kanban) kanban.classList.add('hidden'); if(listView) listView.classList.remove('hidden'); if(btnL) btnL.classList.add('bg-blue-500/20','text-blue-300','border-blue-500/20'); if(btnK) btnK.classList.remove('bg-blue-500/20','text-blue-300','border-blue-500/20'); renderWorkflowsList(); } }
-function renderWorkflowsList() { const container=document.getElementById('wfListView'); if(!container) return; let filtered=G.workflows; if(G.wfFilter) filtered=filtered.filter(w=>w.status===G.wfFilter); if(filtered.length===0){ container.innerHTML='<div class="text-center py-12 text-blue-300/50"><i class="fas fa-tasks text-4xl mb-2 opacity-20"></i><p>Aucun workflow trouvé</p></div>'; return; } container.innerHTML=filtered.map(wf=>`<div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer hover:border-blue-400/40 transition-all" onclick="openWfDetail('${wf.id}')"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex-1"><p class="text-white font-medium">${escapeHtml(wf.title)}</p><div class="flex items-center gap-3 mt-1"><span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span><span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span><span class="text-xs text-blue-300/60">${formatDate(wf.created_at)}</span></div>${wf.assignee_id?`<p class="text-xs text-green-400/60 mt-1">Assigné: ${G.users.find(u=>u.id===wf.assignee_id)?.name||'Inconnu'}</p>`:''}</div><i class="fas fa-chevron-right text-blue-400/50"></i></div></div>`).join(''); }
+async function confirmMoveDocument() {
+  const folderId = document.getElementById('moveFolderSelect')?.value;
+  if (!folderId) {
+    showToast('Veuillez sélectionner un dossier', 'warning');
+    return;
+  }
+  
+  if (!G.moveModalDocId) return;
+  
+  const { error } = await G.supabase
+    .from('documents')
+    .update({ folder_id: folderId, updated_at: new Date().toISOString() })
+    .eq('id', G.moveModalDocId);
+  
+  if (error) {
+    showToast('Erreur déplacement: ' + error.message, 'error');
+    return;
+  }
+  
+  const doc = G.documents.find(d => d.id === G.moveModalDocId);
+  if (doc) {
+    doc.folder_id = folderId;
+    doc.updated_at = new Date().toISOString();
+  }
+  
+  showToast('Document déplacé avec succès', 'success');
+  closeMoveModal();
+  renderDocuments();
+  if (G.currentView === 'folders') renderFolderContents();
+}
 
+// ─── Collaboration (invitation) ───
+function openCollabModal(docId) {
+  G.collabModalDocId = docId;
+  const modal = document.getElementById('collabModal');
+  if (modal) modal.classList.remove('hidden');
+  
+  const doc = G.documents.find(d => d.id === docId);
+  const docInfo = document.getElementById('collabDocInfo');
+  if (docInfo && doc) docInfo.textContent = doc.name;
+}
+
+function closeCollabModal() {
+  const modal = document.getElementById('collabModal');
+  if (modal) modal.classList.add('hidden');
+  G.collabModalDocId = null;
+}
+
+async function inviteCollaborator() {
+  const email = document.getElementById('collabEmail')?.value.trim();
+  const permission = document.getElementById('collabPermission')?.value;
+  
+  if (!email) {
+    showToast('Veuillez entrer un email', 'warning');
+    return;
+  }
+  
+  if (!G.collabModalDocId) return;
+  
+  // Vérifier si l'utilisateur existe dans la même entreprise
+  const { data: targetUser, error: userError } = await G.supabase
+    .from('profiles')
+    .select('id, email, name')
+    .eq('email', email)
+    .eq('company_id', G.currentUser.companyId)
+    .single();
+  
+  if (userError || !targetUser) {
+    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
+    return;
+  }
+  
+  // Créer le partage
+  const share = {
+    id: generateId(),
+    document_id: G.collabModalDocId,
+    sender_id: G.currentUser.id,
+    recipient_email: email,
+    recipient_id: targetUser.id,
+    permission: permission,
+    expires_at: null,
+    status: 'active',
+    created_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('shares').insert(share);
+  if (error) {
+    showToast('Erreur invitation: ' + error.message, 'error');
+    return;
+  }
+  
+  G.shares.push(share);
+  showToast(`Invitation envoyée à ${email}`, 'success');
+  
+  // Envoyer une notification (simulée)
+  await addAuditLog('share_collab', 'document', G.collabModalDocId, `Invité: ${email} avec permission ${permission}`);
+  
+  closeCollabModal();
+  document.getElementById('collabEmail').value = '';
+}
+
+// ─── Partages ───
+function openShareModal(docId) {
+  G.currentDocId = docId;
+  const modal = document.getElementById('shareModal');
+  if (modal) modal.classList.remove('hidden');
+  
+  const doc = G.documents.find(d => d.id === docId);
+  const docInfo = document.getElementById('shareDocInfo');
+  if (docInfo && doc) docInfo.textContent = doc.name;
+}
+
+function closeShareModal() {
+  const modal = document.getElementById('shareModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentDocId = null;
+}
+
+function switchShareTab(tab) {
+  const sendPanel = document.getElementById('sharePanel-send');
+  const historyPanel = document.getElementById('sharePanel-history');
+  const sendTab = document.getElementById('shareTab-send');
+  const historyTab = document.getElementById('shareTab-history');
+  
+  if (tab === 'send') {
+    if (sendPanel) sendPanel.classList.remove('hidden');
+    if (historyPanel) historyPanel.classList.add('hidden');
+    if (sendTab) sendTab.classList.add('border-blue-400', 'text-blue-400');
+    if (historyTab) historyTab.classList.remove('border-blue-400', 'text-blue-400');
+  } else {
+    if (sendPanel) sendPanel.classList.add('hidden');
+    if (historyPanel) historyPanel.classList.remove('hidden');
+    if (historyTab) historyTab.classList.add('border-blue-400', 'text-blue-400');
+    if (sendTab) sendTab.classList.remove('border-blue-400', 'text-blue-400');
+    loadShareHistory();
+  }
+}
+
+async function shareDocument() {
+  const email = document.getElementById('shareEmail')?.value;
+  if (!email) {
+    showToast('Veuillez entrer un email', 'warning');
+    return;
+  }
+  
+  const { data: targetUser, error: userError } = await G.supabase
+    .from('profiles')
+    .select('id, company_id')
+    .eq('email', email)
+    .single();
+  
+  if (userError || !targetUser || targetUser.company_id !== G.currentUser.companyId) {
+    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
+    return;
+  }
+  
+  const share = {
+    id: generateId(),
+    document_id: G.currentDocId,
+    sender_id: G.currentUser.id,
+    recipient_email: email,
+    permission: document.getElementById('sharePermission')?.value || 'view',
+    expires_at: null,
+    status: 'active',
+    created_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('shares').insert(share);
+  if (error) {
+    showToast('Erreur partage', 'error');
+    return;
+  }
+  
+  G.shares.push(share);
+  showToast('Document partagé avec succès', 'success');
+  closeShareModal();
+  updateBadges();
+  
+  await addAuditLog('share', 'document', G.currentDocId, `Partagé avec ${email}`);
+}
+
+async function revokeShare(shareId) {
+  const { error } = await G.supabase
+    .from('shares')
+    .update({ status: 'revoked' })
+    .eq('id', shareId);
+  if (error) {
+    showToast('Erreur révocation', 'error');
+  } else {
+    showToast('Partage révoqué', 'success');
+    loadShareHistory();
+  }
+}
+
+async function loadShareHistory() {
+  const { data: shares, error } = await G.supabase
+    .from('shares')
+    .select('*, documents!document_id(name)')
+    .eq('document_id', G.currentDocId);
+  
+  if (error) return;
+  
+  const historyContainer = document.getElementById('shareHistoryList');
+  if (historyContainer) {
+    if (shares.length === 0) {
+      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucun historique</p>';
+    } else {
+      historyContainer.innerHTML = shares.map(s => `
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/50">
+          <div>
+            <p class="text-white text-sm">Partagé avec: ${s.recipient_email}</p>
+            <p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>
+          </div>
+          ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded">Révoquer</button>` : ''}
+        </div>
+      `).join('');
+    }
+  }
+}
+
+function switchSharedTab(tab) {
+  G.sharedTab = tab;
+  const receivedPanel = document.getElementById('shared-received');
+  const sentPanel = document.getElementById('shared-sent');
+  const tabReceived = document.getElementById('tab-received');
+  const tabSent = document.getElementById('tab-sent');
+  
+  if (receivedPanel && sentPanel) {
+    if (tab === 'received') {
+      receivedPanel.classList.remove('hidden');
+      sentPanel.classList.add('hidden');
+      if (tabReceived) tabReceived.classList.add('border-blue-400', 'text-blue-400');
+      if (tabSent) tabSent.classList.remove('border-blue-400', 'text-blue-400');
+    } else {
+      receivedPanel.classList.add('hidden');
+      sentPanel.classList.remove('hidden');
+      if (tabSent) tabSent.classList.add('border-blue-400', 'text-blue-400');
+      if (tabReceived) tabReceived.classList.remove('border-blue-400', 'text-blue-400');
+    }
+  }
+  renderShared();
+}
+
+function renderShared() {
+  const receivedContainer = document.getElementById('sharedList');
+  const sentContainer = document.getElementById('sentSharesList');
+  const sharedEmptyState = document.getElementById('sharedEmptyState');
+  const sentEmptyState = document.getElementById('sentEmptyState');
+  
+  if (G.sharedTab === 'received') {
+    if (!receivedContainer) return;
+    const received = G.shares.filter(s => s.recipient_email === G.currentUser.email && s.status === 'active');
+    
+    if (received.length === 0) {
+      if (sharedEmptyState) sharedEmptyState.classList.remove('hidden');
+      if (receivedContainer) receivedContainer.classList.add('hidden');
+      return;
+    }
+    
+    if (sharedEmptyState) sharedEmptyState.classList.add('hidden');
+    receivedContainer.classList.remove('hidden');
+    receivedContainer.innerHTML = received.map(s => `
+      <div class="glass-card rounded-xl p-4 border border-purple-500/20 cursor-pointer" onclick="openPreviewModal('${s.document_id}')">
+        <div class="flex items-center gap-3">
+          <i class="fas fa-share-alt text-purple-400"></i>
+          <div><p class="text-white font-medium">${s.documents?.name || 'Document'}</p><p class="text-xs text-blue-300/60">Partagé par: ${s.sender_id}</p></div>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    if (!sentContainer) return;
+    const sent = G.shares.filter(s => s.sender_id === G.currentUser.id);
+    
+    if (sent.length === 0) {
+      if (sentEmptyState) sentEmptyState.classList.remove('hidden');
+      if (sentContainer) sentContainer.classList.add('hidden');
+      return;
+    }
+    
+    if (sentEmptyState) sentEmptyState.classList.add('hidden');
+    sentContainer.classList.remove('hidden');
+    sentContainer.innerHTML = sent.map(s => `
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+        <div class="flex items-center justify-between">
+          <div><p class="text-white font-medium">${s.documents?.name || 'Document'}</p><p class="text-xs text-blue-300/60">À: ${s.recipient_email}</p></div>
+          <div class="flex gap-2">
+            <span class="text-xs px-2 py-1 rounded-full ${s.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${s.status}</span>
+            ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="text-xs text-red-400 hover:text-red-300"><i class="fas fa-ban"></i></button>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+async function generatePublicLink(docId, expiresInDays = 7) {
+  try {
+    const token = generateId();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+    
+    const { error } = await G.supabase.from('public_shares').insert({
+      document_id: docId,
+      token: token,
+      expires_at: expiresAt.toISOString(),
+      created_by: G.currentUser.id
+    });
+    if (error) throw error;
+    
+    const shareUrl = `${window.location.origin}/public/${token}`;
+    const linkInput = document.getElementById('shareLinkInput');
+    const generatedLinkDiv = document.getElementById('generatedLink');
+    
+    if (linkInput) linkInput.value = shareUrl;
+    if (generatedLinkDiv) generatedLinkDiv.classList.remove('hidden');
+    
+    showToast(`Lien public généré`, 'success');
+    return shareUrl;
+  } catch (err) {
+    console.error(err);
+    showToast('Erreur lors de la génération du lien', 'error');
+  }
+}
+
+function copyShareLink() {
+  const linkInput = document.getElementById('shareLinkInput');
+  if (linkInput && linkInput.value) {
+    navigator.clipboard.writeText(linkInput.value);
+    showToast('Lien copié dans le presse-papier', 'success');
+  }
+}
+
+// ─── Workflows (corrigé) ───
+function renderWorkflows() {
+  const container = document.getElementById('wfKanban');
+  if (!container) return;
+  
+  const statuses = ['pending', 'in_review', 'approved', 'rejected'];
+  container.innerHTML = statuses.map(status => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+      <h4 class="text-sm font-semibold ${getWfStatusColor(status)} mb-3">${getWfStatusLabel(status)}</h4>
+      <div class="space-y-2">
+        ${G.workflows.filter(w => w.status === status).map(wf => `
+          <div class="p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50" onclick="openWfDetail('${wf.id}')">
+            <p class="text-white text-sm font-medium">${wf.title}</p>
+            <p class="text-xs text-blue-300/60">Priorité: ${wf.priority}</p>
+            ${wf.assignee_id ? `<p class="text-xs text-green-400/60 mt-1">Assigné à: ${wf.assignee_id === G.currentUser.id ? 'Moi' : wf.assignee_id.substring(0,8)}</p>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+  
+  // Mettre à jour les statistiques
+  const pendingCount = G.workflows.filter(w => w.status === 'pending').length;
+  const inReviewCount = G.workflows.filter(w => w.status === 'in_review').length;
+  const approvedCount = G.workflows.filter(w => w.status === 'approved').length;
+  const rejectedCount = G.workflows.filter(w => w.status === 'rejected').length;
+  
+  const wfKpiStrip = document.getElementById('wfKpiStrip');
+  if (wfKpiStrip) {
+    wfKpiStrip.innerHTML = `
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-orange-400 text-xl font-bold">${pendingCount}</p><p class="text-xs text-blue-300/60">En attente</p></div>
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-blue-400 text-xl font-bold">${inReviewCount}</p><p class="text-xs text-blue-300/60">En révision</p></div>
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-green-400 text-xl font-bold">${approvedCount}</p><p class="text-xs text-blue-300/60">Approuvés</p></div>
+      <div class="glass-card rounded-xl p-2 text-center"><p class="text-red-400 text-xl font-bold">${rejectedCount}</p><p class="text-xs text-blue-300/60">Rejetés</p></div>
+    `;
+  }
+}
+
+function getWfStatusClass(status) {
+  const classes = { 
+    pending: 'bg-orange-500/20 text-orange-300', 
+    in_review: 'bg-blue-500/20 text-blue-300', 
+    approved: 'bg-green-500/20 text-green-300', 
+    rejected: 'bg-red-500/20 text-red-300' 
+  };
+  return classes[status] || 'bg-gray-500/20 text-gray-300';
+}
+
+function getWfStatusLabel(status) {
+  const labels = { 
+    pending: 'En attente', 
+    in_review: 'En révision', 
+    approved: 'Approuvé', 
+    rejected: 'Rejeté' 
+  };
+  return labels[status] || status;
+}
+
+function getWfStatusColor(status) {
+  const colors = { 
+    pending: 'text-orange-400', 
+    in_review: 'text-blue-400', 
+    approved: 'text-green-400', 
+    rejected: 'text-red-400' 
+  };
+  return colors[status] || 'text-gray-400';
+}
+
+function openCreateWorkflowModal() {
+  const docSelect = document.getElementById('wfDocId');
+  if (docSelect) {
+    docSelect.innerHTML = '<option value="">-- Aucun --</option>' + 
+      G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${doc.name}</option>`).join('');
+  }
+  
+  const assigneeSelect = document.getElementById('wfAssignee');
+  if (assigneeSelect) {
+    assigneeSelect.innerHTML = '<option value="">-- Non assigné --</option>' + 
+      G.users.map(user => `<option value="${user.id}">${user.name}</option>`).join('');
+  }
+  
+  const modal = document.getElementById('workflowModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeWorkflowModal() {
+  const modal = document.getElementById('workflowModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function createWorkflow(e) {
+  e.preventDefault();
+  const title = document.getElementById('wfTitle')?.value;
+  if (!title) {
+    showToast('Veuillez entrer un titre', 'warning');
+    return;
+  }
+  
+  const steps = [];
+  const stepsInput = document.getElementById('wfSteps')?.value;
+  if (stepsInput) {
+    steps.push(...stepsInput.split(',').map(s => s.trim()).filter(s => s));
+  }
+  
+  const newWf = {
+    id: generateId(),
+    title,
+    description: document.getElementById('wfDesc')?.value || '',
+    priority: document.getElementById('wfPriority')?.value || 'medium',
+    status: 'pending',
+    assignee_id: document.getElementById('wfAssignee')?.value || null,
+    document_id: document.getElementById('wfDocId')?.value || null,
+    due_date: document.getElementById('wfDueDate')?.value || null,
+    created_by: G.currentUser.id,
+    company_id: G.currentUser.companyId,
+    steps: steps,
+    current_step: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('workflows').insert(newWf);
+  if (error) {
+    showToast('Erreur création workflow: ' + error.message, 'error');
+    return;
+  }
+  
+  G.workflows.unshift(newWf);
+  showToast('Workflow créé', 'success');
+  closeWorkflowModal();
+  renderWorkflows();
+  
+  await addAuditLog('workflow_create', 'workflow', newWf.id, `Titre: ${title}`);
+}
+
+async function actOnWorkflow(action, comment) {
+  if (!G.currentWfId) return;
+  
+  const wf = G.workflows.find(w => w.id === G.currentWfId);
+  if (!wf) return;
+  
+  const commentText = document.getElementById('wfDetailComment')?.value || comment || '';
+  
+  const actionRecord = {
+    id: generateId(),
+    workflow_id: G.currentWfId,
+    user_id: G.currentUser.id,
+    action: action,
+    comment: commentText,
+    step_index: wf.current_step,
+    created_at: new Date().toISOString()
+  };
+  
+  await G.supabase.from('workflow_actions').insert(actionRecord);
+  
+  let newStatus = wf.status;
+  let newStep = wf.current_step;
+  
+  if (action === 'approve') {
+    if (wf.current_step + 1 >= (wf.steps?.length || 0)) {
+      newStatus = 'approved';
+    } else {
+      newStep = wf.current_step + 1;
+    }
+  } else if (action === 'reject') {
+    newStatus = 'rejected';
+  } else if (action === 'request_changes') {
+    newStatus = 'in_review';
+  }
+  
+  await G.supabase
+    .from('workflows')
+    .update({ 
+      status: newStatus, 
+      current_step: newStep,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', G.currentWfId);
+  
+  wf.status = newStatus;
+  wf.current_step = newStep;
+  
+  showToast(`Workflow ${action === 'approve' ? 'approuvé' : action === 'reject' ? 'rejeté' : 'mis à jour'}`, 'success');
+  renderWorkflows();
+  closeWfDetail();
+  
+  await addAuditLog(`workflow_${action}`, 'workflow', G.currentWfId, `Commentaire: ${commentText || 'Aucun'}`);
+}
+
+function openWfDetail(wfId) {
+  G.currentWfId = wfId;
+  const modal = document.getElementById('wfDetailModal');
+  if (modal) modal.classList.remove('hidden');
+  
+  const wf = G.workflows.find(w => w.id === wfId);
+  if (wf) {
+    const titleEl = document.getElementById('wfDetailTitle');
+    if (titleEl) titleEl.textContent = wf.title;
+    
+    const metaEl = document.getElementById('wfDetailMeta');
+    if (metaEl) {
+      metaEl.innerHTML = `
+        <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+        <span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span>
+        <span class="text-xs text-blue-300/60">Créé le ${formatDate(wf.created_at)}</span>
+        ${wf.assignee_id ? `<span class="text-xs text-green-400/60">Assigné: ${G.users.find(u => u.id === wf.assignee_id)?.name || 'Inconnu'}</span>` : ''}
+      `;
+    }
+    
+    const stepsContainer = document.getElementById('wfDetailSteps');
+    if (stepsContainer) {
+      if (wf.steps && Array.isArray(wf.steps) && wf.steps.length > 0) {
+        stepsContainer.innerHTML = wf.steps.map((step, idx) => `
+          <div class="flex items-center gap-3 p-2 rounded-lg ${idx <= wf.current_step ? 'bg-green-500/10 border border-green-500/30' : 'bg-slate-800/50'}">
+            <div class="w-6 h-6 rounded-full flex items-center justify-center ${idx < wf.current_step ? 'bg-green-500 text-white' : idx === wf.current_step ? 'bg-blue-500 text-white' : 'bg-slate-600 text-gray-400'}">
+              ${idx + 1}
+            </div>
+            <div class="flex-1">
+              <p class="text-white text-sm">${step}</p>
+              ${idx === wf.current_step && wf.status === 'pending' ? '<p class="text-xs text-blue-400">En attente de validation</p>' : ''}
+            </div>
+            ${idx < wf.current_step ? '<i class="fas fa-check-circle text-green-400"></i>' : ''}
+          </div>
+        `).join('');
+        
+        const progress = ((wf.current_step + 1) / wf.steps.length) * 100;
+        const progressBar = document.getElementById('wfDetailProgressBar');
+        const progressText = document.getElementById('wfDetailProgress');
+        if (progressBar) progressBar.style.width = `${progress}%`;
+        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+      } else {
+        stepsContainer.innerHTML = '<p class="text-blue-300/50 text-sm">Aucune étape définie</p>';
+      }
+    }
+    
+    if (wf.document_id) {
+      const doc = G.documents.find(d => d.id === wf.document_id);
+      const docContainer = document.getElementById('wfDetailDoc');
+      if (docContainer && doc) {
+        docContainer.classList.remove('hidden');
+        docContainer.innerHTML = `
+          <p class="text-xs text-blue-300/60 mb-1">Document lié</p>
+          <div class="flex items-center gap-2 cursor-pointer" onclick="openPreviewModal('${doc.id}')">
+            <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-blue-400"></i>
+            <span class="text-white text-sm">${doc.name}</span>
+          </div>
+        `;
+      }
+    } else {
+      const docContainer = document.getElementById('wfDetailDoc');
+      if (docContainer) docContainer.classList.add('hidden');
+    }
+    
+    const actionsContainer = document.getElementById('wfDetailActions');
+    if (actionsContainer) {
+      const isAssignee = wf.assignee_id === G.currentUser.id;
+      const isCreator = wf.created_by === G.currentUser.id;
+      const isAdmin = G.currentUser.role === 'admin';
+      
+      if ((isAssignee || isCreator || isAdmin) && wf.status === 'pending') {
+        actionsContainer.classList.remove('hidden');
+      } else {
+        actionsContainer.classList.add('hidden');
+      }
+    }
+    
+    loadWorkflowHistory(wfId);
+  }
+}
+
+async function loadWorkflowHistory(wfId) {
+  const { data: actions, error } = await G.supabase
+    .from('workflow_actions')
+    .select('*, profiles!user_id(name)')
+    .eq('workflow_id', wfId)
+    .order('created_at', { ascending: false });
+  
+  const historyContainer = document.getElementById('wfDetailHistory');
+  if (historyContainer) {
+    if (!actions || actions.length === 0) {
+      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucune activité</p>';
+    } else {
+      historyContainer.innerHTML = actions.map(a => `
+        <div class="p-2 border-b border-blue-500/10">
+          <p class="text-white text-xs">${a.profiles?.name || 'Utilisateur'} a ${getActionLabel(a.action)}</p>
+          <p class="text-blue-300/50 text-[10px]">${formatDate(a.created_at)}</p>
+          ${a.comment ? `<p class="text-xs text-blue-300/70 mt-1">"${a.comment}"</p>` : ''}
+        </div>
+      `).join('');
+    }
+  }
+}
+
+async function addWfComment() {
+  const comment = document.getElementById('wfCommentInput')?.value;
+  if (!comment || !G.currentWfId) return;
+  
+  const actionRecord = {
+    id: generateId(),
+    workflow_id: G.currentWfId,
+    user_id: G.currentUser.id,
+    action: 'comment',
+    comment: comment,
+    created_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('workflow_actions').insert(actionRecord);
+  if (!error) {
+    const input = document.getElementById('wfCommentInput');
+    if (input) input.value = '';
+    loadWorkflowHistory(G.currentWfId);
+    showToast('Commentaire ajouté', 'success');
+  }
+}
+
+function getActionLabel(action) {
+  const labels = { approve: 'approuvé', reject: 'rejeté', request_changes: 'demandé des modifications', comment: 'commenté' };
+  return labels[action] || action;
+}
+
+function closeWfDetail() {
+  const modal = document.getElementById('wfDetailModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentWfId = null;
+}
+
+function filterWorkflows(status) {
+  G.wfFilter = status;
+  document.querySelectorAll('.wf-filter-btn').forEach(btn => {
+    if (btn.dataset.wf === status) {
+      btn.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/30');
+      btn.classList.remove('text-gray-400', 'border-blue-500/10');
+    } else {
+      btn.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/30');
+      btn.classList.add('text-gray-400', 'border-blue-500/10');
+    }
+  });
+  renderWorkflows();
+}
+
+function searchWorkflows(query) {
+  if (!query) {
+    renderWorkflows();
+    return;
+  }
+  
+  const filtered = G.workflows.filter(w => w.title.toLowerCase().includes(query.toLowerCase()));
+  const container = document.getElementById('wfKanban');
+  
+  if (container) {
+    container.innerHTML = filtered.map(wf => `
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
+        <p class="text-white font-medium">${wf.title}</p>
+        <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+      </div>
+    `).join('');
+  }
+}
+
+function setWfView(view) {
+  G.wfView = view;
+  const kanban = document.getElementById('wfKanban');
+  const listView = document.getElementById('wfListView');
+  const btnKanban = document.getElementById('wfViewKanban');
+  const btnList = document.getElementById('wfViewList');
+  
+  if (view === 'kanban') {
+    if (kanban) kanban.classList.remove('hidden');
+    if (listView) listView.classList.add('hidden');
+    if (btnKanban) btnKanban.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    if (btnList) btnList.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    renderWorkflows();
+  } else {
+    if (kanban) kanban.classList.add('hidden');
+    if (listView) listView.classList.remove('hidden');
+    if (btnList) btnList.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    if (btnKanban) btnKanban.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    renderWorkflowsList();
+  }
+}
+
+function renderWorkflowsList() {
+  const container = document.getElementById('wfListView');
+  if (!container) return;
+  
+  let filtered = G.workflows;
+  if (G.wfFilter) filtered = filtered.filter(w => w.status === G.wfFilter);
+  
+  container.innerHTML = filtered.map(wf => `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
+      <div class="flex items-center justify-between">
+        <div><p class="text-white font-medium">${wf.title}</p><p class="text-xs text-blue-300/60">${formatDate(wf.created_at)}</p></div>
+        <span class="text-xs px-2 py-1 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+      </div>
+    </div>
+  `).join('');
+}
 
 // ─── Users ───
 function renderUsers() {
@@ -763,18 +2837,18 @@ function renderUsers() {
           <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
           <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
         </div>
-       </td>
-      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span> </td>
-      <td class="p-4 hidden md:table-cell">- </td>
-      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span> </td>
+      </td>
+      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span></td>
+      <td class="p-4 hidden md:table-cell">-</td>
+      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span></td>
       <td class="p-4">
         <div class="flex gap-2">
           ${u.status === 'pending_validation' && canValidateUsers() ? `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
           ${canValidateUsers() ? `<button onclick="resetUserPassword('${u.email}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Réinitialiser mot de passe"><i class="fas fa-key"></i></button>` : ''}
           ${canValidateUsers() ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
         </div>
-       </td>
-     </tr>
+      </td>
+    </tr>
   `).join('');
 }
 
@@ -1853,7 +3927,6 @@ function openSignModal() {
   // Afficher les signatures existantes
   loadExistingSignatures(doc.id);
 }
-
 function loadExistingSignatures(docId) {
   const existingSignatures = G.signatures.filter(s => s.document_id === docId);
   const container = document.getElementById('existingSignatures');
@@ -2138,7 +4211,6 @@ function viewSignature(signatureId) {
   `;
   document.body.appendChild(modal);
 }
-
 function openRequestSignatureModal() {
   const modal = document.getElementById('requestSignatureModal');
   if (modal) modal.classList.remove('hidden');
@@ -2911,29 +4983,32 @@ function formatDate(dateString) {
 }
 
 function getFileIcon(type) {
-  const map = {
-    pdf: { icon: 'fa-file-pdf', color: 'text-red-400' },
-    doc: { icon: 'fa-file-word', color: 'text-blue-400' },
-    docx: { icon: 'fa-file-word', color: 'text-blue-400' },
-    xls: { icon: 'fa-file-excel', color: 'text-green-400' },
-    xlsx: { icon: 'fa-file-excel', color: 'text-green-400' },
-    ppt: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
-    pptx: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
-    png: { icon: 'fa-file-image', color: 'text-purple-400' },
-    jpg: { icon: 'fa-file-image', color: 'text-purple-400' },
-    jpeg: { icon: 'fa-file-image', color: 'text-purple-400' },
-    gif: { icon: 'fa-file-image', color: 'text-purple-400' },
-    txt: { icon: 'fa-file-alt', color: 'text-gray-400' },
-    zip: { icon: 'fa-file-archive', color: 'text-yellow-400' },
-    mp4: { icon: 'fa-file-video', color: 'text-pink-400' },
-    mp3: { icon: 'fa-file-audio', color: 'text-green-400' },
-    json: { icon: 'fa-file-code', color: 'text-cyan-400' },
-    html: { icon: 'fa-file-code', color: 'text-cyan-400' },
-    css: { icon: 'fa-file-code', color: 'text-cyan-400' },
-    js: { icon: 'fa-file-code', color: 'text-cyan-400' }
+  const icons = { 
+    pdf: 'fa-file-pdf text-red-400',
+    doc: 'fa-file-word text-blue-400',
+    docx: 'fa-file-word text-blue-400',
+    xls: 'fa-file-excel text-green-400',
+    xlsx: 'fa-file-excel text-green-400',
+    ppt: 'fa-file-powerpoint text-orange-400',
+    pptx: 'fa-file-powerpoint text-orange-400',
+    png: 'fa-file-image text-purple-400',
+    jpg: 'fa-file-image text-purple-400',
+    jpeg: 'fa-file-image text-purple-400',
+    gif: 'fa-file-image text-purple-400',
+    webp: 'fa-file-image text-purple-400',
+    svg: 'fa-file-image text-purple-400',
+    txt: 'fa-file-alt text-gray-400',
+    zip: 'fa-file-archive text-yellow-400',
+    rar: 'fa-file-archive text-yellow-400',
+    mp4: 'fa-file-video text-pink-400',
+    mp3: 'fa-file-audio text-green-400',
+    json: 'fa-file-code text-cyan-400',
+    xml: 'fa-file-code text-cyan-400',
+    html: 'fa-file-code text-cyan-400',
+    css: 'fa-file-code text-cyan-400',
+    js: 'fa-file-code text-cyan-400'
   };
-  const m = map[type] || { icon: 'fa-file', color: 'text-blue-400' };
-  return `${m.icon} ${m.color}`;
+  return icons[type] || 'fa-file text-blue-400';
 }
 
 function getFileType(filename) {
@@ -3000,10 +5075,9 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
 // ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
-  window.addEventListener('error', (e) => {
+ window.addEventListener('error', (e) => {
     console.error('❌ Erreur globale:', {
       message: e.message,
       filename: e.filename,
@@ -3011,6 +5085,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       colno: e.colno,
       error: e.error
     });
+    // Optionnel: afficher un toast pour les erreurs critiques
+    if (e.message && !e.message.includes('ResizeObserver')) {
+      // showToast(`Erreur: ${e.message.substring(0, 100)}`, 'error');
+    }
   });
   
   window.addEventListener('unhandledrejection', (e) => {
@@ -3018,6 +5096,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       reason: e.reason,
       promise: e.promise
     });
+    // Optionnel: afficher un toast
+    // showToast(`Erreur: ${e.reason?.message || 'Promesse rejetée'}`, 'error');
   });
   
   console.log('🚀 Démarrage de l\'application SystemesGED v7.0');
@@ -3035,6 +5115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Exposer toutes les fonctions globalement
+// Exposer toutes les fonctions globalement
   window.handleLogin = handleLogin;
   window.handleRegister = handleRegister;
   window.handleLogout = handleLogout;
@@ -3207,7 +5288,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.closeNotifPanel = closeNotifPanel;
   window.toggleNotifications = toggleNotifications;
   window.markAllNotifRead = markAllNotifRead;
-  window.refreshShares = refreshShares;
+  
+  // Nouvelles fonctions
   window.openMoveModal = openMoveModal;
   window.closeMoveModal = closeMoveModal;
   window.confirmMoveDocument = confirmMoveDocument;
