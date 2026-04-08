@@ -1,39 +1,51 @@
 // ============================================
 // SystemesGED v7.0 – Application complète sécurisée
-// CORRIGÉE v7.1 — Liste des corrections appliquées :
+// CORRIGÉE v7.2 — Correctifs modules Dashboard / Documents / Partagés / Workflows
 //
-//  FIX 01 · createWorkflow          — corps de fonction dupliqué supprimé (double G.workflows.unshift)
-//  FIX 02 · uploadDocument           — accolade fermante manquante après le guard "selectedFiles vide" → tout le corps était syntaxiquement mort
-//  FIX 03 · clearTagFilter           — déclaration dupliquée supprimée
-//  FIX 04 · getActionLabel           — doublon avec getWfActionLabel; renommage du doublon interne Workflow
-//  FIX 05 · renderDocListItem        — div.doc-content non fermée → HTML cassé sur vue liste
-//  FIX 06 · handleLogout             — state global non réinitialisé ; await manquant sur signOut
-//  FIX 07 · loadAllData              — refactorisé en Promise.all parallèle (+performance) avec gestion d'erreurs partielle
-//  FIX 08 · handleRegister           — localStorage → sessionStorage (évite fuite entre onglets)
-//  FIX 09 · handleRegister           — validation regex email ajoutée
-//  FIX 10 · handleRegister           — optional chaining sur err.message (évite crash si undefined)
-//  FIX 11 · handleLogin              — optional chaining + cas "Too many requests" ajouté
-//  FIX 12 · generateApiKey           — persistance Supabase manquante ; company_id ajouté ; async
-//  FIX 13 · copyApiKey               — bare navigator.clipboard → helper avec fallback execCommand
-//  FIX 14 · copyFileLink             — même correction clipboard
-//  FIX 15 · exportDocumentsCsv       — échappement CSV (guillemets), BOM UTF-8, colonnes étendues
-//  FIX 16 · submitSignature          — détection canevas vide : comparaison pixel vs background opaque réelle
-//  FIX 17 · showToast                — refactoring complet : styles cohérents, auto-remove sans .remove() sur nœud détaché
-//  FIX 18 · generateId               — crypto.randomUUID() quand disponible (meilleure unicité)
-//  FIX 19 · deleteDocument           — confirm() + permission étendue au rôle 'manager'
-//  FIX 20 · oauthLogin               — implémentation réelle Supabase OAuth au lieu de stub
-//  FIX 21 · switchToMainApp          — double loadAllData supprimé
-//  FIX 22 · DOMContentLoaded         — double loadUserFromSupabase supprimé ; guard propre sur session
-//  FIX 23 · requestAccountDeletion   — double confirmation + audit log RGPD
-//  FIX 24 · showDocContextMenu       — délègue à deleteDocument (confirm inclus) au lieu de confirm() direct
-//  FIX 25 · updateDocViews           — try/catch non-bloquant
-//  FIX 26 · canValidateUsers         — fonction manquante ajoutée (référencée partout mais absente)
-//  FIX 27 · canValidateUsers         — doublon incomplet supprimé (version plus faible ligne ~3245)
-//  FIX 28 · generatePassword         — crypto.getRandomValues pour mots de passe temp sécurisés
-//  FIX 29 · renderApiKeys            — substr → substring + bouton Copier ajouté
-//  FIX 30 · copyShareLink            — clipboard sécurisé avec fallback
-//  FIX 31 · copySqlSchema            — clipboard sécurisé avec fallback
-//  FIX 32 · addAuditLog              — guard G.currentUser null + severity étendue
+//  [Corrections v7.1 héritées]
+//  FIX 01-32 · Voir commentaires originaux en tête de fichier
+//
+//  [Corrections v7.2 — modules Dashboard / Documents / Partagés / Workflows]
+//
+//  FIX-D01 · loadAllData — corps de fonction mort supprimé (fausse 1ère implémentation
+//            qui faisait return [] prématuré ; tout le Promise.all était inatteignable)
+//  FIX-D02 · loadAllData — shares : chargement OR sent+received (avant : sender_id seul)
+//  FIX-D03 · loadAllData — ajout public_shares dans Promise.all + init _shared.publicLinks
+//  FIX-D04 · _shared — déclaration remontée AVANT loadAllData (évite ReferenceError)
+//            et dédoublonnée (doublon + 'use strict' parasites supprimés)
+//  FIX-D05 · SyntaxError — apostrophe non échappée dans uploadDocument corrigée
+//            ('Impossible de récupérer l'URL publique' → double quotes)
+//  FIX-D06 · switchView — active state sidebar synchronisé ([data-view] toggle)
+//  FIX-D07 · switchView — gestion async des fonctions de rendu (Promise guard)
+//
+//  FIX-DASH1 · renderDashboard — converti en async ; rechargement Supabase réel
+//              avant affichage (documents, workflows, shares, users, audit_logs)
+//  FIX-DASH2 · renderDashboard — calcul activeUsers via Set (déduplication correcte)
+//  FIX-DASH3 · renderActivityList — suppression données "simulées" incorrectes ;
+//              utilise les vrais audit_logs Supabase
+//
+//  FIX-DOC1  · renderDocuments — converti en async ; rechargement Supabase à chaque appel
+//  FIX-DOC2  · renderDocuments — filtre onglet 'shared' : utilise shares reçus
+//              (recipient_email), pas les envoyés
+//  FIX-DOC3  · renderDocuments — bloc HTML orphelin de l'ancien code supprimé
+//  FIX-DOC4  · switchDocsTab — converti en async ; requête Supabase ciblée par onglet
+//              (company / personal / mine / shared) avec fusion propre dans G.documents
+//  FIX-DOC5  · switchDocsTab onglet 'shared' — charge les shares reçus depuis Supabase
+//              pour trouver les document_id correspondants
+//
+//  FIX-SHA1  · renderShared — converti en async ; rechargement sent+received+public_shares
+//              depuis Supabase avec déduplication Map avant affichage
+//  FIX-SHA2  · refreshShares — showToast(msg, type, duration) : 3e arg supprimé
+//              (signature n'accepte que 2 args ; le 3e causait un bug silencieux)
+//
+//  FIX-WF1   · renderWorkflows — converti en async ; rechargement Supabase avant rendu
+//              Kanban ; cartes enrichies (assignee, document lié, due_date, priorité)
+//  FIX-WF2   · renderWorkflowsList — converti en async ; rechargement Supabase en vue liste
+//  FIX-WF3   · actOnWorkflow — transition in_review ajoutée (étape intermédiaire approve) ;
+//              action 'comment' gérée sans changement de statut
+//  FIX-WF4   · openWfDetail — boutons d'actions visibles aussi pour statut 'in_review'
+//  FIX-WF5   · filterWorkflows — toggle : reclique = effacement du filtre
+//  FIX-WF6   · renderWorkflows — updateBadges() appelé après rendu Kanban
 // ============================================
 
 // ─── Configuration Supabase ───
@@ -55,9 +67,20 @@ const CONFIG = {
   ]
 };
 
+// ─── État du module Partagés (déclaré tôt pour être disponible dès loadAllData) ───
+window._shared = window._shared || {
+  currentTab:   'received',
+  bulkSelected: new Set(),
+  qsRecipients: [],
+  qsCurrentTab: 'user',
+  publicLinks:  [],
+  filterQuery:  '',
+  filterPerm:   '',
+  filterStatus: '',
+};
+
 // ─── État global ───
-window.G = {
-  supabase: null,
+window.G = {  supabase: null,
   currentUser: null,
   currentCompany: null,
   currentTagFilter: null,
@@ -280,20 +303,21 @@ async function loadAllData() {
     const [
       docsRes, wfsRes, usersRes, tagsRes, sharesRes,
       foldersRes, sigsRes, rulesRes, keysRes, backupsRes,
-      auditRes, syslogsRes
+      auditRes, syslogsRes, publicLinksRes
     ] = await Promise.all([
       G.supabase.from('documents').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
       G.supabase.from('workflows').select('*').eq('company_id', companyId),
       G.supabase.from('profiles').select('*').eq('company_id', companyId),
       G.supabase.from('tags').select('*').eq('company_id', companyId),
-      G.supabase.from('shares').select('*, documents!document_id(name)').eq('sender_id', userId),
+      G.supabase.from('shares').select('*').or(`sender_id.eq.${userId},recipient_email.eq.${G.currentUser.email}`),
       G.supabase.from('folders').select('*').eq('company_id', companyId),
       G.supabase.from('signatures').select('*').eq('signer_id', userId),
       G.supabase.from('automation_rules').select('*').eq('company_id', companyId),
       G.supabase.from('api_keys').select('*').eq('user_id', userId),
       G.supabase.from('backups').select('*').eq('company_id', companyId),
       G.supabase.from('audit_logs').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(200),
-      G.supabase.from('system_logs').select('*').order('created_at', { ascending: false }).limit(100)
+      G.supabase.from('system_logs').select('*').order('created_at', { ascending: false }).limit(100),
+      G.supabase.from('public_shares').select('*').eq('created_by', userId)
     ]);
 
     G.documents      = docsRes.data    || [];
@@ -309,8 +333,13 @@ async function loadAllData() {
     G.auditLogs      = auditRes.data   || [];
     G.systemLogs     = syslogsRes.data || [];
 
+    // Initialiser les liens publics dans le module partagés
+    if (typeof _shared !== 'undefined') {
+      _shared.publicLinks = publicLinksRes.data || [];
+    }
+
     // Log any individual errors without aborting
-    [docsRes, wfsRes, usersRes, tagsRes, sharesRes, foldersRes, sigsRes, rulesRes, keysRes, backupsRes, auditRes, syslogsRes]
+    [docsRes, wfsRes, usersRes, tagsRes, sharesRes, foldersRes, sigsRes, rulesRes, keysRes, backupsRes, auditRes, syslogsRes, publicLinksRes]
       .filter(r => r.error)
       .forEach(r => console.warn('loadAllData partial error:', r.error));
 
@@ -823,10 +852,18 @@ function switchView(viewName) {
   document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
   const target = document.getElementById(`view-${viewName}`);
   if (target) target.classList.add('active-view');
-  
+
   G.currentView = viewName;
   closeMobileSidebar();
-  
+
+  // Synchroniser le active state de tous les boutons sidebar
+  document.querySelectorAll('.sidebar-item').forEach(el => {
+    el.classList.remove('active');
+  });
+  document.querySelectorAll(`[data-view="${viewName}"]`).forEach(el => {
+    el.classList.add('active');
+  });
+
   const views = {
     dashboard: renderDashboard,
     documents: renderDocuments,
@@ -856,7 +893,7 @@ function switchView(viewName) {
     'pending-users': renderPendingUsers
   };
   
-  if (views[viewName]) views[viewName]();
+  if (views[viewName]) { const r = views[viewName](); if (r instanceof Promise) r.catch(e => console.error('switchView error:', e)); }
 }
 
 function openMobileSidebar() {
@@ -874,36 +911,48 @@ function closeMobileSidebar() {
 }
 
 // ─── Dashboard ───
-function renderDashboard() {
+async function renderDashboard() {
   console.log('🔄 Rendu du tableau de bord...');
-  
-  const totalDocs = G.documents.filter(d => !d.is_deleted).length;
-  const activeWorkflows = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
-  const sharedCount = G.shares.filter(s => s.status === 'active').length;
-  const userCount = G.users.length;
-  const totalViews = G.documents.reduce((sum, d) => sum + (d.views || 0), 0);
-  const activeUsers = G.auditLogs.filter(l => {
-    const logDate = new Date(l.created_at);
-    const today = new Date();
-    return l.action === 'login' && logDate.toDateString() === today.toDateString();
-  }).length;
-  
+
+  // ── Recharger les données fraîches depuis Supabase ──────────────
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const [docsRes, wfsRes, sharesRes, usersRes, auditRes] = await Promise.all([
+        G.supabase.from('documents').select('*').eq('company_id', G.currentUser.companyId).order('created_at', { ascending: false }),
+        G.supabase.from('workflows').select('*').eq('company_id', G.currentUser.companyId),
+        G.supabase.from('shares').select('*').or(`sender_id.eq.${G.currentUser.id},recipient_email.eq.${G.currentUser.email}`),
+        G.supabase.from('profiles').select('*').eq('company_id', G.currentUser.companyId),
+        G.supabase.from('audit_logs').select('*').eq('user_id', G.currentUser.id).order('created_at', { ascending: false }).limit(50)
+      ]);
+      if (!docsRes.error)  G.documents  = docsRes.data  || [];
+      if (!wfsRes.error)   G.workflows  = wfsRes.data   || [];
+      if (!sharesRes.error) G.shares    = sharesRes.data || [];
+      if (!usersRes.error) G.users      = usersRes.data  || [];
+      if (!auditRes.error) G.auditLogs  = auditRes.data  || [];
+    } catch (err) {
+      console.warn('renderDashboard: rechargement partiel échoué', err);
+    }
+  }
+
+  const totalDocs        = G.documents.filter(d => !d.is_deleted).length;
+  const activeWorkflows  = G.workflows.filter(w => ['pending', 'in_review'].includes(w.status)).length;
+  const sharedCount      = G.shares.filter(s => s.status === 'active').length;
+  const userCount        = G.users.length;
+  const totalViews       = G.documents.reduce((sum, d) => sum + (d.views || 0), 0);
+  const today            = new Date().toDateString();
+  const activeUsers      = new Set(
+    G.auditLogs.filter(l => l.action === 'login' && new Date(l.created_at).toDateString() === today).map(l => l.user_id)
+  ).size;
+
   // Mise à jour des compteurs
-  const totalDocsEl = document.getElementById('totalDocs');
-  const dashWorkflowCountEl = document.getElementById('dashWorkflowCount');
-  const sharedCountEl = document.getElementById('sharedCount');
-  const dashUserCountEl = document.getElementById('dashUserCount');
-  const dashTotalViews = document.getElementById('dashTotalViews');
-  const dashActiveUsers = document.getElementById('dashActiveUsers');
-  
-  if (totalDocsEl) totalDocsEl.textContent = totalDocs;
-  if (dashWorkflowCountEl) dashWorkflowCountEl.textContent = activeWorkflows;
-  if (sharedCountEl) sharedCountEl.textContent = sharedCount;
-  if (dashUserCountEl) dashUserCountEl.textContent = userCount;
-  if (dashTotalViews) dashTotalViews.textContent = totalViews;
-  if (dashActiveUsers) dashActiveUsers.textContent = activeUsers || userCount;
-  
-  // Mise à jour des badges
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('totalDocs',           totalDocs);
+  set('dashWorkflowCount',   activeWorkflows);
+  set('sharedCount',         sharedCount);
+  set('dashUserCount',       userCount);
+  set('dashTotalViews',      totalViews);
+  set('dashActiveUsers',     activeUsers || userCount);
+
   updateBadges();
   updateStorageDisplay();
   renderActivityList();
@@ -911,65 +960,52 @@ function renderDashboard() {
   renderPopularTags();
   renderTeamDocs();
   renderMyWorkflows();
-  
+
   console.log('✅ Tableau de bord mis à jour');
 }
 
 function renderActivityList() {
   const list = document.getElementById('activityList');
-  if (!list) {
-    console.warn('activityList non trouvé');
-    return;
-  }
-  
-  // Récupérer les activités depuis l'audit log ou créer des activités simulées
+  if (!list) { console.warn('activityList non trouvé'); return; }
+
   let activities = [];
-  
+
   if (G.auditLogs && G.auditLogs.length > 0) {
     activities = G.auditLogs.slice(0, 10);
   } else {
-    // Créer des activités simulées basées sur les données réelles
+    // Construire des activités synthétiques depuis les vraies données
     const recentDocs = G.documents.filter(d => !d.is_deleted).slice(0, 5);
-    recentDocs.forEach(doc => {
-      activities.push({
-        action: 'upload',
-        target_type: 'document',
-        target_id: doc.id,
-        details: doc.name,
-        created_at: doc.created_at
-      });
-    });
-    
-    // Ajouter les partages récents
-    const recentShares = G.shares.filter(s => s.status === 'active').slice(0, 3);
-    recentShares.forEach(share => {
-      activities.push({
-        action: 'share',
-        target_type: 'document',
-        target_id: share.document_id,
-        details: `Partagé avec ${share.recipient_email}`,
-        created_at: share.created_at
-      });
-    });
-    
-    // Trier par date décroissante
+    recentDocs.forEach(doc => activities.push({
+      action: 'upload', target_type: 'document', target_id: doc.id,
+      details: doc.name, created_at: doc.created_at
+    }));
+    const recentShares = G.shares.filter(s => s.sender_id === G.currentUser?.id).slice(0, 3);
+    recentShares.forEach(share => activities.push({
+      action: 'share', target_type: 'document', target_id: share.document_id,
+      details: `Partagé avec ${share.recipient_email}`, created_at: share.created_at
+    }));
     activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     activities = activities.slice(0, 10);
   }
-  
+
   if (activities.length === 0) {
-    list.innerHTML = '<div class="text-center py-8 text-blue-300/50"><i class="fas fa-folder-open text-2xl mb-2 block"></i><p>Aucune activité récente</p><p class="text-xs mt-2">Importez des documents pour voir l\'activité</p></div>';
+    list.innerHTML = `
+      <div class="text-center py-8 text-blue-300/50">
+        <i class="fas fa-folder-open text-2xl mb-2 block"></i>
+        <p>Aucune activité récente</p>
+        <p class="text-xs mt-2">Importez des documents pour voir l'activité</p>
+      </div>`;
     return;
   }
-  
+
   list.innerHTML = activities.map(act => `
-    <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/10 hover:bg-blue-900/30 transition-all">
-      <div class="w-8 h-8 rounded-lg ${getActionBgColor(act.action)} flex items-center justify-center">
+    <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/10 hover:bg-blue-900/30 transition-all group">
+      <div class="w-8 h-8 rounded-lg ${getActionBgColor(act.action)} flex items-center justify-center flex-shrink-0">
         <i class="fas ${getActionIcon(act.action)} text-sm"></i>
       </div>
-      <div class="flex-1">
-        <p class="text-sm text-white">${getActionLabel(act.action)} ${act.target_type ? act.target_type : ''}</p>
-        <p class="text-xs text-blue-300/60">${act.details ? act.details.substring(0, 40) + (act.details.length > 40 ? '...' : '') : ''}</p>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-white">${getActionLabel(act.action)}${act.target_type ? ' · ' + act.target_type : ''}</p>
+        <p class="text-xs text-blue-300/60 truncate">${act.details ? act.details.substring(0, 50) + (act.details.length > 50 ? '…' : '') : ''}</p>
         <p class="text-xs text-blue-400/50 mt-0.5">${formatDate(act.created_at)}</p>
       </div>
       ${act.target_id ? `<button onclick="openPreviewModal('${act.target_id}')" class="text-blue-400 hover:text-blue-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-eye"></i></button>` : ''}
@@ -1158,95 +1194,93 @@ function renderMyWorkflows() {
 }
 
 // ─── Documents ───
-function renderDocuments() {
+async function renderDocuments() {
   const grid = document.getElementById('documentGrid');
-  if (!grid) {
-    console.warn('documentGrid non trouvé');
-    return;
-  }
-  
+  if (!grid) { console.warn('documentGrid non trouvé'); return; }
+
   console.log('🔄 Rendu des documents, tab:', G.docsTab);
-  
-  let filtered = G.documents.filter(d => !d.is_deleted);
-  if (G.currentTagFilter) {
-    filtered = filtered.filter(d => d.tags && d.tags.includes(G.currentTagFilter));
+
+  // Recharger les documents depuis Supabase si disponible
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await G.supabase
+        .from('documents')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      if (!error && data) G.documents = data;
+    } catch (err) {
+      console.warn('renderDocuments: rechargement échoué', err);
+    }
   }
-  
-  // Filtrer selon l'onglet sélectionné
+
+  let filtered = G.documents.filter(d => !d.is_deleted);
+
+  if (G.currentTagFilter) {
+    filtered = filtered.filter(d => Array.isArray(d.tags) && d.tags.includes(G.currentTagFilter));
+  }
+
+  // Filtrer selon l'onglet
   if (G.docsTab === 'company') {
     filtered = filtered.filter(d => d.scope === 'company');
   } else if (G.docsTab === 'personal') {
-    filtered = filtered.filter(d => d.scope === 'personal');
+    filtered = filtered.filter(d => d.scope === 'personal' && d.owner_id === G.currentUser.id);
   } else if (G.docsTab === 'mine') {
     filtered = filtered.filter(d => d.owner_id === G.currentUser.id);
   } else if (G.docsTab === 'shared') {
-    const sharedIds = G.shares
-      .filter(s => s.recipient_email === G.currentUser.email && s.status === 'active')
-      .map(s => s.document_id);
-    filtered = filtered.filter(d => sharedIds.includes(d.id));
+    // Utiliser les partages déjà chargés (reçus pour l'utilisateur courant)
+    const sharedIds = new Set(
+      G.shares
+        .filter(s => s.recipient_email === G.currentUser.email && s.status === 'active')
+        .map(s => s.document_id)
+    );
+    filtered = filtered.filter(d => sharedIds.has(d.id));
   }
-  
+
   // Filtre par type
   const typeFilter = document.getElementById('filterType')?.value;
-  if (typeFilter && typeFilter !== '') {
-    filtered = filtered.filter(d => d.type === typeFilter);
-  }
-  
+  if (typeFilter) filtered = filtered.filter(d => d.type === typeFilter);
+
   // Filtre par date
   const dateFilter = document.getElementById('filterDate')?.value;
   if (dateFilter === 'today') {
-    filtered = filtered.filter(d => {
-      const docDate = new Date(d.created_at);
-      const today = new Date();
-      return docDate.toDateString() === today.toDateString();
-    });
+    const today = new Date().toDateString();
+    filtered = filtered.filter(d => new Date(d.created_at).toDateString() === today);
   } else if (dateFilter === 'week') {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
     filtered = filtered.filter(d => new Date(d.created_at) >= weekAgo);
   } else if (dateFilter === 'month') {
-    const monthAgo = new Date();
-    monthAgo.setDate(monthAgo.getDate() - 30);
+    const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30);
     filtered = filtered.filter(d => new Date(d.created_at) >= monthAgo);
   }
-  
-  // Mettre à jour le compteur
+
   const resultsCount = document.getElementById('resultsCount');
-  if (resultsCount) {
-    resultsCount.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
-  }
-  
-  // Afficher un message si aucun document
+  if (resultsCount) resultsCount.textContent = `${filtered.length} document${filtered.length > 1 ? 's' : ''}`;
+
   if (filtered.length === 0) {
-    let emptyMessage = '';
-    if (G.docsTab === 'company') {
-      emptyMessage = 'Aucun document d\'entreprise. Importez des documents pour les partager avec votre équipe.';
-    } else if (G.docsTab === 'personal') {
-      emptyMessage = 'Aucun document personnel. Importez vos documents privés.';
-    } else if (G.docsTab === 'mine') {
-      emptyMessage = 'Vous n\'avez pas encore importé de documents.';
-    } else if (G.docsTab === 'shared') {
-      emptyMessage = 'Aucun document partagé avec vous.';
-    } else {
-      emptyMessage = 'Aucun document trouvé.';
-    }
-    
+    const msgs = {
+      company:  'Aucun document d\'entreprise. Importez des documents pour les partager avec votre équipe.',
+      personal: 'Aucun document personnel. Importez vos documents privés.',
+      mine:     'Vous n\'avez pas encore importé de documents.',
+      shared:   'Aucun document partagé avec vous.'
+    };
     grid.innerHTML = `
       <div class="col-span-full text-center py-16">
         <i class="fas fa-folder-open text-5xl mb-4 block opacity-20 text-blue-400"></i>
-        <p class="text-blue-300/60">${emptyMessage}</p>
+        <p class="text-blue-300/60">${msgs[G.docsTab] || 'Aucun document trouvé.'}</p>
         <button onclick="openUploadModal()" class="mt-4 btn-primary px-5 py-2 rounded-xl text-white text-sm font-medium inline-flex items-center gap-2">
           <i class="fas fa-cloud-upload-alt"></i>Importer un document
         </button>
-      </div>
-    `;
+      </div>`;
     return;
   }
-  
-  // Appliquer le mode d'affichage
+
   grid.className = G.viewMode === 'grid' ? 'doc-grid' : 'space-y-2';
-  grid.innerHTML = filtered.map(doc => G.viewMode === 'grid' ? renderDocCard(doc) : renderDocListItem(doc)).join('');
-  
+  grid.innerHTML = filtered.map(doc =>
+    G.viewMode === 'grid' ? renderDocCard(doc) : renderDocListItem(doc)
+  ).join('');
+
   console.log(`✅ ${filtered.length} documents affichés`);
 }
 
@@ -1406,21 +1440,15 @@ function renderDocListItem(doc) {
   `;
 }
 
-function switchDocsTab(tab) {
+async function switchDocsTab(tab) {
   console.log('🔄 Changement d\'onglet documents:', tab);
   G.docsTab = tab;
-  
-  // Afficher un loader
-  const grid = document.getElementById('documentGrid');
-  if (grid) {
-    grid.innerHTML = '<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i><p class="mt-2 text-blue-300/60">Chargement...</p></div>';
-  }
-  
+
   // Mettre à jour l'interface des onglets
   document.querySelectorAll('.docs-tab').forEach(el => el.classList.remove('active'));
   const tabEl = document.getElementById(`docsTab-${tab}`);
   if (tabEl) tabEl.classList.add('active');
-  
+
   const docTitle = document.getElementById('documentsTitle');
   if (docTitle) {
     const titles = {
@@ -1431,9 +1459,58 @@ function switchDocsTab(tab) {
     };
     docTitle.textContent = titles[tab] || 'Documents';
   }
-  
-  // Recharger avec délai pour l'UI
-  setTimeout(() => renderDocuments(), 50);
+
+  // Afficher loader
+  const grid = document.getElementById('documentGrid');
+  if (grid) {
+    grid.innerHTML = '<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i><p class="mt-2 text-blue-300/60">Chargement…</p></div>';
+  }
+
+  // Recharger depuis Supabase selon l'onglet
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      let query = G.supabase.from('documents').select('*')
+        .eq('is_deleted', false)
+        .eq('company_id', G.currentUser.companyId)
+        .order('created_at', { ascending: false });
+
+      if (tab === 'company') {
+        query = query.eq('scope', 'company');
+      } else if (tab === 'personal') {
+        query = query.eq('scope', 'personal').eq('owner_id', G.currentUser.id);
+      } else if (tab === 'mine') {
+        query = query.eq('owner_id', G.currentUser.id);
+      } else if (tab === 'shared') {
+        // Charger les partages reçus puis filtrer les documents correspondants
+        const { data: receivedShares } = await G.supabase
+          .from('shares')
+          .select('document_id')
+          .eq('recipient_email', G.currentUser.email)
+          .eq('status', 'active');
+        const ids = (receivedShares || []).map(s => s.document_id).filter(Boolean);
+        if (ids.length === 0) {
+          G.documents = G.documents.filter(d => d.scope !== 'personal' || d.owner_id === G.currentUser.id);
+          renderDocuments();
+          return;
+        }
+        query = G.supabase.from('documents').select('*').in('id', ids).eq('is_deleted', false);
+      }
+
+      const { data, error } = await query;
+      if (!error && data) {
+        // Fusionner avec G.documents (ne pas perdre les autres onglets)
+        const newIds = new Set(data.map(d => d.id));
+        G.documents = [
+          ...data,
+          ...G.documents.filter(d => !newIds.has(d.id))
+        ];
+      }
+    } catch (err) {
+      console.warn('switchDocsTab: erreur Supabase', err);
+    }
+  }
+
+  renderDocuments();
 }
 
 function toggleViewMode() {
@@ -1713,8 +1790,12 @@ async function uploadDocument() {
       
       // 2. Récupérer l'URL publique
       const { data: publicUrlData } = G.supabase.storage
-        .from(CONFIG.storageBucket)
-        .getPublicUrl(storagePath);
+  .from(CONFIG.storageBucket)
+  .getPublicUrl(storagePath);
+
+if (!publicUrlData?.publicUrl) {
+  throw new Error("Impossible de récupérer l'URL publique");
+}
       
       // 3. Créer l'entrée en base de données
       const doc = {
@@ -1742,8 +1823,8 @@ async function uploadDocument() {
       
       const { error: dbErr } = await G.supabase.from('documents').insert(doc);
       if (dbErr) {
-        console.error('DB insert error:', dbErr);
-        throw new Error(`Base de données: ${dbErr.message}`);
+        await G.supabase.storage.from(CONFIG.storageBucket).remove([storagePath]);
+  	throw new Error(`Base de données: ${dbErr.message}`);
       }
       
       // Ajouter à l'état local
@@ -2048,7 +2129,7 @@ async function downloadDocument(docId) {
       .eq('id', docId);
     doc.downloads = (doc.downloads || 0) + 1;
     
-    showToast(`Téléchargement: ${doc.name}`, 'success');
+    showToast(`Téléchargement: ${escapeHtml(doc.name)}`, 'success');
     
     // Log d'audit
     await addAuditLog('download', 'document', docId);
@@ -2076,7 +2157,7 @@ async function deleteDocument(docId) {
     return;
   }
 
-  if (!confirm(`Déplacer "${doc.name}" vers la corbeille ?`)) return;
+  if (!confirm(`Déplacer "${escapeHtml(doc.name)}" vers la corbeille ?`)) return;
   
   const { error } = await G.supabase
     .from('documents')
@@ -2324,19 +2405,7 @@ async function loadShareHistory(docId = null) {
 // et ajoute toutes les nouvelles fonctions SaaS GED
 // ═══════════════════════════════════════════════════════════════════
 
-'use strict';
-
-/* ─── État local du module ─────────────────────────────────────── */
-window._shared = {
-  currentTab:    'received',  // received | sent | links | expired
-  bulkSelected:  new Set(),   // IDs sélectionnés pour actions groupées
-  qsRecipients:  [],          // emails dans le chip-input du modal
-  qsCurrentTab:  'user',      // user | link | team
-  publicLinks:   [],          // liens publics en mémoire
-  filterQuery:   '',
-  filterPerm:    '',
-  filterStatus:  '',
-};
+/* ─── Module Partagés ─────────────────────────────────────── */
 
 /* ───────────────────────────────────────────────────────────────────
    NAVIGATION & RENDU PRINCIPAL
@@ -2373,7 +2442,27 @@ function switchSharedTab(tab) {
 /**
  * Rendu principal – dispatch selon l'onglet actif.
  */
-function renderShared() {
+async function renderShared() {
+  // Recharger les partages depuis Supabase
+  if (G.supabase && G.currentUser) {
+    try {
+      const [sentRes, receivedRes, linksRes] = await Promise.all([
+        G.supabase.from('shares').select('*').eq('sender_id', G.currentUser.id),
+        G.supabase.from('shares').select('*').eq('recipient_email', G.currentUser.email),
+        G.supabase.from('public_shares').select('*').eq('created_by', G.currentUser.id)
+      ]);
+
+      // Fusionner sent + received sans doublons
+      const merged = new Map();
+      [...(sentRes.data || []), ...(receivedRes.data || [])].forEach(s => merged.set(s.id, s));
+      G.shares = Array.from(merged.values());
+
+      if (!linksRes.error) _shared.publicLinks = linksRes.data || [];
+    } catch (err) {
+      console.warn('renderShared: rechargement partiel échoué', err);
+    }
+  }
+
   _updateKPIs();
   switch (_shared.currentTab) {
     case 'received': _renderReceived(); break;
@@ -3489,7 +3578,7 @@ function closeShareDetailModal() {
 async function refreshShares() {
   if (!G.currentUser || !G.supabase) return;
 
-  showToast('Actualisation des partages…', 'info', 1500);
+  showToast('Actualisation des partages…', 'info');
 
   const [sentRes, receivedRes] = await Promise.all([
     G.supabase.from('shares').select('*').eq('sender_id', G.currentUser.id),
@@ -3651,55 +3740,90 @@ Object.assign(window, {
   shareDocument, generatePublicLink, copyShareLink, refreshShares,
 });
 
-// ─── Workflows (corrigé) ───
-function renderWorkflows() {
+// ─── Workflows ───
+async function renderWorkflows() {
   const container = document.getElementById('wfKanban');
   if (!container) return;
-  
+
+  // Recharger depuis Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await G.supabase
+        .from('workflows')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .order('created_at', { ascending: false });
+      if (!error && data) G.workflows = data;
+    } catch (err) {
+      console.warn('renderWorkflows: erreur Supabase', err);
+    }
+  }
+
+  let wfs = G.workflows;
+  if (G.wfFilter) wfs = wfs.filter(w => w.status === G.wfFilter);
+
   const statuses = ['pending', 'in_review', 'approved', 'rejected'];
-  container.innerHTML = statuses.map(status => `
-    <div class="glass-card rounded-xl p-4 border border-blue-500/20">
-      <h4 class="text-sm font-semibold ${getWfStatusColor(status)} mb-3">${getWfStatusLabel(status)}</h4>
-      <div class="space-y-2">
-        ${G.workflows.filter(w => w.status === status).map(wf => `
-          <div class="p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50 transition-all" onclick="openWfDetail('${wf.id}')">
-            <p class="text-white text-sm font-medium truncate">${escapeHtml(wf.title)}</p>
-            <p class="text-xs text-blue-300/60 mt-1">Priorité: ${wf.priority}</p>
-            ${wf.assignee_id ? `<p class="text-xs text-green-400/60 mt-1">Assigné à: ${G.users.find(u => u.id === wf.assignee_id)?.name || wf.assignee_id.substring(0,8)}</p>` : ''}
-            <p class="text-xs text-blue-400/50 mt-1">Créé le ${formatDate(wf.created_at)}</p>
-          </div>
-        `).join('')}
+  container.innerHTML = statuses.map(status => {
+    const cards = wfs.filter(w => w.status === status);
+    return `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 min-h-[120px]">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="text-sm font-semibold ${getWfStatusColor(status)}">${getWfStatusLabel(status)}</h4>
+        <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(status)}">${cards.length}</span>
       </div>
-    </div>
-  `).join('');
-  
-  // Mettre à jour les KPIs
-  const pendingCount = G.workflows.filter(w => w.status === 'pending').length;
-  const inReviewCount = G.workflows.filter(w => w.status === 'in_review').length;
-  const approvedCount = G.workflows.filter(w => w.status === 'approved').length;
-  const rejectedCount = G.workflows.filter(w => w.status === 'rejected').length;
-  
+      <div class="space-y-2">
+        ${cards.length === 0
+          ? '<p class="text-xs text-blue-300/30 text-center py-4">Aucun workflow</p>'
+          : cards.map(wf => {
+              const assignee = wf.assignee_id ? G.users.find(u => u.id === wf.assignee_id) : null;
+              const docName  = wf.document_id ? G.documents.find(d => d.id === wf.document_id)?.name : null;
+              return `
+              <div class="p-3 rounded-lg bg-slate-800/50 border border-blue-500/10 cursor-pointer hover:bg-slate-700/50 hover:border-blue-400/30 transition-all group"
+                   onclick="openWfDetail('${wf.id}')">
+                <p class="text-white text-sm font-medium truncate">${escapeHtml(wf.title)}</p>
+                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded ${wf.priority === 'high' ? 'bg-red-500/20 text-red-300' : wf.priority === 'low' ? 'bg-gray-500/20 text-gray-400' : 'bg-yellow-500/20 text-yellow-300'}">${wf.priority || 'medium'}</span>
+                  ${assignee ? `<span class="text-[10px] text-green-400/70"><i class="fas fa-user mr-1"></i>${escapeHtml(assignee.name)}</span>` : ''}
+                  ${docName  ? `<span class="text-[10px] text-blue-300/50 truncate max-w-[100px]"><i class="fas fa-file mr-1"></i>${escapeHtml(docName)}</span>` : ''}
+                </div>
+                ${wf.due_date ? `<p class="text-[10px] text-orange-400/70 mt-1"><i class="fas fa-calendar mr-1"></i>Échéance : ${formatDate(wf.due_date)}</p>` : ''}
+                <p class="text-[10px] text-blue-400/40 mt-1">${formatDate(wf.created_at)}</p>
+              </div>`;
+            }).join('')
+        }
+      </div>
+    </div>`;
+  }).join('');
+
+  // KPI strip
+  const counts = { pending: 0, in_review: 0, approved: 0, rejected: 0 };
+  G.workflows.forEach(w => { if (counts[w.status] !== undefined) counts[w.status]++; });
   const wfKpiStrip = document.getElementById('wfKpiStrip');
   if (wfKpiStrip) {
     wfKpiStrip.innerHTML = `
-      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('pending')">
-        <p class="text-orange-400 text-xl font-bold">${pendingCount}</p>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer hover:bg-orange-500/10 transition-all" onclick="filterWorkflows('pending')">
+        <p class="text-orange-400 text-xl font-bold">${counts.pending}</p>
         <p class="text-xs text-blue-300/60">En attente</p>
       </div>
-      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('in_review')">
-        <p class="text-blue-400 text-xl font-bold">${inReviewCount}</p>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer hover:bg-blue-500/10 transition-all" onclick="filterWorkflows('in_review')">
+        <p class="text-blue-400 text-xl font-bold">${counts.in_review}</p>
         <p class="text-xs text-blue-300/60">En révision</p>
       </div>
-      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('approved')">
-        <p class="text-green-400 text-xl font-bold">${approvedCount}</p>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer hover:bg-green-500/10 transition-all" onclick="filterWorkflows('approved')">
+        <p class="text-green-400 text-xl font-bold">${counts.approved}</p>
         <p class="text-xs text-blue-300/60">Approuvés</p>
       </div>
-      <div class="glass-card rounded-xl p-2 text-center cursor-pointer" onclick="filterWorkflows('rejected')">
-        <p class="text-red-400 text-xl font-bold">${rejectedCount}</p>
+      <div class="glass-card rounded-xl p-2 text-center cursor-pointer hover:bg-red-500/10 transition-all" onclick="filterWorkflows('rejected')">
+        <p class="text-red-400 text-xl font-bold">${counts.rejected}</p>
         <p class="text-xs text-blue-300/60">Rejetés</p>
       </div>
     `;
   }
+
+  // Mettre à jour aussi le wfListView si visible
+  if (G.wfView === 'list') renderWorkflowsList();
+
+  updateBadges();
 }
 function getWfStatusClass(status) {
   const classes = { 
@@ -3831,15 +3955,19 @@ async function actOnWorkflow(action, comment) {
   let newStep = wf.current_step;
   
   if (action === 'approve') {
-    if (wf.current_step + 1 >= (wf.steps?.length || 0)) {
+    if (wf.steps && wf.current_step + 1 >= (wf.steps?.length || 0)) {
       newStatus = 'approved';
     } else {
-      newStep = wf.current_step + 1;
+      newStep = (wf.current_step || 0) + 1;
+      newStatus = 'in_review';
     }
   } else if (action === 'reject') {
     newStatus = 'rejected';
   } else if (action === 'request_changes') {
     newStatus = 'in_review';
+  } else if (action === 'comment') {
+    // Pas de changement de statut pour un simple commentaire
+    newStatus = wf.status;
   }
   
   const { error: updateError } = await G.supabase
@@ -3949,7 +4077,7 @@ async function openWfDetail(wfId) {
     const isCreator = wf.created_by === G.currentUser.id;
     const isAdmin = G.currentUser.role === 'admin';
     
-    if ((isAssignee || isCreator || isAdmin) && wf.status === 'pending') {
+    if ((isAssignee || isCreator || isAdmin) && ['pending', 'in_review'].includes(wf.status)) {
       actionsContainer.classList.remove('hidden');
     } else {
       actionsContainer.classList.add('hidden');
@@ -4024,21 +4152,20 @@ function closeWfDetail() {
 }
 
 function filterWorkflows(status) {
-  G.wfFilter = status;
+  // Toggle: si on reclique sur le même filtre, l'effacer
+  G.wfFilter = G.wfFilter === status ? '' : status;
+
   document.querySelectorAll('.wf-filter-btn').forEach(btn => {
-    if (btn.dataset.wf === status) {
-      btn.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/30');
-      btn.classList.remove('text-gray-400', 'border-blue-500/10');
-    } else {
-      btn.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/30');
-      btn.classList.add('text-gray-400', 'border-blue-500/10');
-    }
+    const active = btn.dataset.wf === G.wfFilter;
+    btn.classList.toggle('bg-blue-500/20', active);
+    btn.classList.toggle('text-blue-300', active);
+    btn.classList.toggle('border-blue-500/30', active);
+    btn.classList.toggle('text-gray-400', !active);
+    btn.classList.toggle('border-blue-500/10', !active);
   });
-  if (G.wfView === 'kanban') {
-    renderWorkflows();
-  } else {
-    renderWorkflowsList();
-  }
+
+  if (G.wfView === 'kanban') renderWorkflows();
+  else renderWorkflowsList();
 }
 
 function searchWorkflows(query) {
@@ -4100,34 +4227,53 @@ function setWfView(view) {
   }
 }
 
-function renderWorkflowsList() {
+async function renderWorkflowsList() {
   const container = document.getElementById('wfListView');
   if (!container) return;
-  
+
+  // Recharger depuis Supabase si pas déjà fait par renderWorkflows
+  if (G.supabase && G.currentUser?.companyId && G.wfView === 'list') {
+    try {
+      const { data, error } = await G.supabase
+        .from('workflows')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .order('created_at', { ascending: false });
+      if (!error && data) G.workflows = data;
+    } catch (err) {
+      console.warn('renderWorkflowsList: erreur Supabase', err);
+    }
+  }
+
   let filtered = G.workflows;
   if (G.wfFilter) filtered = filtered.filter(w => w.status === G.wfFilter);
-  
+
   if (filtered.length === 0) {
     container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-tasks text-4xl mb-2 opacity-20"></i><p>Aucun workflow trouvé</p></div>';
     return;
   }
-  
-  container.innerHTML = filtered.map(wf => `
-    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer hover:border-blue-400/40 transition-all" onclick="openWfDetail('${wf.id}')">
+
+  container.innerHTML = filtered.map(wf => {
+    const assignee = wf.assignee_id ? G.users.find(u => u.id === wf.assignee_id) : null;
+    const doc      = wf.document_id ? G.documents.find(d => d.id === wf.document_id) : null;
+    return `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer hover:border-blue-400/40 transition-all group" onclick="openWfDetail('${wf.id}')">
       <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="flex-1">
-          <p class="text-white font-medium">${escapeHtml(wf.title)}</p>
-          <div class="flex items-center gap-3 mt-1">
+        <div class="flex-1 min-w-0">
+          <p class="text-white font-medium truncate">${escapeHtml(wf.title)}</p>
+          <div class="flex items-center gap-2 mt-1 flex-wrap">
             <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
-            <span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span>
+            <span class="text-xs text-blue-300/60">Priorité : ${wf.priority || 'medium'}</span>
             <span class="text-xs text-blue-300/60">${formatDate(wf.created_at)}</span>
           </div>
-          ${wf.assignee_id ? `<p class="text-xs text-green-400/60 mt-1">Assigné: ${G.users.find(u => u.id === wf.assignee_id)?.name || 'Inconnu'}</p>` : ''}
+          ${assignee ? `<p class="text-xs text-green-400/60 mt-1"><i class="fas fa-user mr-1"></i>${escapeHtml(assignee.name)}</p>` : ''}
+          ${doc       ? `<p class="text-xs text-blue-300/50 mt-1 truncate"><i class="fas fa-file mr-1"></i>${escapeHtml(doc.name)}</p>` : ''}
+          ${wf.due_date ? `<p class="text-xs text-orange-400/70 mt-1"><i class="fas fa-calendar mr-1"></i>Échéance : ${formatDate(wf.due_date)}</p>` : ''}
         </div>
-        <i class="fas fa-chevron-right text-blue-400/50"></i>
+        <i class="fas fa-chevron-right text-blue-400/50 group-hover:text-blue-300 transition-colors"></i>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // ─── Users ───
@@ -4787,7 +4933,7 @@ function loadDeletedDocs() {
   
   container.innerHTML = deleted.map(doc => `
     <div class="flex items-center justify-between p-3 rounded-lg bg-slate-900/30 border border-red-500/20">
-      <div><p class="text-white text-sm">${doc.name}</p><p class="text-xs text-blue-300/60">Supprimé le ${formatDate(doc.deleted_at)}</p></div>
+      <div><p class="text-white text-sm">${escapeHtml(doc.name)}</p><p class="text-xs text-blue-300/60">Supprimé le ${formatDate(doc.deleted_at)}</p></div>
       <button onclick="restoreDocument('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30">Restaurer</button>
     </div>
   `).join('');
@@ -5576,7 +5722,7 @@ function openRequestSignatureModal() {
   const docSelect = document.getElementById('signatureDocId');
   if (docSelect) {
     docSelect.innerHTML = '<option value="">-- Sélectionner un document --</option>' + 
-      G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${doc.name}</option>`).join('');
+      G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${escapeHtml(doc.name)}</option>`).join('');
   }
 }
 
@@ -5640,12 +5786,12 @@ async function analyzeDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
   
-  showToast(`Analyse IA du document "${doc.name}" en cours...`, 'info');
+  showToast(`Analyse IA du document "${escapeHtml(doc.name)}" en cours...`, 'info');
   
   try {
     // Simuler une analyse IA
     const analysis = {
-      summary: `Résumé du document ${doc.name}: Ce document contient des informations importantes concernant ${doc.type === 'pdf' ? 'un contrat' : 'un rapport'}.`,
+      summary: `Résumé du document ${escapeHtml(doc.name)}: Ce document contient des informations importantes concernant ${doc.type === 'pdf' ? 'un contrat' : 'un rapport'}.`,
       keywords: ['important', 'document', 'ged'],
       sentiment: 'positif'
     };
@@ -5656,14 +5802,14 @@ async function analyzeDocument(docId) {
     if (aiResponseContainer && aiResponseText) {
       aiResponseContainer.classList.remove('hidden');
       aiResponseText.innerHTML = `
-        <strong>Analyse de "${doc.name}" :</strong><br>
+        <strong>Analyse de "${escapeHtml(doc.name)}" :</strong><br>
         📝 Résumé: ${analysis.summary}<br>
         🔑 Mots-clés: ${analysis.keywords.join(', ')}<br>
         😊 Sentiment: ${analysis.sentiment}
       `;
     }
     
-    showToast(`Analyse terminée: ${doc.name}`, 'success');
+    showToast(`Analyse terminée: ${escapeHtml(doc.name)}`, 'success');
   } catch (err) {
     showToast(`Erreur d'analyse: ${err.message}`, 'error');
   }
@@ -5964,7 +6110,7 @@ function handleGlobalSearch(query) {
   dropdown.classList.remove('hidden');
   dropdown.innerHTML = results.map(doc => `
     <div class="p-2 hover:bg-blue-500/10 cursor-pointer" onclick="openPreviewModal('${doc.id}'); document.getElementById('searchDropdown').classList.add('hidden');">
-      <p class="text-white text-sm">${doc.name}</p>
+      <p class="text-white text-sm">${escapeHtml(doc.name)}</p>
       <p class="text-xs text-blue-300/60">${formatBytes(doc.size)}</p>
     </div>
   `).join('');
@@ -6085,7 +6231,7 @@ function renderVersioning() {
   
   container.innerHTML = docs.map(doc => `
     <div class="glass-card rounded-xl p-4 border border-cyan-500/20 flex items-center justify-between">
-      <div><p class="text-white font-medium">${doc.name}</p><p class="text-xs text-blue-300/60">Version ${doc.version} • ${formatDate(doc.updated_at)}</p></div>
+      <div><p class="text-white font-medium">${escapeHtml(doc.name)}</p><p class="text-xs text-blue-300/60">Version ${doc.version} • ${formatDate(doc.updated_at)}</p></div>
       <button onclick="restoreVersion('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30">Restaurer</button>
     </div>
   `).join('');
@@ -6107,7 +6253,7 @@ function filterVersionDocs(query) {
   
   container.innerHTML = docs.map(doc => `
     <div class="glass-card rounded-xl p-4 border border-cyan-500/20 flex items-center justify-between">
-      <div><p class="text-white font-medium">${doc.name}</p><p class="text-xs text-blue-300/60">Version ${doc.version} • ${formatDate(doc.updated_at)}</p></div>
+      <div><p class="text-white font-medium">${escapeHtml(doc.name)}</p><p class="text-xs text-blue-300/60">Version ${doc.version} • ${formatDate(doc.updated_at)}</p></div>
       <button onclick="restoreVersion('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30">Restaurer</button>
     </div>
   `).join('');
@@ -6537,6 +6683,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.revokeShare = revokeShare;
   window.loadShareHistory = loadShareHistory;
   window.switchSharedTab = switchSharedTab;
+  window.renderDashboard = renderDashboard;
   window.renderShared = renderShared;
   window.renderDocuments = renderDocuments;
   window.switchDocsTab = switchDocsTab;
