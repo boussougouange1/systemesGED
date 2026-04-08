@@ -1935,35 +1935,55 @@ function openPreviewModal(docId) {
   
   try {
     if (imageTypes.includes(fileExt)) {
-      // Aperçu image
-      if (previewImage) {
-        previewImage.src = fileUrl;
+  if (previewImage) {
+    fetch(fileUrl)
+      .then(r => {
+        if (!r.ok) throw new Error('Fetch failed');
+        return r.blob();
+      })
+      .then(blob => {
+        const blobUrl = URL.createObjectURL(blob);
+        previewImage.src = blobUrl;
         previewImage.classList.remove('hidden');
         previewImage.onload = () => {
           hidePreviewLoading();
-          console.log('✅ Image chargée');
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
         };
         previewImage.onerror = () => {
           hidePreviewLoading();
           showUnsupportedPreview(doc);
         };
-      }
-    } 
-    else if (pdfTypes.includes(fileExt)) {
-      // Aperçu PDF
-      if (previewFrame) {
-        previewFrame.src = fileUrl;
-        previewFrame.classList.remove('hidden');
+      })
+      .catch(() => {
+        hidePreviewLoading();
+        showUnsupportedPreview(doc);
+      });
+  }
+}
+ else if (pdfTypes.includes(fileExt)) {
+  if (previewFrame) {
+    previewFrame.classList.remove('hidden');
+    // Télécharger en blob pour contourner les restrictions CSP/CORS
+    fetch(fileUrl)
+      .then(r => {
+        if (!r.ok) throw new Error('Fetch failed: ' + r.status);
+        return r.blob();
+      })
+      .then(blob => {
+        const blobUrl = URL.createObjectURL(blob);
+        previewFrame.src = blobUrl;
         previewFrame.onload = () => {
           hidePreviewLoading();
-          console.log('✅ PDF chargé');
+          // Libérer la mémoire après chargement
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
         };
-        previewFrame.onerror = () => {
-          hidePreviewLoading();
-          showUnsupportedPreview(doc);
-        };
-      }
-    }
+      })
+      .catch(() => {
+        hidePreviewLoading();
+        showUnsupportedPreview(doc);
+      });
+  }
+}
     else if (officeTypes.includes(fileExt)) {
       // Aperçu Office
       if (previewOffice) {
@@ -3861,7 +3881,16 @@ function openCreateWorkflowModal() {
     docSelect.innerHTML = '<option value="">-- Aucun --</option>' + 
       G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${escapeHtml(doc.name)}</option>`).join('');
   }
-  
+  function closeWorkflowModal() {
+  const modal = document.getElementById('workflowModal');
+  if (modal) modal.classList.add('hidden');
+  // Réinitialiser les champs
+  const fields = ['wfTitle', 'wfDesc', 'wfSteps'];
+  fields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+}
   const assigneeSelect = document.getElementById('wfAssignee');
   if (assigneeSelect) {
     assigneeSelect.innerHTML = '<option value="">-- Non assigné --</option>' + 
@@ -6856,4 +6885,5 @@ window.toggleBulkSelect        = toggleBulkSelect;
 window.bulkRevokeSelected      = bulkRevokeSelected;
 window.bulkExtendSelected      = bulkExtendSelected;
 window.clearBulkSelection      = clearBulkSelection;
+window.closeWorkflowModal= closeWorkflowModal;
 });
