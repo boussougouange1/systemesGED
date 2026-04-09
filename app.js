@@ -3884,7 +3884,6 @@ function openCreateWorkflowModal() {
   function closeWorkflowModal() {
   const modal = document.getElementById('workflowModal');
   if (modal) modal.classList.add('hidden');
-  // Réinitialiser les champs
   const fields = ['wfTitle', 'wfDesc', 'wfSteps'];
   fields.forEach(id => {
     const el = document.getElementById(id);
@@ -6849,12 +6848,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.toggleNotifications = toggleNotifications;
   window.markAllNotifRead = markAllNotifRead;
   window.refreshShares = refreshShares;
-  window.openMoveModal = openMoveModal;
-  window.closeMoveModal = closeMoveModal;
-  window.confirmMoveDocument = confirmMoveDocument;
-  window.openCollabModal = openCollabModal;
-  window.closeCollabModal = closeCollabModal;
-  window.inviteCollaborator = inviteCollaborator;
+  window.openMoveModal         = openMoveModal;
+  window.closeMoveModal        = closeMoveModal;
+  window.confirmMoveDocument   = confirmMoveDocument;
+  window.openCollabModal       = openCollabModal;
+  window.closeCollabModal      = closeCollabModal;
+  window.inviteCollaborator    = inviteCollaborator;
 window.openQuickShareModal     = openQuickShareModal;
 window.closeQuickShareModal    = closeQuickShareModal;
 window.switchQuickShareTab     = switchQuickShareTab;
@@ -6885,5 +6884,5 @@ window.toggleBulkSelect        = toggleBulkSelect;
 window.bulkRevokeSelected      = bulkRevokeSelected;
 window.bulkExtendSelected      = bulkExtendSelected;
 window.clearBulkSelection      = clearBulkSelection;
-window.closeWorkflowModal= closeWorkflowModal;
+
 });
