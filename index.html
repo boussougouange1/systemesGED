@@ -1,32 +1,7 @@
 <!--
   SystemesGED v7.0 — index.html CORRIGÉ v7.1
   ============================================
-  FIX 01 · <base target="_blank"> supprimé — cassait tous les onclick handlers
-  FIX 02 · Scripts Cloudflare obfuscation supprimés + emails résolus en clair
-  FIX 03 · Script inline appelant uploadFile() inexistante supprimé
-  FIX 04 · <input id="fileInput"> dupliqué supprimé (conflit getElementById)
-  FIX 05 · Écouteur de login dupliqué + fichier tronqué sans </html> corrigés
-  FIX 07 · CSP : 'unsafe-eval' ajouté pour Tailwind CDN Play
-  FIX 08 · Ctrl+K / Escape implémentés pour la barre de recherche globale
-  FIX 09 · Active state des boutons sidebar synchronisé avec switchView()
-  FIX 10 · wfKanban grid-cols-5 → grid-cols-4 (seulement 4 statuts workflow)
-  FIX 14 · "Abonnement v6" dupliqué retiré de la sidebar desktop
-  FIX 15 · desktop-sidebar : classe flex manquante
-  FIX 16 · Conteneur layout : overflow-hidden ajouté
-  FIX 18 · Bouton notifications : aria-label + title ajoutés (accessibilité)
-  FIX 22 · roleModal absent → ajouté avec toutes les permissions checkboxes
-  FIX 23 · richEditorModal absent → ajouté avec barre d'outils contenteditable
-  FIX 26 · Bouton racine dossiers : utilise G.currentFolderId au lieu de '__root__'
-  FIX 28 · previewUnsupported : conflit CSS hidden + flex corrigé
-  FIX 29 · signatureCanvas : auto-init via MutationObserver au lieu d'appel manuel
-  FIX 30 · loginPassword : autocomplete="current-password" ajouté
-  FIX 35 · rememberMe checkbox : id ajouté + logique localStorage implémentée
-  FIX 43 · <noscript> warning ajouté
-  FIX 44 · viewport : user-scalable=no supprimé (WCAG accessibilité)
-  FIX 45 · Version v4.0 → v7.0 dans les stats de la page login
-  FIX 46 · Taille fichier : "100 MB" corrigé en "50 MB" (cohérent avec CONFIG)
-  FIX 49 · meta theme-color ajouté pour navigateurs mobiles
--->
+ -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
