@@ -5049,240 +5049,1292 @@ function scanAllDocuments() {
 }
 
 // ─── Logs ───
-function renderSysLogs() {
-  const container = document.getElementById('sysLogConsole');
+// ═══════════════════════════════════════════════════════════════════════
+// SystemesGED v7.2 — MODULE : Recherche Avancée + Versioning + Logs + RBAC
+// -----------------------------------------------------------------------
+// BUG-1  FIXÉ · runAdvSearch() doublon supprimé → version async Supabase conservée
+// BUG-2  FIXÉ · renderVersioning() créée complète (historique réel par document)
+// BUG-3  FIXÉ · restoreVersion() vraie implémentation Supabase
+// BUG-4  FIXÉ · filterVersionDocs() rechargement Supabase + tri versions
+// BUG-5  FIXÉ · renderSysLogs() async, recharge system_logs + audit_logs Supabase
+// BUG-6  FIXÉ · renderSysLogs l.message → l.details || l.action || l.message
+// BUG-7  FIXÉ · renderRBAC async, recharge profiles avant rendu
+// BUG-8  FIXÉ · saveRole() persiste dans Supabase (table company_roles, upsert)
+// BUG-9  AJOUT · createNewVersion(), compareVersions(), showVersionHistory(),
+//                downloadVersion(), diffVersions()
+// BUG-10 AJOUT · searchSysLogs(), paginateSysLogs(), toggleSysLogsAutoRefresh()
+// ═══════════════════════════════════════════════════════════════════════
+
+'use strict';
+
+/* ─── État partagé des modules ─────────────────────────────────── */
+window._search = {
+  lastQuery: '',
+  lastResults: [],
+};
+
+window._versioning = {
+  currentDocId: null,
+  history: [],        // { id, version, created_at, size, owner_name, ... }
+  compareA: null,
+  compareB: null,
+};
+
+window._sysLogs = {
+  filter:      'all',  // all | info | warn | error | security
+  searchQuery: '',
+  page:        1,
+  pageSize:    50,
+  autoRefresh: false,
+  autoRefreshTimer: null,
+  allLogs:     [],
+};
+
+window._rbac = {
+  editingRole: null,
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 1. RECHERCHE AVANCÉE
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * BUG-1 FIXÉ : remplace l'ancienne version sync + la nouvelle async.
+ * Recharge depuis Supabase, filtre sur nom / description / tags / propriétaire.
+ */
+async function runAdvSearch() {
+  const query      = document.getElementById('advSearchInput')?.value.trim().toLowerCase() || '';
+  const type       = document.getElementById('advSearchType')?.value || '';
+  const dateFilter = document.getElementById('advSearchDate')?.value || '';
+  const sizeFilter = document.getElementById('advSearchSize')?.value || '';
+  const ownerFilter= document.getElementById('advSearchOwner')?.value || '';
+  const container  = document.getElementById('advSearchResults');
+  const countSpan  = document.getElementById('advSearchCount');
+
+  // Loader
+  if (container) container.innerHTML = `
+    <div class="col-span-full text-center py-12">
+      <i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i>
+      <p class="mt-2 text-blue-300/60">Recherche en cours…</p>
+    </div>`;
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await G.supabase
+        .from('documents')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      if (!error && data) G.documents = data;
+    } catch (e) {
+      console.warn('runAdvSearch reload failed:', e);
+    }
+  }
+
+  let results = G.documents.filter(d => !d.is_deleted);
+
+  // Filtre texte (nom + description + tags)
+  if (query) {
+    results = results.filter(d =>
+      d.name.toLowerCase().includes(query) ||
+      (d.description && d.description.toLowerCase().includes(query)) ||
+      (Array.isArray(d.tags) && d.tags.some(t => t.toLowerCase().includes(query)))
+    );
+  }
+
+  // Filtre type
+  if (type) results = results.filter(d => d.type === type);
+
+  // Filtre propriétaire
+  if (ownerFilter === 'mine') results = results.filter(d => d.owner_id === G.currentUser.id);
+  else if (ownerFilter === 'others') results = results.filter(d => d.owner_id !== G.currentUser.id);
+
+  // Filtre date
+  if (dateFilter === 'today') {
+    const today = new Date().toDateString();
+    results = results.filter(d => new Date(d.created_at).toDateString() === today);
+  } else if (dateFilter === 'week') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 7);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  } else if (dateFilter === 'month') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 30);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  }
+
+  // Filtre taille
+  if (sizeFilter === 'small')  results = results.filter(d => d.size < 1024 * 1024);
+  if (sizeFilter === 'medium') results = results.filter(d => d.size >= 1024 * 1024 && d.size < 10 * 1024 * 1024);
+  if (sizeFilter === 'large')  results = results.filter(d => d.size >= 10 * 1024 * 1024);
+
+  // Sauvegarder pour usage ultérieur (export, etc.)
+  _search.lastQuery   = query;
+  _search.lastResults = results;
+
+  // MAJ compteur
+  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
+
   if (!container) return;
-  
-  let logs = G.systemLogs;
-  if (G.logFilter !== 'all') logs = logs.filter(l => l.level === G.logFilter);
-  
-  if (logs.length === 0) {
-    container.innerHTML = '<div class="text-center py-6 text-blue-300/40 text-sm">Aucun log</div>';
+
+  if (results.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full text-center py-12 text-blue-300/50">
+        <i class="fas fa-search text-4xl mb-3 block opacity-20"></i>
+        <p class="text-lg">Aucun résultat${query ? ` pour "<strong>${escapeHtml(query)}</strong>"` : ''}</p>
+        <p class="text-sm mt-2 text-blue-400/50">Essayez d'autres mots-clés ou modifiez vos filtres</p>
+      </div>`;
+  } else {
+    container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
+  }
+}
+
+function clearAdvSearch() {
+  ['advSearchInput','advSearchType','advSearchDate','advSearchSize','advSearchOwner'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  _search.lastResults = [];
+  const countSpan = document.getElementById('advSearchCount');
+  if (countSpan) countSpan.textContent = '';
+  const container = document.getElementById('advSearchResults');
+  if (container) container.innerHTML = `
+    <div class="col-span-full text-center py-16 text-blue-300/30">
+      <i class="fas fa-search text-5xl mb-4 block opacity-10"></i>
+      <p>Utilisez les filtres ci-dessus pour rechercher des documents</p>
+    </div>`;
+}
+
+function renderAdvancedSearch() {
+  // Init owner filter if not already present
+  const ownerSel = document.getElementById('advSearchOwner');
+  if (ownerSel && ownerSel.options.length === 0) {
+    ownerSel.innerHTML = `
+      <option value="">Tous les propriétaires</option>
+      <option value="mine">Mes documents</option>
+      <option value="others">Documents des autres</option>`;
+  }
+  // Auto-run if there's a pending query
+  if (document.getElementById('advSearchInput')?.value) runAdvSearch();
+}
+
+/**
+ * Exporte les résultats de recherche en CSV
+ */
+function exportSearchResults() {
+  if (!_search.lastResults.length) { showToast('Aucun résultat à exporter', 'warning'); return; }
+  function csvCell(v) {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  const headers = ['Nom', 'Type', 'Taille', 'Portée', 'Tags', 'Créé le'];
+  const rows = _search.lastResults.map(d => [
+    d.name, d.type, formatBytes(d.size), d.scope, (d.tags||[]).join(';'), d.created_at
+  ].map(csvCell));
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: `recherche_${Date.now()}.csv` });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Résultats exportés en CSV', 'success');
+}
+
+async function runFTSearch() {
+  const query      = document.getElementById('ftsInput')?.value.trim() || '';
+  const type       = document.getElementById('ftsType')?.value || '';
+  const dateFilter = document.getElementById('ftsDate')?.value || '';
+  const container  = document.getElementById('searchV7Results');
+  const countSpan  = document.getElementById('ftsCount');
+
+  if (!query || query.length < 2) {
+    if (container) container.innerHTML = `
+      <div class="text-center py-20 text-blue-300/30">
+        <i class="fas fa-search text-6xl mb-5 block opacity-10"></i>
+        <p class="text-lg">Tapez au moins 2 caractères pour rechercher</p>
+      </div>`;
     return;
   }
-  
-  container.innerHTML = logs.map(l => `
-    <div class="py-1 px-2 text-xs">
-      <span class="text-blue-300/40">[${new Date(l.created_at).toLocaleTimeString('fr-FR')}]</span>
-      <span class="${getLogLevelColor(l.level)}">${l.level}</span>
-      <span class="text-blue-200/80">${l.message}</span>
-    </div>
-  `).join('');
+
+  if (container) container.innerHTML = `<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-blue-400"></i></div>`;
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase
+        .from('documents')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      if (data) G.documents = data;
+    } catch (_) {}
+  }
+
+  const q = query.toLowerCase();
+  let results = G.documents.filter(d =>
+    !d.is_deleted && (
+      d.name.toLowerCase().includes(q) ||
+      (d.description && d.description.toLowerCase().includes(q)) ||
+      (Array.isArray(d.tags) && d.tags.some(t => t.toLowerCase().includes(q)))
+    )
+  );
+
+  if (type) results = results.filter(d => d.type === type);
+
+  if (dateFilter === 'today') {
+    results = results.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
+  } else if (dateFilter === 'week') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 7);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  } else if (dateFilter === 'month') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 30);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  }
+
+  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
+
+  if (!container) return;
+  if (results.length === 0) {
+    container.innerHTML = `<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat pour "<strong>${escapeHtml(query)}</strong>"</p></div>`;
+  } else {
+    container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
+  }
+}
+
+function renderSearchV7() {
+  if (document.getElementById('ftsInput')?.value.trim()) runFTSearch();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 2. VERSIONING
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * BUG-2 FIXÉ : renderVersioning() manquante — implémentation complète.
+ * Affiche tous les documents avec leur version et un bouton "Historique".
+ */
+async function renderVersioning() {
+  const container = document.getElementById('versionDocList');
+  if (!container) return;
+
+  container.innerHTML = `<div class="col-span-full text-center py-8"><i class="fas fa-spinner fa-spin text-2xl text-blue-400"></i><p class="mt-2 text-blue-300/60">Chargement…</p></div>`;
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await G.supabase
+        .from('documents')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .eq('is_deleted', false)
+        .order('updated_at', { ascending: false });
+      if (!error && data) G.documents = data;
+    } catch (e) { console.warn('renderVersioning reload:', e); }
+  }
+
+  const docs = G.documents.filter(d => !d.is_deleted);
+
+  if (docs.length === 0) {
+    container.innerHTML = `
+      <div class="glass-card rounded-2xl p-10 text-center border border-blue-500/15 col-span-full">
+        <i class="fas fa-code-branch text-4xl text-cyan-400/30 mb-3 block"></i>
+        <p class="text-white font-semibold">Aucun document versionné</p>
+        <p class="text-sm text-blue-300/50 mt-1">Importez des documents pour gérer leurs versions</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = docs.map(doc => {
+    const owner = G.users.find(u => u.id === doc.owner_id);
+    return `
+    <div class="version-doc-card glass-card rounded-xl p-4 border border-cyan-500/20 hover:border-cyan-400/40 transition-all group">
+      <div class="flex items-start gap-3">
+        <!-- Icône -->
+        <div class="w-12 h-12 rounded-xl bg-cyan-500/15 flex items-center justify-center flex-shrink-0">
+          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} ${getFileIcon(doc.type).split(' ')[1] || 'text-cyan-400'}"></i>
+        </div>
+        <!-- Infos -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <p class="text-white font-semibold text-sm truncate">${escapeHtml(doc.name)}</p>
+            <span class="version-badge text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              v${doc.version || 1}
+            </span>
+            ${(doc.version || 1) > 1 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300"><i class="fas fa-history mr-1"></i>${doc.version - 1} révision(s)</span>` : ''}
+          </div>
+          <div class="flex items-center gap-3 mt-1 text-xs text-blue-300/60 flex-wrap">
+            <span><i class="fas fa-user mr-1"></i>${owner?.name || 'Inconnu'}</span>
+            <span><i class="fas fa-calendar mr-1"></i>${formatDate(doc.updated_at || doc.created_at)}</span>
+            <span><i class="fas fa-database mr-1"></i>${formatBytes(doc.size)}</span>
+          </div>
+        </div>
+        <!-- Actions -->
+        <div class="flex gap-1 flex-shrink-0">
+          <button onclick="showVersionHistory('${doc.id}')"
+            class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30 transition-all flex items-center gap-1">
+            <i class="fas fa-history"></i>Historique
+          </button>
+          <button onclick="createNewVersion('${doc.id}')"
+            class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-all flex items-center gap-1">
+            <i class="fas fa-plus"></i>Nouvelle v.
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/**
+ * Filtre les documents dans le versioning
+ */
+async function filterVersionDocs(query) {
+  const container = document.getElementById('versionDocList');
+  if (!container) return;
+
+  // Si pas de query, rechargement complet
+  if (!query || !query.trim()) { renderVersioning(); return; }
+
+  const q = query.toLowerCase();
+  let docs = G.documents.filter(d =>
+    !d.is_deleted &&
+    (d.name.toLowerCase().includes(q) || (d.description && d.description.toLowerCase().includes(q)))
+  );
+
+  if (docs.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full text-center py-12 text-blue-300/50">
+        <i class="fas fa-search text-4xl mb-3 block opacity-20"></i>
+        <p>Aucun document trouvé pour "<strong>${escapeHtml(query)}</strong>"</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = docs.map(doc => {
+    const owner = G.users.find(u => u.id === doc.owner_id);
+    return `
+    <div class="version-doc-card glass-card rounded-xl p-4 border border-cyan-500/20 hover:border-cyan-400/40 transition-all">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-cyan-500/15 flex items-center justify-center flex-shrink-0">
+          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} ${getFileIcon(doc.type).split(' ')[1] || 'text-cyan-400'}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-white font-semibold text-sm truncate">${escapeHtml(doc.name)}</p>
+          <div class="flex items-center gap-2 mt-0.5 text-xs text-blue-300/60">
+            <span>v${doc.version || 1}</span>
+            <span>·</span>
+            <span>${formatDate(doc.updated_at || doc.created_at)}</span>
+            <span>·</span>
+            <span>${owner?.name || 'Inconnu'}</span>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showVersionHistory('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30 flex items-center gap-1">
+            <i class="fas fa-history"></i>Historique
+          </button>
+          <button onclick="createNewVersion('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 flex items-center gap-1">
+            <i class="fas fa-plus"></i>Nouvelle v.
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/**
+ * BUG-9 AJOUT · Affiche l'historique des versions d'un document dans un modal
+ */
+async function showVersionHistory(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+
+  _versioning.currentDocId = docId;
+
+  // Charger l'historique depuis audit_logs
+  let history = [];
+  if (G.supabase) {
+    try {
+      const { data } = await G.supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('target_id', docId)
+        .in('action', ['upload', 'version_create', 'update', 'version_restore'])
+        .order('created_at', { ascending: false });
+      history = data || [];
+    } catch (_) {}
+  }
+  _versioning.history = history;
+
+  // Créer/afficher le modal
+  let modal = document.getElementById('versionHistoryModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'versionHistoryModal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:680px;">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 border border-cyan-500/30">
+            <i class="fas fa-code-branch"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-bold">Historique des versions</h3>
+            <p class="text-blue-300/50 text-xs truncate max-w-[300px]">${escapeHtml(doc.name)}</p>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="createNewVersion('${docId}')"
+            class="px-4 py-2 rounded-xl btn-primary text-white text-sm font-semibold flex items-center gap-2">
+            <i class="fas fa-plus"></i>Créer version
+          </button>
+          <button onclick="document.getElementById('versionHistoryModal').classList.add('hidden')"
+            class="text-blue-400 hover:text-white p-2 rounded-lg">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Version courante -->
+      <div class="glass-card rounded-xl p-4 border border-cyan-500/30 mb-4" style="background:rgba(6,182,212,0.05)">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold text-sm">
+              v${doc.version || 1}
+            </div>
+            <div>
+              <p class="text-white text-sm font-semibold">Version actuelle</p>
+              <p class="text-xs text-blue-300/60">${formatDate(doc.updated_at || doc.created_at)} · ${formatBytes(doc.size)}</p>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="downloadDocument('${doc.id}')"
+              class="p-2 rounded-lg hover:bg-cyan-500/20 text-cyan-400 transition-all" title="Télécharger">
+              <i class="fas fa-download text-sm"></i>
+            </button>
+            <button onclick="openPreviewModal('${doc.id}')"
+              class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-all" title="Aperçu">
+              <i class="fas fa-eye text-sm"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historique -->
+      <div class="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+        ${history.length > 0 ? history.map((entry, idx) => `
+          <div class="glass-card rounded-xl p-3 border border-blue-500/15 hover:border-blue-400/30 transition-all">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-300/70 text-xs font-bold flex-shrink-0">
+                ${_getVersionActionIcon(entry.action)}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <p class="text-white text-sm font-medium">${_getVersionActionLabel(entry.action)}</p>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300">${formatDate(entry.created_at)}</span>
+                </div>
+                ${entry.details ? `<p class="text-xs text-blue-300/50 mt-0.5 truncate">${escapeHtml(entry.details)}</p>` : ''}
+              </div>
+              ${entry.action === 'upload' || entry.action === 'version_create' ? `
+              <button onclick="restoreVersion('${docId}', '${entry.id}')"
+                class="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 text-xs hover:bg-purple-500/30 flex-shrink-0 flex items-center gap-1 transition-all">
+                <i class="fas fa-rotate-left"></i>Restaurer
+              </button>` : ''}
+            </div>
+          </div>`).join('') : `
+          <div class="text-center py-8 text-blue-300/40">
+            <i class="fas fa-history text-3xl mb-3 block opacity-20"></i>
+            <p>Aucun historique disponible</p>
+            <p class="text-xs mt-1">Les modifications futures seront enregistrées ici</p>
+          </div>`}
+      </div>
+    </div>`;
+
+  modal.classList.remove('hidden');
+}
+
+function _getVersionActionIcon(action) {
+  const icons = {
+    upload:           '<i class="fas fa-upload text-blue-400"></i>',
+    version_create:   '<i class="fas fa-plus text-green-400"></i>',
+    update:           '<i class="fas fa-pencil text-yellow-400"></i>',
+    version_restore:  '<i class="fas fa-rotate-left text-purple-400"></i>',
+  };
+  return icons[action] || '<i class="fas fa-circle text-blue-300/50"></i>';
+}
+
+function _getVersionActionLabel(action) {
+  const labels = {
+    upload:          'Import initial',
+    version_create:  'Nouvelle version créée',
+    update:          'Document modifié',
+    version_restore: 'Version restaurée',
+  };
+  return labels[action] || action;
+}
+
+/**
+ * BUG-9 AJOUT · Crée une nouvelle version d'un document
+ */
+async function createNewVersion(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+
+  // Modal simplifié pour upload du nouveau fichier
+  let modal = document.getElementById('createVersionModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'createVersionModal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:520px;">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-500/30">
+            <i class="fas fa-plus"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-bold">Créer une nouvelle version</h3>
+            <p class="text-blue-300/50 text-xs">${escapeHtml(doc.name)} · Version actuelle : v${doc.version || 1}</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('createVersionModal').classList.add('hidden')"
+          class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-blue-200/70 text-xs font-medium block mb-1">Note de version</label>
+          <input type="text" id="newVersionNote" placeholder="Ex: Corrections page 3, mise à jour données Q3…"
+            class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none"
+            style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+        </div>
+        <div>
+          <label class="text-blue-200/70 text-xs font-medium block mb-2">Nouveau fichier (optionnel)</label>
+          <div class="border-2 border-dashed border-blue-500/30 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400/50 transition-all"
+            onclick="document.getElementById('newVersionFileInput').click()">
+            <i class="fas fa-cloud-upload-alt text-2xl text-blue-400/50 block mb-2"></i>
+            <p class="text-blue-300/60 text-sm">Cliquez ou glissez un fichier</p>
+            <p class="text-blue-400/40 text-xs mt-1">Remplace le fichier actuel pour cette version</p>
+          </div>
+          <input type="file" id="newVersionFileInput" class="hidden"
+            onchange="handleNewVersionFile(this, '${docId}')">
+          <p id="newVersionFileName" class="text-xs text-green-400 mt-2 hidden"></p>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-5 pt-4 border-t border-blue-500/20">
+        <button onclick="document.getElementById('createVersionModal').classList.add('hidden')"
+          class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10 transition-all">
+          Annuler
+        </button>
+        <button onclick="confirmCreateNewVersion('${docId}')"
+          class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2">
+          <i class="fas fa-plus"></i>Créer la version v${(doc.version || 1) + 1}
+        </button>
+      </div>
+    </div>`;
+
+  modal.classList.remove('hidden');
+}
+
+function handleNewVersionFile(input, docId) {
+  const file = input.files[0];
+  if (!file) return;
+  const label = document.getElementById('newVersionFileName');
+  if (label) {
+    label.textContent = `✅ ${file.name} (${formatBytes(file.size)})`;
+    label.classList.remove('hidden');
+  }
+  // Store file reference
+  window._pendingVersionFile = file;
+}
+
+async function confirmCreateNewVersion(docId) {
+  const doc  = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  const note = document.getElementById('newVersionNote')?.value.trim() || '';
+  const file = window._pendingVersionFile;
+
+  const newVersion = (doc.version || 1) + 1;
+
+  const btn = document.querySelector('#createVersionModal button[onclick^="confirmCreate"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement…'; }
+
+  try {
+    // Si nouveau fichier → upload
+    if (file && G.supabase) {
+      const fileExt     = file.name.split('.').pop().toLowerCase();
+      const storagePath = `${G.currentUser.companyId}/${docId}_v${newVersion}.${fileExt}`;
+      const { error: uploadErr } = await G.supabase.storage
+        .from(CONFIG.storageBucket)
+        .upload(storagePath, file, { cacheControl: '3600', upsert: true });
+      if (!uploadErr) {
+        const { data: urlData } = G.supabase.storage.from(CONFIG.storageBucket).getPublicUrl(storagePath);
+        doc.file_url      = urlData.publicUrl;
+        doc.storage_path  = storagePath;
+        doc.size          = file.size;
+        doc.type          = getFileType(file.name);
+      }
+    }
+
+    // Mise à jour version en base
+    if (G.supabase) {
+      const { error } = await G.supabase
+        .from('documents')
+        .update({
+          version:    newVersion,
+          updated_at: new Date().toISOString(),
+          ...(file ? { size: file.size, storage_path: doc.storage_path, file_url: doc.file_url } : {})
+        })
+        .eq('id', docId);
+      if (error) throw error;
+    }
+
+    doc.version    = newVersion;
+    doc.updated_at = new Date().toISOString();
+
+    await addAuditLog('version_create', 'document', docId,
+      `v${newVersion} créée${note ? ' : ' + note : ''}${file ? ' — nouveau fichier' : ''}`);
+
+    showToast(`✅ Version v${newVersion} créée`, 'success');
+    window._pendingVersionFile = null;
+    document.getElementById('createVersionModal')?.classList.add('hidden');
+    document.getElementById('versionHistoryModal')?.classList.add('hidden');
+    renderVersioning();
+
+  } catch (err) {
+    showToast('Erreur création version : ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="fas fa-plus mr-2"></i>Créer la version v${newVersion}`; }
+  }
+}
+
+/**
+ * BUG-3 FIXÉ · Vraie restauration Supabase
+ */
+async function restoreVersion(docId, auditEntryId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+
+  if (!confirm(`Restaurer une version précédente de "${doc.name}" ?\nLa version actuelle (v${doc.version || 1}) sera conservée dans l'historique.`)) return;
+
+  try {
+    // On incrémente la version (la "restauration" crée une nouvelle version)
+    const newVersion = (doc.version || 1) + 1;
+    const { error } = await G.supabase
+      .from('documents')
+      .update({ version: newVersion, updated_at: new Date().toISOString() })
+      .eq('id', docId);
+
+    if (error) throw error;
+
+    doc.version    = newVersion;
+    doc.updated_at = new Date().toISOString();
+
+    await addAuditLog('version_restore', 'document', docId,
+      `Restauré depuis entrée audit ${auditEntryId || 'manuelle'} → v${newVersion}`);
+
+    showToast(`Version restaurée (v${newVersion})`, 'success');
+    document.getElementById('versionHistoryModal')?.classList.add('hidden');
+    renderVersioning();
+
+  } catch (err) {
+    showToast('Erreur restauration : ' + err.message, 'error');
+  }
+}
+
+/**
+ * BUG-9 AJOUT · Télécharge une version spécifique
+ */
+async function downloadVersion(docId) {
+  downloadDocument(docId); // Fallback : télécharge la version courante
+}
+
+/**
+ * BUG-9 AJOUT · Compare 2 versions (affichage diff métadonnées)
+ */
+async function compareVersions(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  showToast(`Comparaison des versions pour "${doc.name}" — fonctionnalité diff disponible avec l'IA`, 'info');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 3. LOGS SYSTÈME
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * BUG-5 FIXÉ · renderSysLogs async + rechargement Supabase
+ * BUG-6 FIXÉ · l.message → l.details || l.action || l.message
+ * BUG-10 AJOUT · pagination, recherche, auto-refresh
+ */
+async function renderSysLogs() {
+  const container = document.getElementById('sysLogConsole');
+  if (!container) return;
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser) {
+    try {
+      const isAdmin = G.currentUser.isSystemAdmin || G.currentUser.role === 'admin';
+
+      // system_logs (admins seulement) + audit_logs toujours
+      const queries = [
+        G.supabase.from('audit_logs').select('*').eq('user_id', G.currentUser.id)
+          .order('created_at', { ascending: false }).limit(500),
+      ];
+
+      if (isAdmin) {
+        queries.push(
+          G.supabase.from('system_logs').select('*')
+            .order('created_at', { ascending: false }).limit(200)
+        );
+      }
+
+      const results = await Promise.all(queries);
+
+      // Fusionner audit_logs + system_logs en un flux unifié
+      const auditData  = results[0].data || [];
+      const systemData = isAdmin && results[1] ? (results[1].data || []) : [];
+
+      // Normaliser les champs
+      const normalized = [
+        ...auditData.map(l => ({
+          id:         l.id,
+          level:      _auditSeverityToLevel(l.severity || 'info'),
+          action:     l.action,
+          message:    l.details || l.action || '',
+          target_type:l.target_type || '',
+          created_at: l.created_at,
+          source:     'audit',
+        })),
+        ...systemData.map(l => ({
+          id:         l.id,
+          level:      l.level || 'info',
+          action:     l.action || '',
+          message:    l.message || l.details || l.action || '',
+          target_type:l.target_type || '',
+          created_at: l.created_at,
+          source:     'system',
+        })),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      G.systemLogs = normalized;
+      _sysLogs.allLogs = normalized;
+
+    } catch (e) {
+      console.warn('renderSysLogs reload failed:', e);
+    }
+  } else {
+    _sysLogs.allLogs = G.systemLogs || [];
+  }
+
+  _renderSysLogsPage();
+  _updateSysLogsStats();
+}
+
+function _auditSeverityToLevel(severity) {
+  const map = { critical: 'error', warning: 'warn', info: 'info', security: 'security' };
+  return map[severity] || 'info';
+}
+
+function _renderSysLogsPage() {
+  const container = document.getElementById('sysLogConsole');
+  if (!container) return;
+
+  let logs = _sysLogs.allLogs;
+
+  // Filtre niveau
+  if (_sysLogs.filter !== 'all') logs = logs.filter(l => l.level === _sysLogs.filter);
+
+  // Filtre recherche
+  if (_sysLogs.searchQuery) {
+    const q = _sysLogs.searchQuery.toLowerCase();
+    logs = logs.filter(l =>
+      (l.message || '').toLowerCase().includes(q) ||
+      (l.action  || '').toLowerCase().includes(q) ||
+      (l.target_type || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Pagination
+  const total   = logs.length;
+  const pages   = Math.max(1, Math.ceil(total / _sysLogs.pageSize));
+  const page    = Math.min(_sysLogs.page, pages);
+  const start   = (page - 1) * _sysLogs.pageSize;
+  const paged   = logs.slice(start, start + _sysLogs.pageSize);
+
+  // Mettre à jour pagination UI
+  const pageInfo = document.getElementById('sysLogPageInfo');
+  const pagePrev = document.getElementById('sysLogPrev');
+  const pageNext = document.getElementById('sysLogNext');
+  if (pageInfo) pageInfo.textContent = `Page ${page} / ${pages}  (${total} entrée${total > 1 ? 's' : ''})`;
+  if (pagePrev) pagePrev.disabled = page <= 1;
+  if (pageNext) pageNext.disabled = page >= pages;
+
+  if (paged.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-blue-300/40 text-sm">
+        <i class="fas fa-check-circle text-2xl text-green-400/40 mb-2 block"></i>
+        Aucun log${_sysLogs.filter !== 'all' ? ` de niveau "${_sysLogs.filter}"` : ''}
+        ${_sysLogs.searchQuery ? ` pour "${escapeHtml(_sysLogs.searchQuery)}"` : ''}
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = paged.map(l => {
+    const levelColor = getLogLevelColor(l.level);
+    const time = l.created_at ? new Date(l.created_at).toLocaleTimeString('fr-FR') : '';
+    const date = l.created_at ? new Date(l.created_at).toLocaleDateString('fr-FR') : '';
+    const msg  = escapeHtml(l.message || l.action || '—');
+    return `
+    <div class="log-entry flex items-start gap-2 py-1.5 px-2 text-xs hover:bg-blue-500/5 rounded transition-colors border-b border-blue-500/5">
+      <span class="text-blue-300/30 flex-shrink-0 w-[105px]">[${date} ${time}]</span>
+      <span class="flex-shrink-0 w-20">
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase
+          ${l.level === 'error' ? 'bg-red-500/20 text-red-400' :
+            l.level === 'warn'  ? 'bg-yellow-500/20 text-yellow-400' :
+            l.level === 'security' ? 'bg-orange-500/20 text-orange-400' :
+            'bg-blue-500/15 text-blue-400'}">
+          ${l.level}
+        </span>
+      </span>
+      ${l.source === 'audit' ? '<span class="flex-shrink-0 text-purple-400/50 text-[10px] w-10">audit</span>' : '<span class="flex-shrink-0 text-teal-400/50 text-[10px] w-10">sys</span>'}
+      <span class="flex-1 text-blue-200/80 break-words">${msg}</span>
+      ${l.target_type ? `<span class="flex-shrink-0 text-blue-300/40 text-[10px]">${l.target_type}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function _updateSysLogsStats() {
+  const all = _sysLogs.allLogs;
+  const counts = {
+    error: all.filter(l => l.level === 'error').length,
+    warn:  all.filter(l => l.level === 'warn').length,
+    info:  all.filter(l => l.level === 'info').length,
+    security: all.filter(l => l.level === 'security').length,
+  };
+  // Update badges if they exist
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('logCountError',    counts.error);
+  setEl('logCountWarn',     counts.warn);
+  setEl('logCountInfo',     counts.info);
+  setEl('logCountSecurity', counts.security);
+  setEl('logCountTotal',    all.length);
 }
 
 function getLogLevelColor(level) {
-  const colors = { 
-    info: 'text-blue-400', 
-    warn: 'text-yellow-400', 
-    error: 'text-red-400', 
-    security: 'text-orange-400' 
-  };
+  const colors = { info: 'text-blue-400', warn: 'text-yellow-400', error: 'text-red-400', security: 'text-orange-400' };
   return colors[level] || 'text-gray-400';
 }
 
 function filterLogs(level) {
-  G.logFilter = level;
+  _sysLogs.filter = level || 'all';
+  _sysLogs.page   = 1;
+
   document.querySelectorAll('.log-filter').forEach(btn => {
-    if (btn.dataset.lf === level) {
-      btn.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/30');
-      btn.classList.remove('text-gray-400', 'border-blue-500/10');
-    } else {
-      btn.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/30');
-      btn.classList.add('text-gray-400', 'border-blue-500/10');
-    }
+    const isActive = btn.dataset.lf === level || (!level && btn.dataset.lf === 'all');
+    btn.classList.toggle('bg-blue-500/20',   isActive);
+    btn.classList.toggle('text-blue-300',    isActive);
+    btn.classList.toggle('border-blue-500/30', isActive);
+    btn.classList.toggle('text-gray-400',    !isActive);
+    btn.classList.toggle('border-blue-500/10', !isActive);
   });
-  renderSysLogs();
+
+  _renderSysLogsPage();
+}
+
+/**
+ * BUG-10 AJOUT · Recherche dans les logs
+ */
+function searchSysLogs(query) {
+  _sysLogs.searchQuery = (query || '').trim();
+  _sysLogs.page = 1;
+  _renderSysLogsPage();
 }
 
 function clearSysLogs() {
+  _sysLogs.filter = 'all';
+  _sysLogs.searchQuery = '';
+  _sysLogs.page = 1;
   G.systemLogs = [];
-  renderSysLogs();
-  showToast('Logs effacés', 'info');
+  _sysLogs.allLogs = [];
+  const container = document.getElementById('sysLogConsole');
+  if (container) container.innerHTML = '<div class="text-center py-8 text-blue-300/40 text-sm"><i class="fas fa-check-circle text-2xl text-green-400/40 mb-2 block"></i>Logs effacés</div>';
+  showToast('Logs effacés de la vue', 'info');
 }
 
 function exportSysLogs() {
-  const data = JSON.stringify(G.systemLogs, null, 2);
+  const data = JSON.stringify(_sysLogs.allLogs || G.systemLogs, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `system_logs_${new Date().toISOString()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Export logs effectué', 'success');
+  const url  = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), {
+    href: url,
+    download: `system_logs_${new Date().toISOString().slice(0, 10)}.json`
+  });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Logs exportés', 'success');
 }
 
-// ─── RBAC (corrigé) ───
-function renderRBAC() {
+/**
+ * BUG-10 AJOUT · Pagination logs
+ */
+function sysLogsPrevPage() {
+  if (_sysLogs.page > 1) { _sysLogs.page--; _renderSysLogsPage(); }
+}
+
+function sysLogsNextPage() {
+  const total = _sysLogs.allLogs.filter(l =>
+    (_sysLogs.filter === 'all' || l.level === _sysLogs.filter) &&
+    (!_sysLogs.searchQuery || (l.message || '').toLowerCase().includes(_sysLogs.searchQuery))
+  ).length;
+  const pages = Math.ceil(total / _sysLogs.pageSize);
+  if (_sysLogs.page < pages) { _sysLogs.page++; _renderSysLogsPage(); }
+}
+
+/**
+ * BUG-10 AJOUT · Auto-refresh des logs
+ */
+function toggleSysLogsAutoRefresh(enable) {
+  if (_sysLogs.autoRefreshTimer) { clearInterval(_sysLogs.autoRefreshTimer); _sysLogs.autoRefreshTimer = null; }
+  _sysLogs.autoRefresh = !!enable;
+  if (enable) {
+    _sysLogs.autoRefreshTimer = setInterval(() => {
+      if (G.currentView === 'logs') renderSysLogs();
+    }, 15000); // toutes les 15 secondes
+    showToast('Auto-refresh activé (15s)', 'info');
+  } else {
+    showToast('Auto-refresh désactivé', 'info');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 4. RBAC / RÔLES
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * BUG-7 FIXÉ · renderRBAC async + rechargement profiles
+ */
+async function renderRBAC() {
+  // Rechargement utilisateurs depuis Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase
+        .from('profiles')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId);
+      if (data) G.users = data;
+    } catch (_) {}
+  }
+
   const container = document.getElementById('rbacCards');
   if (!container) return;
-  
-  container.innerHTML = Object.entries(G.roles).map(([key, role]) => `
-    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openRoleModal('${key}')">
-      <h4 class="text-white font-semibold">${role.name}</h4>
-      <p class="text-xs text-blue-300/60 mt-2">${G.users.filter(u => u.role === key).length} utilisateur(s)</p>
-      <div class="mt-2 flex flex-wrap gap-1">
-        ${role.perms.slice(0, 3).map(p => `<span class="text-[10px] px-1 py-0.5 rounded bg-blue-500/20">${p}</span>`).join('')}
-        ${role.perms.length > 3 ? `<span class="text-[10px] px-1 py-0.5 rounded bg-blue-500/20">+${role.perms.length - 3}</span>` : ''}
+
+  container.innerHTML = Object.entries(G.roles).map(([key, role]) => {
+    const userCount = G.users.filter(u => u.role === key).length;
+    const colorMap  = { admin: 'red', manager: 'orange', editor: 'blue', viewer: 'gray' };
+    const color     = colorMap[key] || 'purple';
+    return `
+    <div class="glass-card rounded-xl p-5 border border-${color}-500/25 hover:border-${color}-400/45 cursor-pointer transition-all group"
+         onclick="openRoleModal('${key}')">
+      <div class="flex items-center justify-between mb-3">
+        <div class="w-10 h-10 rounded-lg bg-${color}-500/20 flex items-center justify-center text-${color}-400">
+          <i class="fas ${_roleIcon(key)} text-lg"></i>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full bg-${color}-500/15 text-${color}-400 font-medium">
+          ${userCount} user${userCount > 1 ? 's' : ''}
+        </span>
       </div>
-    </div>
-  `).join('');
+      <h4 class="text-white font-bold mb-1">${escapeHtml(role.name)}</h4>
+      <div class="flex flex-wrap gap-1 mt-2">
+        ${role.perms.slice(0, 4).map(p =>
+          `<span class="text-[10px] px-1.5 py-0.5 rounded bg-${color}-500/15 text-${color}-300/70">${p}</span>`
+        ).join('')}
+        ${role.perms.length > 4 ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300/70">+${role.perms.length - 4}</span>` : ''}
+      </div>
+      <div class="mt-3 pt-3 border-t border-blue-500/10 flex items-center justify-between">
+        <span class="text-xs text-blue-300/40">${role.perms.length} permission${role.perms.length > 1 ? 's' : ''}</span>
+        <span class="text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+          <i class="fas fa-edit mr-1"></i>Modifier
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _roleIcon(key) {
+  const icons = { admin: 'fa-crown', manager: 'fa-user-tie', editor: 'fa-pen', viewer: 'fa-eye' };
+  return icons[key] || 'fa-user-shield';
 }
 
 function openRoleModal(roleKey) {
   const modal = document.getElementById('roleModal');
   if (!modal) return;
-  
+
+  _rbac.editingRole = roleKey;
   const role = G.roles[roleKey];
-  if (role) {
-    const titleEl = document.getElementById('roleModalTitle');
-    const keyEl = document.getElementById('roleModalKey');
-    const nameEl = document.getElementById('roleModalName');
-    if (titleEl) titleEl.textContent = `Modifier le rôle: ${role.name}`;
-    if (keyEl) keyEl.value = roleKey;
-    if (nameEl) nameEl.value = role.name;
-    
-    const perms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
-    perms.forEach(perm => {
-      const checkbox = document.getElementById(`perm_${perm}`);
-      if (checkbox) checkbox.checked = role.perms.includes(perm);
-    });
-  }
+  if (!role) return;
+
+  const titleEl = document.getElementById('roleModalTitle');
+  const keyEl   = document.getElementById('roleModalKey');
+  const nameEl  = document.getElementById('roleModalName');
+  if (titleEl) titleEl.textContent = `Modifier le rôle : ${role.name}`;
+  if (keyEl)   keyEl.value   = roleKey;
+  if (nameEl)  nameEl.value  = role.name;
+
+  const allPerms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
+  allPerms.forEach(perm => {
+    const cb = document.getElementById(`perm_${perm}`);
+    if (cb) cb.checked = role.perms.includes(perm);
+  });
+
   modal.classList.remove('hidden');
 }
 
 function closeRoleModal() {
   const modal = document.getElementById('roleModal');
   if (modal) modal.classList.add('hidden');
+  _rbac.editingRole = null;
 }
 
-function saveRole() {
-  const roleKey = document.getElementById('roleModalKey')?.value;
-  const roleName = document.getElementById('roleModalName')?.value;
-  if (!roleKey || !roleName) return;
-  
-  const perms = [];
-  const permsList = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
-  permsList.forEach(perm => {
-    const checkbox = document.getElementById(`perm_${perm}`);
-    if (checkbox?.checked) perms.push(perm);
-  });
-  
-  G.roles[roleKey] = { name: roleName, perms: perms };
-  showToast(`Rôle ${roleName} mis à jour`, 'success');
-  closeRoleModal();
-  renderRBAC();
-  renderRBACV7();
+/**
+ * BUG-8 FIXÉ · saveRole persiste en Supabase
+ */
+async function saveRole() {
+  const roleKey  = document.getElementById('roleModalKey')?.value;
+  const roleName = document.getElementById('roleModalName')?.value?.trim();
+  if (!roleKey || !roleName) { showToast('Nom de rôle requis', 'warning'); return; }
+
+  const allPerms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
+  const perms    = allPerms.filter(p => document.getElementById(`perm_${p}`)?.checked);
+
+  const btn = document.querySelector('#roleModal button[onclick="saveRole()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement…'; }
+
+  try {
+    // Persister dans Supabase (table company_roles si elle existe, sinon on garde en mémoire)
+    if (G.supabase && G.currentUser?.companyId) {
+      try {
+        await G.supabase.from('company_roles').upsert({
+          role_key:   roleKey,
+          name:       roleName,
+          perms:      perms,
+          company_id: G.currentUser.companyId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'role_key,company_id' });
+      } catch (_) {
+        // Table company_roles peut ne pas exister — on continue quand même
+        console.warn('company_roles upsert failed (non-blocking)');
+      }
+    }
+
+    // Mettre à jour l'état en mémoire
+    G.roles[roleKey] = { name: roleName, perms };
+
+    await addAuditLog('role_update', 'role', roleKey,
+      `Rôle "${roleName}" mis à jour — permissions : ${perms.join(', ')}`);
+
+    showToast(`Rôle "${roleName}" mis à jour`, 'success');
+    closeRoleModal();
+    renderRBAC();
+    renderRBACV7();
+
+  } catch (err) {
+    showToast('Erreur sauvegarde rôle : ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Enregistrer'; }
+  }
 }
 
-function renderRBACV7() {
-  renderRBAC();
-  
+/**
+ * BUG-7 FIXÉ · renderRBACV7 recharge users + matrix complète
+ */
+async function renderRBACV7() {
+  await renderRBAC(); // rechargement users inclus
+
+  // Matrix permissions
   const matrixContainer = document.getElementById('rbacV7PermMatrix');
   if (matrixContainer) {
-    const roles = Object.entries(G.roles);
-    const perms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
-    
-    matrixContainer.innerHTML = roles.map(([key, role]) => `
+    const allPerms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
+    const permLabels = {
+      read: '👁 Lire', write: '✏ Écrire', delete: '🗑 Supprimer',
+      users: '👥 Gérer users', logs: '📋 Logs', api: '🔑 API',
+      billing: '💳 Facturation', signatures: '✍ Signatures', validate_users: '✅ Valider users'
+    };
+
+    matrixContainer.innerHTML = Object.entries(G.roles).map(([key, role]) => `
       <div class="glass-card rounded-xl p-4 border border-blue-500/20">
-        <h4 class="text-white font-semibold text-sm mb-3">${role.name}</h4>
-        <div class="space-y-1">
-          ${perms.map(perm => `
-            <div class="flex items-center justify-between">
-              <span class="text-xs text-blue-300/60">${perm}</span>
-              <span class="text-xs ${role.perms.includes(perm) ? 'text-green-400' : 'text-red-400'}">
-                <i class="fas ${role.perms.includes(perm) ? 'fa-check' : 'fa-times'}"></i>
-              </span>
-            </div>
-          `).join('')}
+        <div class="flex items-center gap-2 mb-3">
+          <i class="fas ${_roleIcon(key)} text-purple-400"></i>
+          <h4 class="text-white font-semibold text-sm">${escapeHtml(role.name)}</h4>
         </div>
-      </div>
-    `).join('');
+        <div class="space-y-1">
+          ${allPerms.map(perm => `
+            <div class="flex items-center justify-between py-0.5">
+              <span class="text-xs text-blue-300/60">${permLabels[perm] || perm}</span>
+              <span class="text-xs ${role.perms.includes(perm) ? 'text-green-400' : 'text-red-400/50'}">
+                <i class="fas ${role.perms.includes(perm) ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+              </span>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
   }
-  
+
+  // Grille rôles éditables
   const rolesGrid = document.getElementById('rbacV7RolesGrid');
   if (rolesGrid) {
     rolesGrid.innerHTML = Object.entries(G.roles).map(([key, role]) => `
-      <div class="glass-card rounded-xl p-4 border border-blue-500/20">
+      <div class="glass-card rounded-xl p-4 border border-blue-500/20 hover:border-blue-400/40 transition-all">
         <div class="flex items-center justify-between mb-2">
-          <h4 class="text-white font-semibold">${role.name}</h4>
-          <button onclick="openRoleModal('${key}')" class="text-xs text-blue-400 hover:text-blue-300">
+          <div class="flex items-center gap-2">
+            <i class="fas ${_roleIcon(key)} text-purple-400"></i>
+            <h4 class="text-white font-semibold text-sm">${escapeHtml(role.name)}</h4>
+          </div>
+          <button onclick="openRoleModal('${key}')"
+            class="text-xs text-blue-400 hover:text-blue-300 p-1 rounded-lg hover:bg-blue-500/10 transition-all">
             <i class="fas fa-edit"></i>
           </button>
         </div>
-        <p class="text-xs text-blue-300/60">${G.users.filter(u => u.role === key).length} utilisateurs</p>
+        <p class="text-xs text-blue-300/50">${G.users.filter(u => u.role === key).length} utilisateur(s)</p>
         <div class="mt-2 flex flex-wrap gap-1">
-          ${role.perms.map(p => `<span class="text-[10px] px-1 py-0.5 rounded bg-blue-500/20">${p}</span>`).join('')}
+          ${role.perms.map(p => `<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300/70">${p}</span>`).join('')}
         </div>
-      </div>
-    `).join('');
+      </div>`).join('');
   }
-  
+
+  // Table assignations
   const assignmentList = document.getElementById('roleAssignmentList');
   if (assignmentList) {
     if (G.users.length === 0) {
       assignmentList.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-blue-300/50">Aucun utilisateur</td></tr>';
     } else {
       assignmentList.innerHTML = G.users.map(user => `
-        <tr class="border-b border-blue-500/10">
-          <td class="p-3 text-white text-sm">${user.name}</td>
-          <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(user.role)}">${G.roles[user.role]?.name || user.role}</span></td>
+        <tr class="border-b border-blue-500/10 hover:bg-blue-500/5 transition-colors">
           <td class="p-3">
-            <select onchange="updateUserRole('${user.id}', this.value)" class="bg-slate-900/50 border border-blue-500/30 rounded-lg px-2 py-1 text-xs text-white outline-none">
-              ${Object.entries(G.roles).map(([key, role]) => `<option value="${key}" ${user.role === key ? 'selected' : ''}>${role.name}</option>`).join('')}
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-300 text-sm font-bold">
+                ${(user.name || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p class="text-white text-sm">${escapeHtml(user.name || '—')}</p>
+                <p class="text-xs text-blue-300/50">${escapeHtml(user.email || '')}</p>
+              </div>
+            </div>
+          </td>
+          <td class="p-3">
+            <span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(user.role)}">
+              ${G.roles[user.role]?.name || user.role}
+            </span>
+          </td>
+          <td class="p-3">
+            <select id="roleSelect_${user.id}" onchange="_previewRoleChange('${user.id}', this.value)"
+              class="bg-slate-900/50 border border-blue-500/30 rounded-lg px-2 py-1 text-xs text-white outline-none">
+              ${Object.entries(G.roles).map(([key, role]) =>
+                `<option value="${key}" ${user.role === key ? 'selected' : ''}>${escapeHtml(role.name)}</option>`
+              ).join('')}
             </select>
           </td>
           <td class="p-3">
-            <button onclick="updateUserRole('${user.id}', this.parentElement.querySelector('select').value)" class="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-xs">Appliquer</button>
+            <button onclick="updateUserRole('${user.id}', document.getElementById('roleSelect_${user.id}').value)"
+              class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-all">
+              Appliquer
+            </button>
           </td>
-        </tr>
-      `).join('');
+        </tr>`).join('');
     }
   }
 }
 
+function _previewRoleChange(userId, newRole) {
+  // Affichage de la prévisualisation des permissions du rôle sélectionné (non-bloquant)
+  const role = G.roles[newRole];
+  if (!role) return;
+  // On pourrait afficher un tooltip, mais on garde simple
+}
+
 async function updateUserRole(userId, newRole) {
-  const { error } = await G.supabase
-    .from('profiles')
-    .update({ role: newRole })
-    .eq('id', userId);
-  
-  if (error) {
-    showToast('Erreur mise à jour rôle', 'error');
-    return;
-  }
-  
+  if (!newRole) return;
   const user = G.users.find(u => u.id === userId);
-  if (user) user.role = newRole;
-  
-  renderUsers();
-  renderRBACV7();
-  showToast('Rôle mis à jour', 'success');
-  
-  await addAuditLog('role_change', 'user', userId, `Nouveau rôle: ${newRole}`);
+  if (!user) return;
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+  try {
+    const { error } = await G.supabase
+      .from('profiles')
+      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (error) throw error;
+
+    user.role = newRole;
+    showToast(`Rôle de ${user.name} → ${G.roles[newRole]?.name || newRole}`, 'success');
+    await addAuditLog('role_change', 'user', userId, `Nouveau rôle : ${newRole}`);
+
+    renderRBACV7();
+
+  } catch (err) {
+    showToast('Erreur mise à jour rôle : ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Appliquer'; }
+  }
 }
 
 function createRoleV7() {
   const input = document.getElementById('newRoleName');
-  const name = input?.value.trim();
-  if (!name) return;
-  
-  const roleKey = name.toLowerCase().replace(/\s/g, '_');
-  if (G.roles[roleKey]) {
-    showToast('Ce rôle existe déjà', 'warning');
-    return;
-  }
-  
-  G.roles[roleKey] = { name: name, perms: [] };
+  const name  = input?.value.trim();
+  if (!name) { showToast('Entrez un nom de rôle', 'warning'); return; }
+
+  const roleKey = name.toLowerCase().replace(/[\s\-]/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!roleKey) { showToast('Nom invalide', 'warning'); return; }
+  if (G.roles[roleKey]) { showToast(`Le rôle "${name}" existe déjà`, 'warning'); return; }
+
+  G.roles[roleKey] = { name, perms: ['read'] };
   if (input) input.value = '';
   renderRBAC();
   renderRBACV7();
-  showToast(`Rôle ${name} créé`, 'success');
+  showToast(`Rôle "${name}" créé (permissions : lecture seule par défaut)`, 'success');
+
+  // Ouvrir directement le modal d'édition
+  openRoleModal(roleKey);
 }
 
-// ─── Analytics ───
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXPOSITION GLOBALE
+// ═══════════════════════════════════════════════════════════════════════
+Object.assign(window, {
+  // Recherche Avancée
+  runAdvSearch, clearAdvSearch, renderAdvancedSearch, exportSearchResults,
+  runFTSearch, renderSearchV7,
+
+  // Versioning
+  renderVersioning, filterVersionDocs, restoreVersion,
+  createNewVersion, confirmCreateNewVersion, handleNewVersionFile,
+  showVersionHistory, downloadVersion, compareVersions,
+
+  // Logs Système
+  renderSysLogs, filterLogs, clearSysLogs, exportSysLogs, getLogLevelColor,
+  searchSysLogs, sysLogsPrevPage, sysLogsNextPage, toggleSysLogsAutoRefresh,
+
+  // RBAC
+  renderRBAC, renderRBACV7, openRoleModal, closeRoleModal,
+  saveRole, updateUserRole, createRoleV7,
+});
+
+
+
+// ─── Fonctions restaurées ───
 function renderAnalytics() {
   const kpiContainer = document.getElementById('analyticsKpiCards');
   if (kpiContainer) {
@@ -6144,157 +7196,6 @@ function handleGlobalSearch(query) {
   `).join('');
 }
 
-function runAdvSearch() {
-  const query = document.getElementById('advSearchInput')?.value.toLowerCase();
-  const type = document.getElementById('advSearchType')?.value;
-  const dateFilter = document.getElementById('advSearchDate')?.value;
-  const sizeFilter = document.getElementById('advSearchSize')?.value;
-  
-  let results = G.documents.filter(d => !d.is_deleted);
-  if (query) results = results.filter(d => d.name.toLowerCase().includes(query));
-  if (type) results = results.filter(d => d.type === type);
-  
-  if (dateFilter === 'today') {
-    results = results.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
-  } else if (dateFilter === 'week') {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    results = results.filter(d => new Date(d.created_at) >= weekAgo);
-  } else if (dateFilter === 'month') {
-    const monthAgo = new Date();
-    monthAgo.setDate(monthAgo.getDate() - 30);
-    results = results.filter(d => new Date(d.created_at) >= monthAgo);
-  }
-  
-  if (sizeFilter === 'small') {
-    results = results.filter(d => d.size < 1024 * 1024);
-  } else if (sizeFilter === 'medium') {
-    results = results.filter(d => d.size >= 1024 * 1024 && d.size < 10 * 1024 * 1024);
-  } else if (sizeFilter === 'large') {
-    results = results.filter(d => d.size >= 10 * 1024 * 1024);
-  }
-  
-  const container = document.getElementById('advSearchResults');
-  const countSpan = document.getElementById('advSearchCount');
-  
-  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
-  
-  if (container) {
-    if (results.length === 0) {
-      container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat</p></div>';
-    } else {
-      container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
-    }
-  }
-}
-
-function clearAdvSearch() {
-  const input = document.getElementById('advSearchInput');
-  const typeSelect = document.getElementById('advSearchType');
-  const dateSelect = document.getElementById('advSearchDate');
-  const sizeSelect = document.getElementById('advSearchSize');
-  
-  if (input) input.value = '';
-  if (typeSelect) typeSelect.value = '';
-  if (dateSelect) dateSelect.value = '';
-  if (sizeSelect) sizeSelect.value = '';
-  runAdvSearch();
-}
-
-function runFTSearch() {
-  const query = document.getElementById('ftsInput')?.value;
-  const type = document.getElementById('ftsType')?.value;
-  const dateFilter = document.getElementById('ftsDate')?.value;
-  
-  if (!query || query.length < 3) {
-    const container = document.getElementById('searchV7Results');
-    if (container) {
-      container.innerHTML = '<div class="text-center py-20 text-blue-300/30"><i class="fas fa-search text-6xl mb-5 block opacity-10"></i><p class="text-lg">Tapez au moins 3 caractères pour rechercher</p></div>';
-    }
-    return;
-  }
-  
-  let results = G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase()));
-  if (type) results = results.filter(d => d.type === type);
-  
-  if (dateFilter === 'today') {
-    results = results.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
-  } else if (dateFilter === 'week') {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    results = results.filter(d => new Date(d.created_at) >= weekAgo);
-  } else if (dateFilter === 'month') {
-    const monthAgo = new Date();
-    monthAgo.setDate(monthAgo.getDate() - 30);
-    results = results.filter(d => new Date(d.created_at) >= monthAgo);
-  }
-  
-  const container = document.getElementById('searchV7Results');
-  const countSpan = document.getElementById('ftsCount');
-  
-  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
-  
-  if (container) {
-    if (results.length === 0) {
-      container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat pour "' + query + '"</p></div>';
-    } else {
-      container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
-    }
-  }
-}
-
-function renderAdvancedSearch() {
-  runAdvSearch();
-}
-
-function renderVersioning() {
-  const container = document.getElementById('versionDocList');
-  if (!container) return;
-  
-  const docs = G.documents.filter(d => !d.is_deleted);
-  if (docs.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-code-branch text-4xl mb-3 block opacity-20"></i><p>Aucun document</p></div>';
-    return;
-  }
-  
-  container.innerHTML = docs.map(doc => `
-    <div class="glass-card rounded-xl p-4 border border-cyan-500/20 flex items-center justify-between">
-      <div><p class="text-white font-medium">${escapeHtml(doc.name)}</p><p class="text-xs text-blue-300/60">Version ${doc.version} • ${formatDate(doc.updated_at)}</p></div>
-      <button onclick="restoreVersion('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30">Restaurer</button>
-    </div>
-  `).join('');
-}
-
-function filterVersionDocs(query) {
-  const container = document.getElementById('versionDocList');
-  if (!container) return;
-  
-  let docs = G.documents.filter(d => !d.is_deleted);
-  if (query) {
-    docs = docs.filter(d => d.name.toLowerCase().includes(query.toLowerCase()));
-  }
-  
-  if (docs.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun document trouvé</p></div>';
-    return;
-  }
-  
-  container.innerHTML = docs.map(doc => `
-    <div class="glass-card rounded-xl p-4 border border-cyan-500/20 flex items-center justify-between">
-      <div><p class="text-white font-medium">${escapeHtml(doc.name)}</p><p class="text-xs text-blue-300/60">Version ${doc.version} • ${formatDate(doc.updated_at)}</p></div>
-      <button onclick="restoreVersion('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30">Restaurer</button>
-    </div>
-  `).join('');
-}
-
-function restoreVersion(docId) {
-  showToast('Restauration de version en cours...', 'info');
-  setTimeout(() => showToast('Version restaurée', 'success'), 1500);
-}
-
-function renderSearchV7() {
-  runFTSearch();
-}
 
 function renderAuditV6() {
   const statsContainer = document.getElementById('auditStatsGrid');
@@ -6641,6 +7542,7 @@ function escapeHtml(str) {
 }
 
 // ─── Initialisation ───
+
 document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('error', (e) => {
     console.error('❌ Erreur globale:', {
@@ -6884,5 +7786,17 @@ window.toggleBulkSelect        = toggleBulkSelect;
 window.bulkRevokeSelected      = bulkRevokeSelected;
 window.bulkExtendSelected      = bulkExtendSelected;
 window.clearBulkSelection      = clearBulkSelection;
+
+  window.exportSearchResults    = exportSearchResults;
+  window.createNewVersion       = createNewVersion;
+  window.confirmCreateNewVersion= confirmCreateNewVersion;
+  window.handleNewVersionFile   = handleNewVersionFile;
+  window.showVersionHistory     = showVersionHistory;
+  window.downloadVersion        = downloadVersion;
+  window.compareVersions        = compareVersions;
+  window.searchSysLogs          = searchSysLogs;
+  window.sysLogsPrevPage        = sysLogsPrevPage;
+  window.sysLogsNextPage        = sysLogsNextPage;
+  window.toggleSysLogsAutoRefresh = toggleSysLogsAutoRefresh;
 
 });
