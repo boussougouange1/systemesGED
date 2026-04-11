@@ -1935,57 +1935,52 @@ function openPreviewModal(docId) {
   
   try {
     if (imageTypes.includes(fileExt)) {
-  if (previewImage) {
-    fetch(fileUrl)
-      .then(r => {
-        if (!r.ok) throw new Error('Fetch failed');
-        return r.blob();
-      })
-      .then(blob => {
-        const blobUrl = URL.createObjectURL(blob);
-        previewImage.src = blobUrl;
-        previewImage.classList.remove('hidden');
-        previewImage.onload = () => {
-          hidePreviewLoading();
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-        };
-        previewImage.onerror = () => {
-          hidePreviewLoading();
-          showUnsupportedPreview(doc);
-        };
-      })
-      .catch(() => {
-        hidePreviewLoading();
-        showUnsupportedPreview(doc);
-      });
-  }
-}
- else if (pdfTypes.includes(fileExt)) {
-  if (previewFrame) {
-    previewFrame.classList.remove('hidden');
-    // Télécharger en blob pour contourner les restrictions CSP/CORS
-    fetch(fileUrl)
-      .then(r => {
-        if (!r.ok) throw new Error('Fetch failed: ' + r.status);
-        return r.blob();
-      })
-      .then(blob => {
-        const blobUrl = URL.createObjectURL(blob);
-        previewFrame.src = blobUrl;
-        previewFrame.onload = () => {
-          hidePreviewLoading();
-          // Libérer la mémoire après chargement
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-        };
-      })
-      .catch(() => {
-        hidePreviewLoading();
-        showUnsupportedPreview(doc);
-      });
-  }
-}
-    else if (officeTypes.includes(fileExt)) {
-      // Aperçu Office
+      if (previewImage) {
+        fetch(fileUrl)
+          .then(r => {
+            if (!r.ok) throw new Error('Fetch failed');
+            return r.blob();
+          })
+          .then(blob => {
+            const blobUrl = URL.createObjectURL(blob);
+            previewImage.src = blobUrl;
+            previewImage.classList.remove('hidden');
+            previewImage.onload = () => {
+              hidePreviewLoading();
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+            };
+            previewImage.onerror = () => {
+              hidePreviewLoading();
+              showUnsupportedPreview(doc);
+            };
+          })
+          .catch(() => {
+            hidePreviewLoading();
+            showUnsupportedPreview(doc);
+          });
+      }
+    } else if (pdfTypes.includes(fileExt)) {
+      if (previewFrame) {
+        previewFrame.classList.remove('hidden');
+        fetch(fileUrl)
+          .then(r => {
+            if (!r.ok) throw new Error('Fetch failed: ' + r.status);
+            return r.blob();
+          })
+          .then(blob => {
+            const blobUrl = URL.createObjectURL(blob);
+            previewFrame.src = blobUrl;
+            previewFrame.onload = () => {
+              hidePreviewLoading();
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+            };
+          })
+          .catch(() => {
+            hidePreviewLoading();
+            showUnsupportedPreview(doc);
+          });
+      }
+    } else if (officeTypes.includes(fileExt)) {
       if (previewOffice) {
         previewOffice.src = fileUrl;
         previewOffice.classList.remove('hidden');
@@ -1998,28 +1993,23 @@ function openPreviewModal(docId) {
           showUnsupportedPreview(doc);
         };
       }
-    }
-    else if (textTypes.includes(fileExt)) {
-      // Aperçu texte
-      previewContent.classList.remove('hidden');
+    } else if (textTypes.includes(fileExt)) {
+      if (previewContent) previewContent.classList.remove('hidden');
       const contentEl = document.getElementById('previewTextContent');
       if (contentEl) {
-        contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i><p class="mt-2">Chargement du contenu...</p></div>';
-        
+        contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i></div>';
         fetch(fileUrl)
           .then(response => response.text())
           .then(text => {
             hidePreviewLoading();
-            contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap overflow-auto max-h-[60vh] p-4 bg-slate-900/50 rounded-lg">${escapeHtml(text.substring(0, 50000))}${text.length > 50000 ? '\n\n... (fichier tronqué)' : ''}</pre>`;
+            contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap break-words p-4 max-h-[60vh] overflow-y-auto">${escapeHtml(text.slice(0, 50000))}</pre>`;
           })
           .catch(() => {
             hidePreviewLoading();
-            contentEl.innerHTML = `<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-2 block"></i><p>Impossible de lire le contenu</p><button onclick="downloadDocument('${doc.id}')" class="mt-3 btn-primary px-4 py-2 rounded-lg text-sm">Télécharger</button></div>`;
+            contentEl.innerHTML = '<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-3 block"></i><p>Impossible de charger le contenu</p></div>';
           });
       }
-    }
-    else {
-      // Type non supporté
+    } else {
       hidePreviewLoading();
       showUnsupportedPreview(doc);
     }
@@ -7642,6 +7632,291 @@ function handleNewVersionFile(input, docId) {
   window._pendingVersionFile = file;
 }
 
+
+// ─── Utilitaires ───
+async function addAuditLog(action, targetType, targetId, details = '') {
+  if (!G.currentUser || !G.supabase) return;
+  try {
+    const log = {
+      id: generateId(),
+      user_id: G.currentUser.id,
+      user_email: G.currentUser.email,
+      action: action,
+      target_type: targetType,
+      target_id: targetId,
+      details: details,
+      severity: ['delete', 'validate_user', 'account_deletion_request', 'role_change'].includes(action) ? 'warning' : 'info',
+      created_at: new Date().toISOString()
+    };
+
+    const { error } = await G.supabase.from('audit_logs').insert(log);
+    if (!error) {
+      if (!G.auditLogs) G.auditLogs = [];
+      G.auditLogs.unshift(log);
+      if (G.auditLogs.length > 500) G.auditLogs.pop();
+    }
+  } catch (err) {
+    console.warn('addAuditLog error (non-blocking):', err);
+  }
+}
+
+// ─── Rich Editor ───
+function openRichEditor(docId) {
+  showToast('Éditeur riche en développement', 'info');
+}
+
+function closeRichEditor() {
+  const modal = document.getElementById('richEditorModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function _onRichEditorInput() {}
+function _saveRichContent() {}
+
+// ─── Utilitaires ───
+function generateId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID().replace(/-/g, '');
+  }
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+}
+
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function getFileIcon(type) {
+  const map = {
+    pdf: { icon: 'fa-file-pdf', color: 'text-red-400' },
+    doc: { icon: 'fa-file-word', color: 'text-blue-400' },
+    docx: { icon: 'fa-file-word', color: 'text-blue-400' },
+    xls: { icon: 'fa-file-excel', color: 'text-green-400' },
+    xlsx: { icon: 'fa-file-excel', color: 'text-green-400' },
+    ppt: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
+    pptx: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
+    png: { icon: 'fa-file-image', color: 'text-purple-400' },
+    jpg: { icon: 'fa-file-image', color: 'text-purple-400' },
+    jpeg: { icon: 'fa-file-image', color: 'text-purple-400' },
+    gif: { icon: 'fa-file-image', color: 'text-purple-400' },
+    txt: { icon: 'fa-file-alt', color: 'text-gray-400' },
+    zip: { icon: 'fa-file-archive', color: 'text-yellow-400' },
+    mp4: { icon: 'fa-file-video', color: 'text-pink-400' },
+    mp3: { icon: 'fa-file-audio', color: 'text-green-400' },
+    json: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    html: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    css: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    js: { icon: 'fa-file-code', color: 'text-cyan-400' }
+  };
+  const m = map[type] || { icon: 'fa-file', color: 'text-blue-400' };
+  return `${m.icon} ${m.color}`;
+}
+
+function getFileType(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const types = { 
+    pdf: 'pdf',
+    doc: 'doc',
+    docx: 'doc',
+    xls: 'xls',
+    xlsx: 'xls',
+    ppt: 'ppt',
+    pptx: 'ppt',
+    png: 'img',
+    jpg: 'img',
+    jpeg: 'img',
+    gif: 'img',
+    webp: 'img',
+    svg: 'img',
+    txt: 'txt',
+    zip: 'zip',
+    rar: 'zip',
+    mp4: 'video',
+    mp3: 'audio',
+    json: 'code',
+    xml: 'code',
+    html: 'code',
+    css: 'code',
+    js: 'code'
+  };
+  return types[ext] || 'unknown';
+}
+
+function showToast(message, type = 'info', duration = 4000) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const styles = {
+    success: { bg: 'rgba(16,185,129,0.95)', icon: 'fa-check-circle',       border: 'rgba(16,185,129,0.4)' },
+    error:   { bg: 'rgba(239,68,68,0.95)',  icon: 'fa-exclamation-circle',  border: 'rgba(239,68,68,0.4)'  },
+    warning: { bg: 'rgba(245,158,11,0.95)', icon: 'fa-exclamation-triangle', border: 'rgba(245,158,11,0.4)' },
+    info:    { bg: 'rgba(37,99,235,0.95)',  icon: 'fa-info-circle',          border: 'rgba(96,165,250,0.4)' }
+  };
+  const s = styles[type] || styles.info;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.style.cssText = `background:${s.bg};border-color:${s.border};`;
+  toast.innerHTML = `<i class="fas ${s.icon}"></i><span>${escapeHtml(String(message))}</span>`;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('hiding');
+    setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 320);
+  }, duration);
+}
+
+function handleDocDragStart(e, docId) {
+  e.dataTransfer.setData('text/plain', docId);
+}
+
+function showDocContextMenu(e, docId) {
+  e.preventDefault();
+  e.stopPropagation();
+  // Use the standard delete flow which includes its own confirm
+  deleteDocument(docId);
+}
+
+// ─── Sécurité : Échappement HTML ───
+function canValidateUsers() {
+  if (!G.currentUser) return false;
+  return G.currentUser.isSystemAdmin ||
+    G.roles[G.currentUser.role]?.perms?.includes('validate_users') ||
+    G.currentUser.role === 'admin';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ─── Initialisation ───
+
+
+
+// ─── Helpers manquants ───
+
+function getRoleBadgeClass(role) {
+  const classes = { 
+    admin: 'bg-red-500/20 text-red-400', 
+    manager: 'bg-orange-500/20 text-orange-400', 
+    editor: 'bg-blue-500/20 text-blue-400', 
+    viewer: 'bg-gray-500/20 text-gray-400' 
+  };
+  return classes[role] || 'bg-gray-500/20 text-gray-400';
+}
+
+  function renderFolderTreeRecursive(folderId, level = 0) {
+    const folder = G.folders.find(f => f.id === folderId);
+    if (!folder) return '';
+    const children = G.folders.filter(f => f.parent_id === folderId);
+    const indent = level * 12;
+    return `
+      <div style="margin-left: ${indent}px" class="cursor-pointer hover:bg-blue-500/10 rounded-lg">
+        <div class="flex items-center gap-2 px-2 py-1 text-blue-300/70 text-xs" onclick="openFolder('${folder.id}', '${folder.name}')">
+          <i class="fas fa-folder text-yellow-400 text-xs"></i>
+          <span>${folder.name}</span>
+        </div>
+        ${children.map(c => renderFolderTreeRecursive(c.id, level + 1)).join('')}
+      </div>
+    `;
+  }
+
+function updateFolderBreadcrumb() {
+  const breadcrumb = document.getElementById('folderBreadcrumb');
+  if (!breadcrumb) return;
+  
+  breadcrumb.innerHTML = G.folderPath.map((f, idx) => `
+    <span class="flex items-center">
+      ${idx > 0 ? '<i class="fas fa-chevron-right text-blue-400/40 text-xs mx-1"></i>' : ''}
+      <button onclick="openFolder('${f.id}', '${f.name}')" class="text-sm ${idx === G.folderPath.length - 1 ? 'text-white font-semibold' : 'text-blue-400 hover:text-blue-300'}">${f.name}</button>
+    </span>
+  `).join('');
+}
+
+  function getCoordinates(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    let clientX, clientY;
+    if (e.touches) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
+  }
+
+  function startDrawing(e) {
+    e.preventDefault();
+    isDrawing = true;
+    const { x, y } = getCoordinates(e);
+    lastX = x;
+    lastY = y;
+    signatureCtx.beginPath();
+    signatureCtx.moveTo(x, y);
+  }
+
+  function draw(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const { x, y } = getCoordinates(e);
+    signatureCtx.lineTo(x, y);
+    signatureCtx.stroke();
+    lastX = x;
+    lastY = y;
+  }
+
+  function stopDrawing() {
+    isDrawing = false;
+    signatureCtx.beginPath();
+  }
+
+function handleGlobalSearch(query) {
+  const dropdown = document.getElementById('searchDropdown');
+  if (!dropdown) return;
+  
+  if (!query || query.length < 2) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+  
+  const results = G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase())).slice(0, 5);
+  if (results.length === 0) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+  
+  dropdown.classList.remove('hidden');
+  dropdown.innerHTML = results.map(doc => `
+    <div class="p-2 hover:bg-blue-500/10 cursor-pointer" onclick="openPreviewModal('${doc.id}'); document.getElementById('searchDropdown').classList.add('hidden');">
+      <p class="text-white text-sm">${escapeHtml(doc.name)}</p>
+      <p class="text-xs text-blue-300/60">${formatBytes(doc.size)}</p>
+    </div>
+  `).join('');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('error', (e) => {
     console.error('❌ Erreur globale:', {
@@ -7733,6 +8008,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.searchWorkflows = searchWorkflows;
   window.setWfView = setWfView;
   window.renderUsers = renderUsers;
+  window.getRoleBadgeClass = getRoleBadgeClass;
+  window.addAuditLog = addAuditLog;
+  window.renderFolderContents = renderFolderContents;
   window.updatePendingUsersCount = updatePendingUsersCount;
   window.clearTagFilter = clearTagFilter;
   window.loadDeletedDocs = loadDeletedDocs;
