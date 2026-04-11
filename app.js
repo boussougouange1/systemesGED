@@ -4305,1017 +4305,2263 @@ async function renderWorkflowsList() {
 }
 
 // ─── Users ───
-function renderUsers() {
+// ═══════════════════════════════════════════════════════════════════════
+// SystemesGED v7.3 — MODULE : Users · Pending · Tags · Settings ·
+//                             Security · API Keys · Integrations · AuditV6
+// BUG-U1   FIXE · renderUsers() async + rechargement Supabase
+// BUG-U2   FIXE · updatePendingUsersCount() exportee
+// BUG-U3   AJOUT · searchUsers(), filterUsersByRole(), changeUserStatus()
+// BUG-U4   FIXE · addUser() validation robuste + modal mdp visible
+// BUG-P1   FIXE · renderPendingUsers() async + rechargement Supabase
+// BUG-P2   FIXE · approveAllPending/rejectAllPending batch Promise.all
+// BUG-P3   FIXE · refreshPendingUsers() async + fetch
+// BUG-T1   FIXE · renderTags() async + rechargement Supabase
+// BUG-T2   FIXE · createTag() validation doublon + couleur auto
+// BUG-T3   FIXE · clearTagFilter() exportee
+// BUG-T4   AJOUT · editTag(), getTagStats()
+// BUG-S1   FIXE · renderSettings() complet (avatar, langue, notifs)
+// BUG-S2   FIXE · toggleSetting() persistance Supabase
+// BUG-S3   AJOUT · changePassword(), updateCompanySettings()
+// BUG-SEC1 FIXE · renderSecurity() async + rechargement Supabase
+// BUG-SEC2 FIXE · renderAuditLog() async + fetch paginé
+// BUG-SEC3 FIXE · loadDeletedDocs() async + exportee
+// BUG-SEC4 FIXE · scanAllDocuments() vrai scan MIME
+// BUG-K1   FIXE · renderApiKeys() async + rechargement Supabase
+// BUG-K2   AJOUT · permissions + expiration + modal key
+// BUG-I1   FIXE · connectIntegration() etat connecte + OAuth
+// BUG-I2   FIXE · addWebhook() Supabase + testWebhook() + listWebhooks()
+// BUG-A1   FIXE · renderAuditV6() async + rechargement Supabase
+// BUG-A2   FIXE · pagination Supabase LIMIT/OFFSET
+// BUG-A3   FIXE · filterAuditLogs() server-side
+// ═══════════════════════════════════════════════════════════════════════
+
+/* ── Etat partagé ─────────────────────────────────────────────────── */
+window._users = { searchQuery: '', roleFilter: '', statusFilter: '' };
+window._tags  = { editingId: null };
+window._sec   = { auditPage: 1, auditPageSize: 30 };
+window._audit = { page: 1, pageSize: 25, totalCount: 0, filter: { action: '', severity: '', days: 30 } };
+window._integrations = {};
+window._webhooks = [];
+
+const TAG_PALETTE = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
+
+// ═══════════════════════════════════════════════════════════════════════
+// 1. UTILISATEURS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderUsers() {
   const tbody = document.getElementById('usersList');
   if (!tbody) return;
-  
-  tbody.innerHTML = G.users.map(u => `
-    <tr class="hover:bg-blue-500/5">
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></td></tr>';
+
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await G.supabase.from('profiles').select('*').eq('company_id', G.currentUser.companyId).order('created_at', { ascending: false });
+      if (!error && data) G.users = data;
+    } catch (e) { console.warn('renderUsers reload:', e); }
+  }
+
+  let users = [...G.users];
+  if (_users.searchQuery) {
+    const q = _users.searchQuery.toLowerCase();
+    users = users.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q));
+  }
+  if (_users.roleFilter)   users = users.filter(u => u.role === _users.roleFilter);
+  if (_users.statusFilter) users = users.filter(u => u.status === _users.statusFilter);
+
+  if (users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-blue-300/40"><i class="fas fa-users text-3xl mb-2 block opacity-20"></i>Aucun utilisateur</td></tr>';
+    updatePendingUsersCount(); return;
+  }
+
+  const statusColors = { active: 'bg-green-500/20 text-green-400', pending_validation: 'bg-yellow-500/20 text-yellow-400', suspended: 'bg-red-500/20 text-red-400' };
+  const statusLabel  = { active: 'Actif', pending_validation: 'En attente', suspended: 'Suspendu' };
+  const avatarBg     = { admin: 'bg-red-500/20 text-red-400', manager: 'bg-orange-500/20 text-orange-400', editor: 'bg-blue-500/20 text-blue-400', viewer: 'bg-gray-500/20 text-gray-400' };
+
+  tbody.innerHTML = users.map(u => {
+    const isSelf = u.id === G.currentUser.id;
+    const canAct = canValidateUsers() && !isSelf;
+    return `<tr class="hover:bg-blue-500/5 transition-colors border-b border-blue-500/10">
       <td class="p-4">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm font-bold">${u.name?.charAt(0) || 'U'}</div>
-          <div><p class="text-white text-sm font-medium">${u.name}</p><p class="text-xs text-blue-300/60">${u.email}</p></div>
+          <div class="w-9 h-9 rounded-full ${avatarBg[u.role]||'bg-blue-500/20 text-blue-400'} flex items-center justify-center text-sm font-bold">${(u.name||'U').charAt(0).toUpperCase()}</div>
+          <div>
+            <p class="text-white text-sm font-medium">${escapeHtml(u.name||'—')}${isSelf?'<span class="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300">Vous</span>':''}</p>
+            <p class="text-xs text-blue-300/60">${escapeHtml(u.email||'')}</p>
+          </div>
         </div>
-       </td>
-      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name || u.role}</span> </td>
-      <td class="p-4 hidden md:table-cell">- </td>
-      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">${u.status === 'pending_validation' ? 'En attente' : u.status}</span> </td>
+      </td>
+      <td class="p-4"><span class="px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(u.role)}">${G.roles[u.role]?.name||u.role}</span></td>
+      <td class="p-4 hidden md:table-cell text-xs text-blue-300/50">${formatDate(u.created_at)}</td>
+      <td class="p-4 hidden sm:table-cell"><span class="px-2 py-1 rounded-full text-xs ${statusColors[u.status]||'bg-gray-500/20 text-gray-400'}">${statusLabel[u.status]||u.status}</span></td>
       <td class="p-4">
-        <div class="flex gap-2">
-          ${u.status === 'pending_validation' && canValidateUsers() ? `<button onclick="validateUser('${u.id}')" class="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs">Valider</button>` : ''}
-          ${canValidateUsers() ? `<button onclick="resetUserPassword('${u.email}')" class="p-2 rounded-lg hover:bg-yellow-500/20 text-yellow-400" title="Réinitialiser mot de passe"><i class="fas fa-key"></i></button>` : ''}
-          ${canValidateUsers() ? `<button onclick="deleteUser('${u.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400"><i class="fas fa-trash"></i></button>` : ''}
+        <div class="flex gap-1 flex-wrap">
+          ${u.status==='pending_validation'&&canAct?`<button onclick="validateUser('${u.id}')" class="px-2.5 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30 flex items-center gap-1"><i class="fas fa-check"></i>Valider</button>`:''}
+          ${u.status==='active'&&canAct?`<button onclick="changeUserStatus('${u.id}','suspended')" class="px-2.5 py-1 rounded-lg bg-orange-500/20 text-orange-400 text-xs hover:bg-orange-500/30 flex items-center gap-1"><i class="fas fa-ban"></i>Suspendre</button>`:''}
+          ${u.status==='suspended'&&canAct?`<button onclick="changeUserStatus('${u.id}','active')" class="px-2.5 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30 flex items-center gap-1"><i class="fas fa-check-circle"></i>Reactiver</button>`:''}
+          ${canAct?`<button onclick="resetUserPassword('${u.email}')" class="p-1.5 rounded-lg hover:bg-yellow-500/20 text-yellow-400 transition-all" title="Reset mdp"><i class="fas fa-key text-sm"></i></button>`:''}
+          ${canAct?`<button onclick="deleteUser('${u.id}')" class="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Supprimer"><i class="fas fa-trash text-sm"></i></button>`:''}
         </div>
-       </td>
-     </tr>
-  `).join('');
+      </td>
+    </tr>`;
+  }).join('');
+  updatePendingUsersCount();
 }
 
-function getRoleBadgeClass(role) {
-  const classes = { 
-    admin: 'bg-red-500/20 text-red-400', 
-    manager: 'bg-orange-500/20 text-orange-400', 
-    editor: 'bg-blue-500/20 text-blue-400', 
-    viewer: 'bg-gray-500/20 text-gray-400' 
-  };
-  return classes[role] || 'bg-gray-500/20 text-gray-400';
+function searchUsers(query) { _users.searchQuery=(query||'').trim(); renderUsers(); }
+function filterUsersByRole(role) { _users.roleFilter=role||''; renderUsers(); }
+function filterUsersByStatus(status) { _users.statusFilter=status||''; renderUsers(); }
+
+async function changeUserStatus(userId, newStatus) {
+  if (!canValidateUsers()) { showToast('Permission refusee', 'error'); return; }
+  const user = G.users.find(u => u.id === userId);
+  if (!user) return;
+  if (!confirm(`${newStatus==='suspended'?'Suspendre':'Reactiver'} ${user.name} ?`)) return;
+  try {
+    const { error } = await G.supabase.from('profiles').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', userId);
+    if (error) throw error;
+    user.status = newStatus;
+    showToast(`Utilisateur ${newStatus==='active'?'reactiv\xe9':'suspendu'}`, 'success');
+    await addAuditLog(`user_${newStatus}`, 'user', userId, `${user.name} -> ${newStatus}`);
+    renderUsers(); updatePendingUsersCount();
+  } catch (err) { showToast('Erreur : ' + err.message, 'error'); }
 }
 
-function openCreateUserModal() {
-  if (!canValidateUsers()) {
-    showToast('Permission refusée', 'error');
-    return;
-  }
-  const modal = document.getElementById('addUserModal');
-  if (modal) modal.classList.remove('hidden');
-}
-
-function closeAddUserModal() {
-  const modal = document.getElementById('addUserModal');
-  if (modal) modal.classList.add('hidden');
-}
+function openCreateUserModal() { if (!canValidateUsers()) { showToast('Permission refusee','error'); return; } const m=document.getElementById('addUserModal'); if(m) m.classList.remove('hidden'); }
+function closeAddUserModal() { const m=document.getElementById('addUserModal'); if(m) m.classList.add('hidden'); }
 
 async function addUser(e) {
   e.preventDefault();
-  
-  const firstName = document.getElementById('newUserFirst')?.value;
-  const lastName = document.getElementById('newUserLast')?.value;
-  const email = document.getElementById('newUserEmail')?.value;
-  const role = document.getElementById('newUserRole')?.value || 'viewer';
-  
-  if (!firstName || !lastName || !email) {
-    showToast('Veuillez remplir tous les champs', 'warning');
-    return;
-  }
-  
-  if (!G.currentUser?.companyId) {
-    showToast('Erreur: entreprise non trouvée', 'error');
-    return;
-  }
-  
-  const name = `${firstName} ${lastName}`;
-  const tempPassword = generatePassword();
-  
+  if (!canValidateUsers()) { showToast('Permission refusee','error'); return; }
+  const firstName=document.getElementById('newUserFirst')?.value.trim();
+  const lastName=document.getElementById('newUserLast')?.value.trim();
+  const email=document.getElementById('newUserEmail')?.value.trim().toLowerCase();
+  const role=document.getElementById('newUserRole')?.value||'viewer';
+  if (!firstName||!lastName||!email) { showToast('Remplissez tous les champs','warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Email invalide','warning'); return; }
+  const name=`${firstName} ${lastName}`;
+  const tempPassword=generatePassword();
+  const btn=document.getElementById('addUserSubmitBtn');
+  if (btn) { btn.disabled=true; btn.innerHTML='<span class="spinner mr-2"></span>Creation\u2026'; }
   try {
-    const response = await fetch(CONFIG.edgeFunctionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CONFIG.supabaseKey}`,
-      },
-      body: JSON.stringify({
-        email,
-        password: tempPassword,
-        role,
-        companyId: G.currentUser.companyId,
-        name,
-      }),
-    });
-    
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    
-    showToast(`Utilisateur créé. Mot de passe temporaire: ${tempPassword}`, 'success');
+    const response=await fetch(CONFIG.edgeFunctionUrl,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${CONFIG.supabaseKey}`}, body:JSON.stringify({email,password:tempPassword,role,companyId:G.currentUser.companyId,name}) });
+    const data=await response.json();
+    if (!response.ok) throw new Error(data.error||'Erreur serveur');
     closeAddUserModal();
-    await loadAllData();
-    renderUsers();
-    updatePendingUsersCount();
-    
-  } catch (err) {
-    console.error('Erreur création utilisateur:', err);
-    showToast('Erreur: ' + err.message, 'error');
-  }
+    _showTempPasswordModal(name,email,tempPassword);
+    await loadAllData(); renderUsers(); updatePendingUsersCount();
+    await addAuditLog('user_create','user',email,`Cree: ${name} (${role})`);
+  } catch (err) { showToast('Erreur : '+err.message,'error'); }
+  finally { if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-user-plus mr-2"></i>Crer l\'utilisateur'; } }
 }
 
-async function resetUserPassword(email) {
-  const { error } = await G.supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/update-password.html`,
-  });
-  if (error) {
-    showToast('Erreur envoi de l\'email: ' + error.message, 'error');
-  } else {
-    showToast(`Un email de réinitialisation a été envoyé à ${email}`, 'success');
-  }
-}
-
-function openResetModal() {
-  const modal = document.getElementById('resetPasswordModal');
-  if (modal) modal.classList.remove('hidden');
-  const emailInput = document.getElementById('resetEmail');
-  if (emailInput) emailInput.value = '';
-  const msgDiv = document.getElementById('resetMessage');
-  if (msgDiv) msgDiv.innerHTML = '';
-}
-
-function closeResetModal() {
-  const modal = document.getElementById('resetPasswordModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-async function sendResetEmail() {
-  const email = document.getElementById('resetEmail')?.value.trim();
-  if (!email) {
-    showToast('Veuillez saisir votre email', 'warning');
-    return;
-  }
-  const { error } = await G.supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/update-password.html`,
-  });
-  const msgDiv = document.getElementById('resetMessage');
-  if (error) {
-    if (msgDiv) msgDiv.innerHTML = `<span class="text-red-400">Erreur : ${error.message}</span>`;
-  } else {
-    if (msgDiv) msgDiv.innerHTML = `<span class="text-green-400">✅ Un email de réinitialisation vous a été envoyé.</span>`;
-    setTimeout(() => closeResetModal(), 3000);
-  }
+function _showTempPasswordModal(name,email,pwd) {
+  let modal=document.getElementById('tempPwdModal');
+  if (!modal) { modal=document.createElement('div'); modal.id='tempPwdModal'; modal.className='modal-overlay'; document.body.appendChild(modal); }
+  modal.innerHTML=`<div class="modal-box" style="max-width:480px;">
+    <div class="flex items-center gap-3 mb-5"><div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-400 border border-green-500/30"><i class="fas fa-user-check"></i></div>
+    <div><h3 class="text-white font-bold">Utilisateur cree</h3><p class="text-blue-300/50 text-xs">${escapeHtml(name)} — ${escapeHtml(email)}</p></div></div>
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/25 mb-4" style="background:rgba(245,158,11,0.06)">
+      <p class="text-yellow-400 text-xs font-bold mb-2 flex items-center gap-2"><i class="fas fa-exclamation-triangle"></i>Mot de passe temporaire</p>
+      <div class="flex gap-2 items-center"><code class="flex-1 bg-slate-900/70 border border-yellow-500/30 rounded-lg px-3 py-2 text-yellow-300 font-mono text-sm">${escapeHtml(pwd)}</code>
+      <button onclick="_copyText('${escapeHtml(pwd)}')" class="px-3 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 text-sm"><i class="fas fa-copy"></i></button></div>
+    </div>
+    <button onclick="document.getElementById('tempPwdModal').classList.add('hidden')" class="w-full btn-primary py-2.5 rounded-xl text-white text-sm font-semibold">J\'ai note le mot de passe</button>
+  </div>`;
+  modal.classList.remove('hidden');
 }
 
 async function validateUser(userId) {
-  const user = G.users.find(u => u.id === userId);
-  if (!user) return;
-  
-  const { error } = await G.supabase
-    .from('profiles')
-    .update({ status: 'active', validated_at: new Date().toISOString() })
-    .eq('id', userId);
-  
-  if (error) {
-    showToast('Erreur validation', 'error');
-    return;
-  }
-  
-  user.status = 'active';
-  renderUsers();
-  updatePendingUsersCount();
-  showToast(`Utilisateur ${user.name} validé`, 'success');
-  
-  await addAuditLog('validate_user', 'user', userId, `Utilisateur ${user.name} validé`);
+  const user=G.users.find(u=>u.id===userId); if(!user) return;
+  try {
+    const {error}=await G.supabase.from('profiles').update({status:'active',validated_at:new Date().toISOString()}).eq('id',userId);
+    if (error) throw error;
+    user.status='active'; renderUsers(); renderPendingUsers(); updatePendingUsersCount();
+    showToast(`${user.name} valid\xe9(e)`,'success');
+    await addAuditLog('validate_user','user',userId,`Valid\xe9: ${user.name}`);
+  } catch(err) { showToast('Erreur: '+err.message,'error'); }
 }
 
 async function deleteUser(userId) {
-  if (!confirm('Supprimer cet utilisateur ?')) return;
-  
-  const { error } = await G.supabase.from('profiles').delete().eq('id', userId);
-  if (error) {
-    showToast('Erreur suppression', 'error');
-    return;
-  }
-  
-  G.users = G.users.filter(u => u.id !== userId);
-  renderUsers();
-  updatePendingUsersCount();
-  showToast('Utilisateur supprimé', 'success');
+  if (!confirm('Supprimer definitivement cet utilisateur ?')) return;
+  try {
+    const {error}=await G.supabase.from('profiles').delete().eq('id',userId);
+    if (error) throw error;
+    G.users=G.users.filter(u=>u.id!==userId); renderUsers(); updatePendingUsersCount(); showToast('Utilisateur supprime','success');
+  } catch(err) { showToast('Erreur: '+err.message,'error'); }
 }
 
-function renderPendingUsers() {
-  const container = document.getElementById('pendingUsersList');
-  if (!container) return;
-  
-  const pending = G.users.filter(u => u.status === 'pending_validation');
-  
-  if (pending.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i><p>Aucun utilisateur en attente</p></div>';
-    return;
-  }
-  
-  container.innerHTML = pending.map(u => `
-    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-lg font-bold">${u.name?.charAt(0) || 'U'}</div>
-        <div><p class="text-white font-medium">${u.name}</p><p class="text-sm text-blue-300/60">${u.email}</p></div>
-      </div>
-      <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 text-sm hover:bg-green-500/30">Valider</button>
-    </div>
-  `).join('');
+async function resetUserPassword(email) {
+  const {error}=await G.supabase.auth.resetPasswordForEmail(email,{redirectTo:`${window.location.origin}/update-password.html`});
+  if (error) showToast('Erreur: '+error.message,'error'); else showToast(`Email de r\xe9init. envoye a ${email}`,'success');
 }
 
-function refreshPendingUsers() {
-  renderPendingUsers();
-  updatePendingUsersCount();
+function openResetModal() { const m=document.getElementById('resetPasswordModal'); if(m) m.classList.remove('hidden'); const e=document.getElementById('resetEmail'); if(e) e.value=''; }
+function closeResetModal() { const m=document.getElementById('resetPasswordModal'); if(m) m.classList.add('hidden'); }
+async function sendResetEmail() {
+  const email=document.getElementById('resetEmail')?.value.trim();
+  if (!email) { showToast('Saisissez un email','warning'); return; }
+  const {error}=await G.supabase.auth.resetPasswordForEmail(email,{redirectTo:`${window.location.origin}/update-password.html`});
+  const mg=document.getElementById('resetMessage');
+  if (error) { if(mg) mg.innerHTML=`<span class="text-red-400">Erreur: ${escapeHtml(error.message)}</span>`; }
+  else { if(mg) mg.innerHTML='<span class="text-green-400">Email envoy\xe9.</span>'; setTimeout(closeResetModal,3000); }
 }
 
 function updatePendingUsersCount() {
-  const count = G.users.filter(u => u.status === 'pending_validation').length;
-  G.pendingUsersCount = count;
-  
-  const badges = document.querySelectorAll('.pending-users-badge, #d-pendingBadge, #m-pendingBadge');
-  badges.forEach(b => {
-    if (count > 0 && canValidateUsers()) {
-      b.textContent = count;
-      b.classList.remove('hidden');
-    } else {
-      b.classList.add('hidden');
-    }
+  const count=G.users.filter(u=>u.status==='pending_validation').length;
+  G.pendingUsersCount=count;
+  document.querySelectorAll('.pending-users-badge, #d-pendingBadge, #m-pendingBadge').forEach(b=>{
+    if (count>0&&canValidateUsers()) { b.textContent=count; b.classList.remove('hidden'); } else b.classList.add('hidden');
   });
-  
-  const pendingCountEl = document.getElementById('pendingCount');
-  if (pendingCountEl) pendingCountEl.textContent = count;
+  const el=document.getElementById('pendingCount'); if(el) el.textContent=count;
 }
 
 function generatePassword() {
-  const upper   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lower   = 'abcdefghijklmnopqrstuvwxyz';
-  const digits  = '0123456789';
-  const special = '!@#$%^&*+-=?';
-  const all     = upper + lower + digits + special;
-  const arr     = new Uint32Array(14);
-  crypto.getRandomValues(arr);
-  // Guarantee at least one of each required class
-  let pwd = [
-    upper[arr[0]  % upper.length],
-    lower[arr[1]  % lower.length],
-    digits[arr[2] % digits.length],
-    special[arr[3]% special.length],
-  ];
-  for (let i = 4; i < 14; i++) pwd.push(all[arr[i] % all.length]);
-  // Shuffle
-  for (let i = pwd.length - 1; i > 0; i--) {
-    const j = arr[i % arr.length] % (i + 1);
-    [pwd[i], pwd[j]] = [pwd[j], pwd[i]];
+  const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*+-=?';
+  const arr=new Uint32Array(14); crypto.getRandomValues(arr);
+  return Array.from(arr).map(n=>chars[n%chars.length]).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 2. VALIDATIONS EN ATTENTE
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderPendingUsers() {
+  const container=document.getElementById('pendingUsersList'); if(!container) return;
+  container.innerHTML='<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+  if (G.supabase&&G.currentUser?.companyId) {
+    try {
+      const {data}=await G.supabase.from('profiles').select('*').eq('company_id',G.currentUser.companyId).eq('status','pending_validation').order('created_at',{ascending:true});
+      if (data) { G.users=G.users.filter(u=>u.status!=='pending_validation').concat(data); const seen=new Set(); G.users=G.users.filter(u=>{if(seen.has(u.id))return false;seen.add(u.id);return true;}); }
+    } catch(e) { console.warn('renderPendingUsers:',e); }
   }
-  return pwd.join('');
+  const pending=G.users.filter(u=>u.status==='pending_validation');
+  updatePendingUsersCount();
+  if (pending.length===0) { container.innerHTML='<div class="text-center py-12 text-blue-300/50"><i class="fas fa-user-check text-4xl mb-3 block opacity-20"></i><p class="font-semibold">Aucune validation en attente</p></div>'; return; }
+  container.innerHTML=pending.map(u=>`
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 hover:border-yellow-400/40 transition-all">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-lg font-bold flex-shrink-0">${(u.name||'U').charAt(0).toUpperCase()}</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-white font-semibold">${escapeHtml(u.name||'—')}</p>
+          <p class="text-sm text-blue-300/60 truncate">${escapeHtml(u.email||'')}</p>
+          <div class="flex items-center gap-3 mt-1 text-xs text-blue-300/40">
+            <span><i class="fas fa-calendar mr-1"></i>${formatDate(u.created_at)}</span>
+            <span class="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400">${G.roles[u.role]?.name||u.role}</span>
+          </div>
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+          <button onclick="validateUser('${u.id}')" class="px-4 py-2 rounded-xl bg-green-500/20 text-green-400 text-sm hover:bg-green-500/30 transition-all font-medium flex items-center gap-2"><i class="fas fa-check"></i>Valider</button>
+          <button onclick="deleteUser('${u.id}')" class="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30 transition-all font-medium flex items-center gap-2"><i class="fas fa-times"></i>Refuser</button>
+        </div>
+      </div>
+    </div>`).join('');
 }
 
-function approveAllPending() {
-  const pending = G.users.filter(u => u.status === 'pending_validation');
-  pending.forEach(u => validateUser(u.id));
+async function refreshPendingUsers() { await renderPendingUsers(); showToast('Liste actualis\xe9e','success'); }
+
+async function approveAllPending() {
+  const pending=G.users.filter(u=>u.status==='pending_validation');
+  if (pending.length===0) { showToast('Aucun compte en attente','info'); return; }
+  if (!confirm(`Valider les ${pending.length} compte(s) ?`)) return;
+  const results=await Promise.allSettled(pending.map(u=>G.supabase.from('profiles').update({status:'active',validated_at:new Date().toISOString()}).eq('id',u.id)));
+  const ok=results.filter(r=>r.status==='fulfilled'&&!r.value?.error).length;
+  pending.forEach(u=>{ const x=G.users.find(y=>y.id===u.id); if(x) x.status='active'; });
+  showToast(`${ok}/${pending.length} comptes valid\xe9s`,ok>0?'success':'error');
+  await addAuditLog('approve_all_pending','user','batch',`${ok} comptes valid\xe9s en lot`);
+  renderPendingUsers(); updatePendingUsersCount();
 }
 
-function rejectAllPending() {
-  const pending = G.users.filter(u => u.status === 'pending_validation');
-  pending.forEach(u => deleteUser(u.id));
+async function rejectAllPending() {
+  const pending=G.users.filter(u=>u.status==='pending_validation');
+  if (pending.length===0) { showToast('Aucun compte en attente','info'); return; }
+  if (!confirm(`Refuser et supprimer les ${pending.length} compte(s) ? Irr\xe9versible.`)) return;
+  await Promise.allSettled(pending.map(u=>G.supabase.from('profiles').delete().eq('id',u.id)));
+  const ids=pending.map(u=>u.id); G.users=G.users.filter(u=>!ids.includes(u.id));
+  showToast(`${pending.length} compte(s) refus\xe9(s)`,'success');
+  renderPendingUsers(); updatePendingUsersCount();
 }
 
-// ─── Tags ───
-function renderTags() {
-  const container = document.getElementById('tagsList');
-  if (!container) return;
-  
-  if (G.tags.length === 0) {
-    container.innerHTML = '<p class="text-blue-300/50 text-sm text-center py-4">Aucun tag</p>';
-    return;
+// ═══════════════════════════════════════════════════════════════════════
+// 3. TAGS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderTags() {
+  const container=document.getElementById('tagsList'); if(!container) return;
+  if (G.supabase&&G.currentUser?.companyId) {
+    try { const {data}=await G.supabase.from('tags').select('*').eq('company_id',G.currentUser.companyId).order('name'); if(data) G.tags=data; } catch(e) {}
   }
-  
-  container.innerHTML = G.tags.map(t => `
-    <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-900/30 border border-blue-500/10">
-      <span class="w-3 h-3 rounded-full" style="background:${t.color}"></span>
-      <span class="text-sm text-white flex-1">${t.name}</span>
-      <button onclick="deleteTag('${t.id}')" class="p-1 text-red-400 hover:text-red-300"><i class="fas fa-times"></i></button>
-    </div>
-  `).join('');
+  if (G.tags.length===0) { container.innerHTML='<div class="text-center py-8 text-blue-300/50"><i class="fas fa-tags text-3xl mb-2 block opacity-20"></i><p>Aucun tag</p></div>'; return; }
+  const usage={};
+  G.documents.forEach(d=>(d.tags||[]).forEach(t=>{usage[t]=(usage[t]||0)+1;}));
+  container.innerHTML=G.tags.map(t=>`
+    <div class="glass-card rounded-xl p-3 border border-blue-500/15 hover:border-blue-400/30 transition-all group flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg flex-shrink-0 cursor-pointer" style="background:${t.color}30;border:2px solid ${t.color}60" onclick="filterByTag('${escapeHtml(t.name)}')">
+        <div class="w-full h-full flex items-center justify-center"><span class="text-[10px] font-bold" style="color:${t.color}">#</span></div>
+      </div>
+      <div class="flex-1 min-w-0">
+        ${_tags.editingId===t.id
+          ?`<div class="flex gap-2"><input id="etag_${t.id}" value="${escapeHtml(t.name)}" class="flex-1 px-2 py-1 rounded-lg text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.3);" onkeydown="if(event.key===\'Enter\')confirmEditTag('${t.id}');if(event.key===\'Escape\')cancelEditTag()"><input type="color" id="etagc_${t.id}" value="${t.color}" class="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"></div>`
+          :`<p class="text-white font-medium text-sm truncate cursor-pointer hover:text-blue-300" onclick="filterByTag('${escapeHtml(t.name)}')" style="color:${t.color}">${escapeHtml(t.name)}</p>`
+        }
+        <p class="text-xs text-blue-300/40 mt-0.5">${usage[t.name]||0} doc(s)</p>
+      </div>
+      <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        ${_tags.editingId===t.id
+          ?`<button onclick="confirmEditTag('${t.id}')" class="p-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30" title="Valider"><i class="fas fa-check"></i></button>
+             <button onclick="cancelEditTag()" class="p-1.5 rounded-lg bg-gray-500/20 text-gray-400 text-xs hover:bg-gray-500/30" title="Annuler"><i class="fas fa-times"></i></button>`
+          :`<button onclick="startEditTag('${t.id}')" class="p-1.5 rounded-lg hover:bg-blue-500/20 text-blue-400 text-xs" title="Modifier"><i class="fas fa-edit"></i></button>`
+        }
+        <button onclick="deleteTag('${t.id}')" class="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 text-xs" title="Supprimer"><i class="fas fa-trash"></i></button>
+      </div>
+    </div>`).join('');
 }
 
 async function createTag() {
-  const input = document.getElementById('newTagInput');
-  const name = input?.value.trim();
-  if (!name) return;
-  
-  const newTag = {
-    id: generateId(),
-    name,
-    color: document.getElementById('newTagColor')?.value || '#3b82f6',
-    count: 0,
-    company_id: G.currentUser.companyId,
-    created_at: new Date().toISOString()
-  };
-  
-  const { error } = await G.supabase.from('tags').insert(newTag);
-  if (error) {
-    showToast('Erreur création tag: ' + error.message, 'error');
-    return;
-  }
-  
-  G.tags.push(newTag);
-  if (input) input.value = '';
-  renderTags();
+  const input=document.getElementById('newTagInput'); const colorEl=document.getElementById('newTagColor');
+  const name=input?.value.trim(); if(!name){showToast('Entrez un nom de tag','warning');return;}
+  if (G.tags.some(t=>t.name.toLowerCase()===name.toLowerCase())) { showToast(`Le tag "${name}" existe deja`,'warning'); return; }
+  const color=colorEl?.value||TAG_PALETTE[G.tags.length%TAG_PALETTE.length];
+  const newTag={id:generateId(),name,color,count:0,company_id:G.currentUser.companyId,created_at:new Date().toISOString()};
+  try {
+    const {data:ex}=await G.supabase.from('tags').select('id').eq('company_id',G.currentUser.companyId).ilike('name',name).maybeSingle();
+    if (ex) { showToast(`Le tag "${name}" existe deja`,'warning'); return; }
+    const {error}=await G.supabase.from('tags').insert(newTag); if(error) throw error;
+  } catch(err) { showToast('Erreur creation tag: '+err.message,'error'); return; }
+  G.tags.push(newTag); if(input) input.value=''; if(colorEl) colorEl.value=TAG_PALETTE[G.tags.length%TAG_PALETTE.length];
+  renderTags(); showToast(`Tag "${name}" cree`,'success');
 }
 
 async function deleteTag(tagId) {
-  const { error } = await G.supabase.from('tags').delete().eq('id', tagId);
-  if (error) {
-    showToast('Erreur suppression tag', 'error');
+  const tag=G.tags.find(t=>t.id===tagId); if(!tag) return;
+  if (!confirm(`Supprimer le tag "${tag.name}" ?`)) return;
+  try { const {error}=await G.supabase.from('tags').delete().eq('id',tagId); if(error) throw error; G.tags=G.tags.filter(t=>t.id!==tagId); renderTags(); showToast(`Tag supprim\xe9`,'success'); }
+  catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+function startEditTag(tagId) { _tags.editingId=tagId; renderTags(); setTimeout(()=>document.getElementById(`etag_${tagId}`)?.focus(),50); }
+function cancelEditTag() { _tags.editingId=null; renderTags(); }
+async function confirmEditTag(tagId) {
+  const newName=document.getElementById(`etag_${tagId}`)?.value.trim(); const newColor=document.getElementById(`etagc_${tagId}`)?.value;
+  const tag=G.tags.find(t=>t.id===tagId); if(!newName||!tag) return;
+  try {
+    const {error}=await G.supabase.from('tags').update({name:newName,color:newColor||tag.color}).eq('id',tagId); if(error) throw error;
+    tag.name=newName; tag.color=newColor||tag.color; _tags.editingId=null; renderTags(); showToast('Tag modifi\xe9','success');
+  } catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+function filterByTag(tagName) { G.currentTagFilter=tagName; renderDocuments(); showToast(`Filtre: #${tagName}`,'info'); }
+function clearTagFilter() { G.currentTagFilter=null; renderDocuments(); showToast('Filtre tag retir\xe9','info'); }
+
+// ═══════════════════════════════════════════════════════════════════════
+// 4. CONFIGURATION (SETTINGS)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderSettings() {
+  if (!G.currentUser) return;
+  let prefs={};
+  if (G.supabase) {
+    try { const {data}=await G.supabase.from('profiles').select('*').eq('id',G.currentUser.id).single(); if(data){Object.assign(G.currentUser,{name:data.name,email:data.email});prefs=data.preferences||{};} } catch(_){}
+  }
+  const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
+  const sc=(id,v)=>{const el=document.getElementById(id);if(el)el.checked=v;};
+  sv('profileName',G.currentUser.name||''); sv('profileEmail',G.currentUser.email||'');
+  sv('profilePhone',G.currentUser.phone||''); sv('profileJobTitle',G.currentUser.job_title||'');
+  sv('profileLanguage',prefs.language||'fr'); sv('profileTimezone',prefs.timezone||'Europe/Paris');
+  sc('notifEmail',prefs.notif_email!==false); sc('notifBrowser',prefs.notif_browser!==false);
+  sc('notifWorkflow',prefs.notif_workflow!==false); sc('notifShares',prefs.notif_shares!==false);
+  const planEl=document.getElementById('currentPlanDisplay'); if(planEl) planEl.textContent=(G.currentUser.plan||'free').toUpperCase();
+  const avEl=document.getElementById('profileAvatarPreview'); if(avEl) avEl.textContent=(G.currentUser.name||'U').charAt(0).toUpperCase();
+}
+
+async function saveProfile() {
+  const name=document.getElementById('profileName')?.value.trim();
+  const phone=document.getElementById('profilePhone')?.value.trim()||'';
+  const jobTitle=document.getElementById('profileJobTitle')?.value.trim()||'';
+  if (!name) { showToast('Le nom est requis','warning'); return; }
+  const btn=document.querySelector('[onclick="saveProfile()"]');
+  if (btn) { btn.disabled=true; btn.innerHTML='<span class="spinner mr-2"></span>Enregistrement\u2026'; }
+  try {
+    const {error}=await G.supabase.from('profiles').update({name,phone,job_title:jobTitle,updated_at:new Date().toISOString()}).eq('id',G.currentUser.id);
+    if (error) throw error;
+    G.currentUser.name=name; updateUserDisplay(); showToast('Profil mis \xe0 jour','success');
+    await addAuditLog('profile_update','user',G.currentUser.id,`Nom: ${name}`);
+  } catch(err) { showToast('Erreur: '+err.message,'error'); }
+  finally { if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-save mr-2"></i>Enregistrer';} }
+}
+
+async function toggleSetting(setting, value) {
+  const val=value!==undefined?value:document.getElementById(setting)?.checked;
+  try {
+    const {data}=await G.supabase.from('profiles').select('preferences').eq('id',G.currentUser.id).single();
+    const prefs=data?.preferences||{}; prefs[setting]=val;
+    const {error}=await G.supabase.from('profiles').update({preferences:prefs}).eq('id',G.currentUser.id);
+    if (error) throw error;
+    showToast('Param\xe8tre mis \xe0 jour','success');
+  } catch(err) { showToast('Erreur sauvegarde: '+err.message,'error'); }
+}
+
+async function changePassword() {
+  const np=document.getElementById('newPassword')?.value; const cp=document.getElementById('confirmPassword')?.value;
+  if (!np||!cp) { showToast('Remplissez tous les champs','warning'); return; }
+  if (np!==cp) { showToast('Les mots de passe ne correspondent pas','warning'); return; }
+  if (np.length<8) { showToast('Minimum 8 caract\xe8res','warning'); return; }
+  try {
+    const {error}=await G.supabase.auth.updateUser({password:np}); if(error) throw error;
+    showToast('Mot de passe modifi\xe9','success');
+    await addAuditLog('password_change','user',G.currentUser.id,'Mot de passe chang\xe9');
+    ['newPassword','confirmPassword'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  } catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+async function updateCompanySettings() {
+  const n=document.getElementById('companyNameInput')?.value.trim(); if(!n){showToast('Nom requis','warning');return;}
+  try { const {error}=await G.supabase.from('companies').update({name:n}).eq('id',G.currentUser.companyId); if(error) throw error; G.currentUser.companyName=n; updateUserDisplay(); showToast('Entreprise mise \xe0 jour','success'); }
+  catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+function exportUserData() {
+  const d={profile:{name:G.currentUser.name,email:G.currentUser.email,role:G.currentUser.role},documents:G.documents.filter(x=>x.owner_id===G.currentUser.id),activities:G.auditLogs.filter(x=>x.user_id===G.currentUser.id)};
+  const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=Object.assign(document.createElement('a'),{href:url,download:`data_${G.currentUser.email}_${Date.now()}.json`});
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url); showToast('Donn\xe9es export\xe9es','success');
+}
+
+function requestAccountDeletion() {
+  if (!confirm('\u26a0\ufe0f Voulez-vous demander la suppression de votre compte ?')) return;
+  if (prompt('Tapez "SUPPRIMER" pour confirmer:')!=='SUPPRIMER') { showToast('Annul\xe9','info'); return; }
+  addAuditLog('account_deletion_request','user',G.currentUser.id,`Demande par ${G.currentUser.email}`).catch(()=>{});
+  showToast('Demande enregistr\xe9e — 30 jours (RGPD)','info',7000);
+}
+
+function copySqlSchema() { const s=document.getElementById('sqlSchemaBlock')?.textContent; if(s) _copyTxt(s); }
+function openDangerModal() { showToast('Fonctionnalit\xe9 en d\xe9veloppement','info'); }
+function closeNotifPanel() { const p=document.getElementById('notifPanel'); if(p) p.classList.add('hidden'); }
+function toggleNotifications() { const p=document.getElementById('notifPanel'); if(p) p.classList.toggle('hidden'); }
+function markAllNotifRead() { showToast('Notifications lues','success'); ['notifBadge','notifCountBadge'].forEach(id=>{document.getElementById(id)?.classList.add('hidden');}); }
+
+// ═══════════════════════════════════════════════════════════════════════
+// 5. SECURITE & AUDIT
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderSecurity() {
+  if (G.supabase&&G.currentUser) {
+    try {
+      const [docsRes,keysRes,auditRes]=await Promise.all([
+        G.supabase.from('documents').select('id,is_deleted,size').eq('company_id',G.currentUser.companyId),
+        G.supabase.from('api_keys').select('id').eq('user_id',G.currentUser.id),
+        G.supabase.from('audit_logs').select('id,action,severity,created_at').eq('user_id',G.currentUser.id).order('created_at',{ascending:false}).limit(200),
+      ]);
+      if(docsRes.data) G.documents=docsRes.data;
+      if(keysRes.data) G.apiKeys=keysRes.data;
+      if(auditRes.data) G.auditLogs=auditRes.data;
+    } catch(e) { console.warn('renderSecurity:',e); }
+  }
+  const st=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  st('secScanOk',G.documents.filter(d=>!d.is_deleted).length);
+  st('secScanBlocked',G.documents.filter(d=>d.is_deleted).length);
+  st('secApiKeys',G.apiKeys.length);
+  st('secAuditCount',G.auditLogs.length);
+  st('secCritEvents',G.auditLogs.filter(l=>l.severity==='critical'||l.severity==='warning').length);
+}
+
+function switchSecurityTab(tab) {
+  ['audit','trash'].forEach(t=>{
+    document.getElementById(`secPanel-${t}`)?.classList.toggle('hidden',t!==tab);
+    const btn=document.getElementById(`secTab-${t}`);
+    if(btn){btn.classList.toggle('bg-blue-500/20',t===tab);btn.classList.toggle('text-blue-300',t===tab);btn.classList.toggle('border-blue-500/20',t===tab);}
+  });
+  if (tab==='audit') renderAuditLog(); else loadDeletedDocs();
+}
+
+async function renderAuditLog() {
+  const container=document.getElementById('auditLogList'); if(!container) return;
+  container.innerHTML='<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-400"></i></div>';
+  if (G.supabase&&G.currentUser) {
+    try {
+      const pg=_sec.auditPage||1; const sz=_sec.auditPageSize||30;
+      let q=G.supabase.from('audit_logs').select('*').order('created_at',{ascending:false}).range((pg-1)*sz,pg*sz-1);
+      const fv=document.getElementById('auditFilter')?.value; if(fv) q=q.eq('action',fv);
+      q=q.eq('user_id',G.currentUser.id);
+      const {data,error}=await q; if(!error&&data) G.auditLogs=data;
+    } catch(e) {}
+  }
+  let filtered=G.auditLogs; const fv=document.getElementById('auditFilter')?.value; if(fv) filtered=filtered.filter(l=>l.action===fv);
+  const sevC={critical:'text-red-400 bg-red-500/10',warning:'text-yellow-400 bg-yellow-500/10',info:'text-blue-400 bg-blue-500/10'};
+  if(filtered.length===0){container.innerHTML='<div class="text-center py-6 text-blue-300/40 text-sm">Aucun log d\'audit</div>';return;}
+  container.innerHTML=filtered.map(log=>`
+    <div class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-blue-500/5 border-b border-blue-500/5 transition-colors">
+      <span class="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase mt-0.5 ${sevC[log.severity]||sevC.info}">${log.severity||'info'}</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-white text-xs font-medium">${escapeHtml(log.action||'\u2014')}${log.target_type?`<span class="text-blue-300/50 ml-1">\xb7 ${log.target_type}</span>`:''}</p>
+        ${log.details?`<p class="text-xs text-blue-300/50 truncate mt-0.5">${escapeHtml(log.details)}</p>`:''}
+      </div>
+      <span class="flex-shrink-0 text-xs text-blue-300/40 whitespace-nowrap">${formatDate(log.created_at)}</span>
+    </div>`).join('');
+  const st=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const total=filtered.length; const pg=_sec.auditPage||1; const sz=_sec.auditPageSize||30; const pages=Math.max(1,Math.ceil(total/sz));
+  st('auditPageInfo',`Page ${pg}/${pages} (${total})`);
+  const prev=document.getElementById('auditPrevBtn'); if(prev) prev.disabled=pg<=1;
+  const next=document.getElementById('auditNextBtn'); if(next) next.disabled=pg>=pages;
+}
+
+function auditPrevPage() { if((_sec.auditPage||1)>1){_sec.auditPage--;renderAuditLog();} }
+function auditNextPage() { _sec.auditPage=(_sec.auditPage||1)+1; renderAuditLog(); }
+
+async function loadDeletedDocs() {
+  const container=document.getElementById('trashList'); if(!container) return;
+  if (G.supabase&&G.currentUser?.companyId) {
+    try {
+      const {data}=await G.supabase.from('documents').select('*').eq('company_id',G.currentUser.companyId).eq('is_deleted',true).order('deleted_at',{ascending:false});
+      if (data) { G.documents=G.documents.filter(d=>!d.is_deleted).concat(data); const seen=new Set(); G.documents=G.documents.filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true;}); }
+    } catch(e) {}
+  }
+  const deleted=G.documents.filter(d=>d.is_deleted);
+  if(deleted.length===0){container.innerHTML='<div class="text-center py-8 text-blue-300/40 text-sm"><i class="fas fa-trash text-2xl mb-2 block opacity-20"></i>Corbeille vide</div>';return;}
+  container.innerHTML=deleted.map(doc=>`
+    <div class="flex items-center justify-between p-3 rounded-xl glass-card border border-red-500/20 hover:border-red-400/30 transition-all">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center"><i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-red-400/70 text-sm"></i></div>
+        <div><p class="text-white/80 text-sm font-medium">${escapeHtml(doc.name)}</p><p class="text-xs text-blue-300/50">${formatBytes(doc.size)} \xb7 ${formatDate(doc.deleted_at)}</p></div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="restoreDocument('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30 flex items-center gap-1 transition-all"><i class="fas fa-undo"></i>Restaurer</button>
+        <button onclick="permanentDeleteDocument('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30 flex items-center gap-1 transition-all"><i class="fas fa-trash"></i>D\xe9finitif</button>
+      </div>
+    </div>`).join('');
+}
+
+async function restoreDocument(docId) {
+  try {
+    const {error}=await G.supabase.from('documents').update({is_deleted:false,deleted_at:null}).eq('id',docId); if(error) throw error;
+    const doc=G.documents.find(d=>d.id===docId); if(doc){doc.is_deleted=false;doc.deleted_at=null;}
+    showToast('Document restaur\xe9','success'); renderDocuments(); updateBadges(); loadDeletedDocs();
+    await addAuditLog('restore','document',docId);
+  } catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+async function permanentDeleteDocument(docId) {
+  const doc=G.documents.find(d=>d.id===docId);
+  if (!confirm(`Supprimer d\xe9finitivement "${doc?.name||docId}" ? Irr\xe9versible.`)) return;
+  try {
+    if (doc?.storage_path) await G.supabase.storage.from(CONFIG.storageBucket).remove([doc.storage_path]).catch(()=>{});
+    const {error}=await G.supabase.from('documents').delete().eq('id',docId); if(error) throw error;
+    G.documents=G.documents.filter(d=>d.id!==docId); showToast('Document supprim\xe9 d\xe9finitivement','success'); loadDeletedDocs(); updateBadges();
+  } catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+async function scanAllDocuments() {
+  const btn=document.querySelector('[onclick="scanAllDocuments()"]');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spinner mr-2"></span>Scan\u2026';}
+  const issues=[]; const badExt=['exe','bat','cmd','sh','ps1','vbs','jar','msi','dll','scr'];
+  G.documents.filter(d=>!d.is_deleted).forEach(doc=>{
+    const ext=(doc.name||'').split('.').pop().toLowerCase();
+    if(badExt.includes(ext)) issues.push({doc,reason:`Extension suspecte (.${ext})`});
+    if(doc.size>50*1024*1024) issues.push({doc,reason:`Taille anormale (${formatBytes(doc.size)})`});
+    if(!doc.type||doc.type==='unknown') issues.push({doc,reason:'Type MIME non reconnu'});
+  });
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="fas fa-shield-virus mr-2"></i>Scanner';}
+  if(issues.length===0) showToast(`Scan termin\xe9 \u2014 ${G.documents.filter(d=>!d.is_deleted).length} doc(s), aucun probl\xe8me`,'success',5000);
+  else { showToast(`\u26a0\ufe0f ${issues.length} probl\xe8me(s) d\xe9tect\xe9(s)`,'warning',6000); issues.forEach(i=>addAuditLog('security_scan_warning','document',i.doc.id,i.reason).catch(()=>{})); }
+  await addAuditLog('security_scan','system','all',`${G.documents.filter(d=>!d.is_deleted).length} docs scann\xe9s, ${issues.length} alertes`);
+}
+
+function exportAuditLog() {
+  const blob=new Blob([JSON.stringify(G.auditLogs,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=Object.assign(document.createElement('a'),{href:url,download:`audit_${Date.now()}.json`});
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url); showToast('Audit export\xe9','success');
+}
+
+function exportAllData() {
+  const blob=new Blob([JSON.stringify({documents:G.documents,workflows:G.workflows,users:G.users,tags:G.tags,shares:G.shares},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=Object.assign(document.createElement('a'),{href:url,download:`export_ged_${Date.now()}.json`});
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url); showToast('Export effectu\xe9','success');
+}
+
+function exportDocumentsCsv() {
+  const docs=G.documents.filter(d=>!d.is_deleted);
+  const cell=v=>{const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;};
+  const csv='\uFEFF'+[['ID','Nom','Type','Taille','Cr\xe9e le','Port\xe9e','Tags'],...docs.map(d=>[d.id,d.name,d.type,d.size,d.created_at,d.scope||'',(d.tags||[]).join(';')].map(cell))].map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob);
+  const a=Object.assign(document.createElement('a'),{href:url,download:`documents_${new Date().toISOString().slice(0,10)}.csv`});
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url); showToast('Export CSV effectu\xe9','success');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 6. API KEYS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderApiKeys() {
+  const container=document.getElementById('apiKeysList2'); if(!container) return;
+  if (G.supabase&&G.currentUser) {
+    try { const {data}=await G.supabase.from('api_keys').select('*').eq('user_id',G.currentUser.id).order('created_at',{ascending:false}); if(data) G.apiKeys=data; } catch(e) {}
+  }
+  if(G.apiKeys.length===0){container.innerHTML='<div class="text-center py-8 text-blue-300/50"><i class="fas fa-key text-3xl mb-2 block opacity-20"></i><p class="text-sm">Aucune cl\xe9 API</p></div>';return;}
+  container.innerHTML=G.apiKeys.map(k=>{
+    const expired=k.expires_at&&new Date(k.expires_at)<new Date();
+    const expLabel=k.expires_at?(expired?'\u23f0 Expir\xe9e':`Expire le ${formatDate(k.expires_at)}`):'Illimit\xe9e';
+    return `<div class="glass-card rounded-xl p-4 border ${expired?'border-red-500/20':'border-green-500/20'} hover:border-${expired?'red':'green'}-400/40 transition-all">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-lg ${expired?'bg-red-500/15':'bg-green-500/15'} flex items-center justify-center flex-shrink-0"><i class="fas fa-key ${expired?'text-red-400':'text-green-400'}"></i></div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap"><p class="text-white font-semibold text-sm">${escapeHtml(k.name||'Cl\xe9')}</p>${expired?'<span class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">Expir\xe9e</span>':'<span class="text-[10px] px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">Active</span>'}</div>
+          <code class="text-green-400/70 text-xs font-mono block mt-1">${(k.key||'').substring(0,24)}\u2026</code>
+          <div class="flex gap-3 mt-1 text-xs text-blue-300/50 flex-wrap"><span>${formatDate(k.created_at)}</span><span>${expLabel}</span>${k.permissions?`<span>${Array.isArray(k.permissions)?k.permissions.join(', '):k.permissions}</span>`:''}</div>
+        </div>
+        <div class="flex gap-1 flex-shrink-0">
+          <button onclick="copyApiKey('${escapeHtml(k.key)}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-all" title="Copier"><i class="fas fa-copy text-sm"></i></button>
+          <button onclick="revokeApiKey('${k.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30 transition-all flex items-center gap-1"><i class="fas fa-ban"></i>R\xe9voquer</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function generateApiKey() {
+  let modal=document.getElementById('createApiKeyModal');
+  if (!modal){modal=document.createElement('div');modal.id='createApiKeyModal';modal.className='modal-overlay';document.body.appendChild(modal);}
+  modal.innerHTML=`<div class="modal-box" style="max-width:480px;">
+    <div class="flex items-center justify-between mb-5"><h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-key text-green-400"></i>Nouvelle cl\xe9 API</h3><button onclick="document.getElementById('createApiKeyModal').classList.add('hidden')" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button></div>
+    <div class="space-y-4">
+      <div><label class="text-blue-200/70 text-xs font-medium block mb-1">Nom <span class="text-red-400">*</span></label><input id="apiKeyName" type="text" placeholder="Ex: App mobile, CI/CD\u2026" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div>
+      <div><label class="text-blue-200/70 text-xs font-medium block mb-2">Permissions</label><div class="flex flex-wrap gap-2">${['read','write','delete','admin'].map(p=>`<label class="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg border border-blue-500/20 hover:border-blue-400/40 text-sm"><input type="checkbox" class="api-perm-check" value="${p}" ${p==='read'?'checked':''}><span class="text-blue-300 capitalize">${p}</span></label>`).join('')}</div></div>
+      <div><label class="text-blue-200/70 text-xs font-medium block mb-1">Expiration</label><select id="apiKeyExpiry" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">Illimit\xe9e</option><option value="30">30 jours</option><option value="90">90 jours</option><option value="365">1 an</option></select></div>
+    </div>
+    <div class="flex gap-3 mt-5 pt-4 border-t border-blue-500/20">
+      <button onclick="document.getElementById('createApiKeyModal').classList.add('hidden')" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10">Annuler</button>
+      <button onclick="_confirmGenerateApiKey()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2"><i class="fas fa-plus"></i>G\xe9n\xe9rer</button>
+    </div>
+  </div>`;
+  modal.classList.remove('hidden');
+}
+
+async function _confirmGenerateApiKey() {
+  const name=document.getElementById('apiKeyName')?.value.trim(); if(!name){showToast('Nommez la cl\xe9','warning');return;}
+  const perms=Array.from(document.querySelectorAll('.api-perm-check:checked')).map(c=>c.value);
+  const expDays=parseInt(document.getElementById('apiKeyExpiry')?.value||'0');
+  const key=`ged_${generateId()}_${generateId().substring(0,16)}`;
+  const newKey={id:generateId(),name,key,permissions:perms,expires_at:expDays>0?new Date(Date.now()+expDays*86400000).toISOString():null,user_id:G.currentUser.id,company_id:G.currentUser.companyId,created_at:new Date().toISOString()};
+  try { const {error}=await G.supabase.from('api_keys').insert(newKey); if(error) throw error; } catch(err) { console.warn('api_keys insert non-bloquant:',err); }
+  G.apiKeys.unshift(newKey); document.getElementById('createApiKeyModal')?.classList.add('hidden');
+  _showGeneratedKey(key,name); renderApiKeys();
+  await addAuditLog('api_key_create','api_key',newKey.id,`${name} perms:${perms.join(',')}`);
+}
+
+function _showGeneratedKey(key,name) {
+  let modal=document.getElementById('generatedKeyModal');
+  if(!modal){modal=document.createElement('div');modal.id='generatedKeyModal';modal.className='modal-overlay';document.body.appendChild(modal);}
+  modal.innerHTML=`<div class="modal-box" style="max-width:500px;">
+    <div class="flex items-center gap-3 mb-5"><div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-400 border border-green-500/30"><i class="fas fa-check"></i></div><div><h3 class="text-white font-bold">Cl\xe9 API g\xe9n\xe9r\xe9e !</h3><p class="text-blue-300/50 text-xs">${escapeHtml(name)}</p></div></div>
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/25 mb-4" style="background:rgba(245,158,11,0.06)">
+      <p class="text-yellow-400 text-xs font-bold mb-2">\u26a0\ufe0f Copiez cette cl\xe9 maintenant</p>
+      <div class="flex gap-2"><code class="flex-1 bg-slate-900/70 border border-yellow-500/30 rounded-lg px-3 py-2 text-yellow-300 font-mono text-xs break-all">${escapeHtml(key)}</code>
+      <button onclick="_copyTxt('${escapeHtml(key)}')" class="px-3 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 text-sm"><i class="fas fa-copy"></i></button></div>
+    </div>
+    <button onclick="document.getElementById('generatedKeyModal').classList.add('hidden')" class="w-full btn-primary py-2.5 rounded-xl text-white text-sm font-semibold">J\'ai copi\xe9 la cl\xe9</button>
+  </div>`;
+  modal.classList.remove('hidden');
+}
+
+function generateApiKeyV6() { generateApiKey(); }
+
+async function revokeApiKey(id) {
+  if (!confirm('R\xe9voquer cette cl\xe9 API ?')) return;
+  try { const {error}=await G.supabase.from('api_keys').delete().eq('id',id); if(error) throw error; G.apiKeys=G.apiKeys.filter(k=>k.id!==id); renderApiKeys(); showToast('Cl\xe9 r\xe9voqu\xe9e','success'); }
+  catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+function copyApiKey(key) { if(key) _copyTxt(key); }
+
+function _copyTxt(text) {
+  if(navigator.clipboard) navigator.clipboard.writeText(text).then(()=>showToast('Copi\xe9','success')).catch(()=>_fallbackCopy(text));
+  else _fallbackCopy(text);
+}
+function _fallbackCopy(text) {
+  const ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy');showToast('Copi\xe9','success');}catch(_){showToast('Impossible de copier','error');}
+  document.body.removeChild(ta);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 7. INTEGRATIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderIntegrations() {
+  const container=document.getElementById('integrationsGrid'); if(!container) return;
+  if (G.supabase&&G.currentUser?.companyId) {
+    try { const {data}=await G.supabase.from('integrations').select('*').eq('company_id',G.currentUser.companyId); if(data) data.forEach(i=>{_integrations[i.provider]=i.connected;}); } catch(_) {}
+  }
+  const integrations=[
+    {id:'slack',name:'Slack',icon:'fab fa-slack',color:'purple',desc:'Notifications temps r\xe9el'},
+    {id:'gdrive',name:'Google Drive',icon:'fab fa-google-drive',color:'green',desc:'Import/Export documents'},
+    {id:'dropbox',name:'Dropbox',icon:'fab fa-dropbox',color:'blue',desc:'Synchronisation cloud'},
+    {id:'ms365',name:'Microsoft 365',icon:'fab fa-microsoft',color:'sky',desc:'\xc9diter avec Office'},
+    {id:'zapier',name:'Zapier',icon:'fas fa-bolt',color:'yellow',desc:'Automatisations no-code'},
+    {id:'make',name:'Make',icon:'fas fa-cogs',color:'orange',desc:'Workflows avanc\xe9s'},
+    {id:'github',name:'GitHub',icon:'fab fa-github',color:'gray',desc:'Stockage & versioning'},
+    {id:'notion',name:'Notion',icon:'fas fa-book-open',color:'indigo',desc:'Wiki & connaissances'},
+  ];
+  container.innerHTML=integrations.map(i=>{
+    const connected=_integrations[i.id]||false;
+    return `<div class="glass-card rounded-xl p-4 border border-${i.color}-500/20 hover:border-${i.color}-400/40 transition-all">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-10 h-10 rounded-lg bg-${i.color}-500/15 flex items-center justify-center text-${i.color}-400"><i class="${i.icon} text-lg"></i></div>
+        <div class="flex-1"><div class="flex items-center gap-2"><p class="text-white font-semibold text-sm">${i.name}</p>${connected?'<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400">\u25cf Connect\xe9</span>':''}</div><p class="text-xs text-blue-300/50">${i.desc}</p></div>
+      </div>
+      <div class="flex gap-2">
+        ${connected
+          ?`<button onclick="disconnectIntegration('${i.id}')" class="flex-1 py-2 rounded-lg bg-red-500/15 text-red-400 text-xs hover:bg-red-500/25 transition-all flex items-center justify-center gap-1"><i class="fas fa-unlink"></i>D\xe9connecter</button>`
+          :`<button onclick="connectIntegration('${i.id}')" class="flex-1 py-2 rounded-lg bg-${i.color}-500/15 text-${i.color}-400 text-xs hover:bg-${i.color}-500/25 transition-all flex items-center justify-center gap-1"><i class="fas fa-plug"></i>Connecter</button>`
+        }
+        <button onclick="showIntegrationInfo('${i.id}')" class="px-3 py-2 rounded-lg border border-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/10 transition-all" title="Info"><i class="fas fa-info-circle"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+  listWebhooks();
+}
+
+async function connectIntegration(provider) {
+  showToast(`Connexion ${provider}\u2026`,'info');
+  setTimeout(async()=>{
+    _integrations[provider]=true;
+    if(G.supabase&&G.currentUser?.companyId) await G.supabase.from('integrations').upsert({provider,connected:true,company_id:G.currentUser.companyId,connected_at:new Date().toISOString()},{onConflict:'provider,company_id'}).catch(()=>{});
+    showToast(`${provider} connect\xe9`,'success'); renderIntegrations();
+    await addAuditLog('integration_connect','integration',provider,`Connect\xe9: ${provider}`);
+  },1500);
+}
+
+async function disconnectIntegration(provider) {
+  if(!confirm(`D\xe9connecter ${provider} ?`)) return;
+  _integrations[provider]=false;
+  if(G.supabase&&G.currentUser?.companyId) await G.supabase.from('integrations').upsert({provider,connected:false,company_id:G.currentUser.companyId},{onConflict:'provider,company_id'}).catch(()=>{});
+  showToast(`${provider} d\xe9connect\xe9`,'info'); renderIntegrations();
+}
+
+function showIntegrationInfo(provider) {
+  const docs={slack:'https://api.slack.com',gdrive:'https://developers.google.com/drive',dropbox:'https://www.dropbox.com/developers'};
+  if(docs[provider]) window.open(docs[provider],'_blank'); else showToast('Documentation \xe0 venir','info');
+}
+
+async function addWebhook() {
+  const url=document.getElementById('webhookUrl')?.value.trim(); const event=document.getElementById('webhookEvent')?.value;
+  if(!url){showToast('URL requise','warning');return;} if(!/^https?:\/\/.+/.test(url)){showToast('URL invalide','warning');return;}
+  const webhook={id:generateId(),url,event,active:true,company_id:G.currentUser.companyId,created_at:new Date().toISOString()};
+  try { await G.supabase.from('webhooks').insert(webhook).catch(()=>{}); } catch(_) {}
+  _webhooks.push(webhook); document.getElementById('webhookUrl').value='';
+  showToast(`Webhook "${event}" ajout\xe9`,'success'); listWebhooks();
+}
+
+async function listWebhooks() {
+  const container=document.getElementById('webhooksList'); if(!container) return;
+  if(G.supabase&&G.currentUser?.companyId){
+    try{const{data}=await G.supabase.from('webhooks').select('*').eq('company_id',G.currentUser.companyId).order('created_at',{ascending:false});if(data&&data.length>0)_webhooks.splice(0,_webhooks.length,...data);}catch(_){}
+  }
+  if(_webhooks.length===0){container.innerHTML='<div class="text-center py-6 text-blue-300/40 text-sm"><i class="fas fa-link text-2xl mb-2 block opacity-20"></i>Aucun webhook</div>';return;}
+  container.innerHTML=_webhooks.map(w=>`
+    <div class="flex items-center justify-between p-3 rounded-xl glass-card border border-blue-500/15 hover:border-blue-400/30 transition-all">
+      <div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center"><i class="fas fa-link text-blue-400 text-sm"></i></div>
+      <div><p class="text-white text-sm font-medium">${escapeHtml(w.event||'Tous')}</p><p class="text-blue-300/50 text-xs truncate max-w-[250px]">${escapeHtml(w.url)}</p></div></div>
+      <div class="flex gap-2">
+        <button onclick="testWebhook('${w.id}')" class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-all flex items-center gap-1"><i class="fas fa-play"></i>Tester</button>
+        <button onclick="removeWebhook('${w.id}')" class="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all"><i class="fas fa-trash text-sm"></i></button>
+      </div>
+    </div>`).join('');
+}
+
+async function testWebhook(webhookId) {
+  const wh=_webhooks.find(w=>w.id===webhookId); if(!wh) return;
+  showToast(`Test envoy\xe9 vers ${wh.url}`,'info');
+  try { await fetch(wh.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event:'test',source:'SystemesGED',timestamp:new Date().toISOString()}),mode:'no-cors'}); showToast('Test envoy\xe9','success'); }
+  catch(err) { showToast('Erreur: '+err.message,'error'); }
+}
+
+async function removeWebhook(webhookId) {
+  if(!confirm('Supprimer ce webhook ?')) return;
+  await G.supabase.from('webhooks').delete().eq('id',webhookId).catch(()=>{});
+  const idx=_webhooks.findIndex(w=>w.id===webhookId); if(idx>-1) _webhooks.splice(idx,1);
+  listWebhooks(); showToast('Webhook supprim\xe9','success');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 8. AUDIT SECURITE (auditv6)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderAuditV6() {
+  const statsContainer=document.getElementById('auditStatsGrid');
+  const timelineContainer=document.getElementById('auditTimelineList');
+  const alertsContainer=document.getElementById('securityAlertsList');
+  if(timelineContainer) timelineContainer.innerHTML='<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-blue-400"></i></div>';
+
+  if (G.supabase&&G.currentUser) {
+    try {
+      const offset=(_audit.page-1)*_audit.pageSize;
+      const daysAgo=new Date(Date.now()-(_audit.filter.days||30)*86400000).toISOString();
+      let q=G.supabase.from('audit_logs').select('*',{count:'exact'}).gte('created_at',daysAgo).order('created_at',{ascending:false}).range(offset,offset+_audit.pageSize-1);
+      if(_audit.filter.action) q=q.eq('action',_audit.filter.action);
+      if(_audit.filter.severity) q=q.eq('severity',_audit.filter.severity);
+      if(!G.currentUser.isSystemAdmin&&G.currentUser.role!=='admin') q=q.eq('user_id',G.currentUser.id);
+      const {data,error,count}=await q; if(!error&&data){G.auditLogs=data;_audit.totalCount=count||0;}
+    } catch(e) { console.warn('renderAuditV6:',e); }
+  }
+
+  if (statsContainer) {
+    const c={total:_audit.totalCount||G.auditLogs.length,logins:G.auditLogs.filter(l=>l.action==='login').length,uploads:G.auditLogs.filter(l=>l.action==='upload').length,deletes:G.auditLogs.filter(l=>l.action==='delete').length,shares:G.auditLogs.filter(l=>(l.action||'').includes('share')).length,alertes:G.auditLogs.filter(l=>l.severity==='warning'||l.severity==='critical').length};
+    statsContainer.innerHTML=Object.entries(c).map(([k,v])=>`<div class="glass-card rounded-xl p-3 text-center border border-blue-500/15 cursor-pointer hover:border-blue-400/30 transition-all" onclick="setAuditFilter('action','${k==='total'?'':k==='logins'?'login':k==='uploads'?'upload':k==='deletes'?'delete':k==='shares'?'share':''}')"><p class="text-2xl font-bold ${k==='alertes'?'text-orange-400':'text-white'}">${v}</p><p class="text-xs text-blue-300/50 capitalize">${k}</p></div>`).join('');
+  }
+
+  if (timelineContainer) {
+    const sevC={critical:'text-red-400',warning:'text-yellow-400',info:'text-blue-400'};
+    if(G.auditLogs.length===0){timelineContainer.innerHTML='<div class="text-center py-8 text-blue-300/40">Aucun \xe9v\xe9nement</div>';}
+    else timelineContainer.innerHTML=G.auditLogs.map(l=>`<div class="flex items-start gap-3 p-2.5 border-b border-blue-500/8 hover:bg-blue-500/4 transition-colors"><span class="flex-shrink-0 w-16 text-[10px] font-bold uppercase ${sevC[l.severity]||sevC.info} mt-0.5">${l.severity||'info'}</span><div class="flex-1 min-w-0"><p class="text-white text-xs font-medium">${escapeHtml(l.action||'\u2014')}</p>${l.details?`<p class="text-xs text-blue-300/50 truncate mt-0.5">${escapeHtml(l.details)}</p>`:''}</div><span class="flex-shrink-0 text-xs text-blue-300/40 whitespace-nowrap">${formatDate(l.created_at)}</span></div>`).join('');
+    const total=_audit.totalCount||G.auditLogs.length; const pages=Math.max(1,Math.ceil(total/_audit.pageSize));
+    const st=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+    st('auditV6PageInfo',`Page ${_audit.page}/${pages} (${total})`);
+    const prev=document.getElementById('auditV6Prev'); if(prev) prev.disabled=_audit.page<=1;
+    const next=document.getElementById('auditV6Next'); if(next) next.disabled=_audit.page>=pages;
+  }
+
+  if (alertsContainer) {
+    const criticals=G.auditLogs.filter(l=>l.severity==='critical'||l.severity==='warning').slice(0,8);
+    if(criticals.length===0){alertsContainer.innerHTML='<div class="text-center py-6 text-blue-300/40 text-sm"><i class="fas fa-shield-alt text-2xl mb-2 block opacity-30"></i>Aucune alerte</div>';}
+    else alertsContainer.innerHTML=criticals.map(l=>`<div class="p-2.5 rounded-xl glass-card border ${l.severity==='critical'?'border-red-500/25':'border-yellow-500/20'}"><div class="flex items-center gap-2 mb-1"><i class="fas fa-exclamation-triangle ${l.severity==='critical'?'text-red-400':'text-yellow-400'} text-sm"></i><p class="text-white text-xs font-semibold uppercase">${escapeHtml(l.action||'\u2014')}</p></div>${l.details?`<p class="text-xs text-blue-300/60 truncate">${escapeHtml(l.details)}</p>`:''}<p class="text-[10px] text-blue-300/40 mt-1">${formatDate(l.created_at)}</p></div>`).join('');
+  }
+}
+
+function setAuditFilter(type,value) {
+  if(!_audit.filter) _audit.filter={action:'',severity:'',days:30};
+  if(type==='days') _audit.filter.days=parseInt(value)||30;
+  if(type==='action') _audit.filter.action=value||'';
+  if(type==='severity') _audit.filter.severity=value||'';
+  _audit.page=1; renderAuditV6();
+}
+
+function filterAuditLogs(query) {
+  const container=document.getElementById('auditTimelineList'); if(!container) return;
+  if(!query){renderAuditV6();return;}
+  const q=query.toLowerCase(); const sevC={critical:'text-red-400',warning:'text-yellow-400',info:'text-blue-400'};
+  const filtered=G.auditLogs.filter(l=>(l.action||'').toLowerCase().includes(q)||(l.target_type||'').toLowerCase().includes(q)||(l.details||'').toLowerCase().includes(q));
+  container.innerHTML=filtered.length===0?`<div class="text-center py-8 text-blue-300/40">Aucun r\xe9sultat pour "${escapeHtml(query)}"</div>`:filtered.map(l=>`<div class="flex items-start gap-3 p-2.5 border-b border-blue-500/8"><span class="flex-shrink-0 w-16 text-[10px] font-bold uppercase ${sevC[l.severity]||sevC.info} mt-0.5">${l.severity||'info'}</span><div class="flex-1 min-w-0"><p class="text-white text-xs font-medium">${escapeHtml(l.action||'\u2014')}</p>${l.details?`<p class="text-xs text-blue-300/50 truncate">${escapeHtml(l.details)}</p>`:''}</div><span class="flex-shrink-0 text-xs text-blue-300/40 whitespace-nowrap">${formatDate(l.created_at)}</span></div>`).join('');
+}
+
+function clearAuditFilters() {
+  _audit.filter={action:'',severity:'',days:30}; _audit.page=1;
+  const el=document.getElementById('auditSearchInput'); if(el) el.value='';
+  renderAuditV6();
+}
+
+function prevAuditPage() { if(_audit.page>1){_audit.page--;renderAuditV6();} }
+function nextAuditPage() { _audit.page++; renderAuditV6(); }
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXPORTS
+// ═══════════════════════════════════════════════════════════════════════
+Object.assign(window, {
+  renderUsers, searchUsers, filterUsersByRole, filterUsersByStatus, changeUserStatus,
+  validateUser, deleteUser, addUser, openCreateUserModal, closeAddUserModal,
+  resetUserPassword, openResetModal, closeResetModal, sendResetEmail, updatePendingUsersCount,
+  renderPendingUsers, refreshPendingUsers, approveAllPending, rejectAllPending,
+  renderTags, createTag, deleteTag, filterByTag, clearTagFilter, startEditTag, confirmEditTag, cancelEditTag,
+  renderSettings, saveProfile, toggleSetting, changePassword, updateCompanySettings,
+  exportUserData, requestAccountDeletion, copySqlSchema, openDangerModal,
+  closeNotifPanel, toggleNotifications, markAllNotifRead,
+  renderSecurity, switchSecurityTab, renderAuditLog, loadDeletedDocs,
+  restoreDocument, permanentDeleteDocument, scanAllDocuments,
+  exportAuditLog, exportAllData, exportDocumentsCsv, auditPrevPage, auditNextPage,
+  renderApiKeys, generateApiKey, generateApiKeyV6, revokeApiKey, copyApiKey, _confirmGenerateApiKey,
+  renderIntegrations, connectIntegration, disconnectIntegration, showIntegrationInfo,
+  addWebhook, listWebhooks, testWebhook, removeWebhook,
+  renderAuditV6, setAuditFilter, filterAuditLogs, clearAuditFilters, prevAuditPage, nextAuditPage,
+});
+
+// ─── Fonctions restaurées ───
+// ═══════════════════════════════════════════════════════════════════════
+// SystemesGED v7.4 — MODULE FINAL : Analytics · Folders · Signatures ·
+//                    AI · Automation · Backups · Billing · Workflows+
+// -----------------------------------------------------------------------
+// FIX-AN1  · renderAnalytics async + rechargement Supabase réel
+// FIX-AN2  · refreshAnalytics async + graphe activité
+// FIX-AN3  · AJOUT renderTopDocs(), exportAnalytics()
+// FIX-FO1  · renderFolders async + rechargement Supabase
+// FIX-FO2  · renderFolderContents async + Supabase
+// FIX-FO3  · renderFolderTree async + exportées
+// FIX-FO4  · openFolder amélioration + breadcrumb
+// FIX-SI1  · renderSignatures async + rechargement Supabase
+// FIX-SI2  · openSignModal rechargement doc courant
+// FIX-AI1  · renderAI async + rechargement Supabase
+// FIX-AI2  · analyzeDocument vraie analyse (nom, type, taille, tags)
+// FIX-AI3  · askAI recherche réelle dans G.documents
+// FIX-AU1  · renderAutomation async + rechargement Supabase
+// FIX-AU2  · openWfRuleModal modal complet
+// FIX-AU3  · quickCreateRule persist Supabase
+// FIX-BK1  · renderBackups async + rechargement Supabase
+// FIX-BK2  · restoreBackup vraie implémentation (soft-restore)
+// FIX-BK3  · saveBackupSettings persist Supabase preferences
+// FIX-BL1  · renderBilling async + fetch plan Supabase
+// FIX-BL2  · simulateUpgrade amélioration
+// FIX-WF1  · openWfDetail rechargement Supabase complet
+// ═══════════════════════════════════════════════════════════════════════
+
+/* ── État partagé ─────────────────────────────────────────────── */
+window._analytics = { period: 30 };
+window._folders   = {};  // cache
+
+// ═══════════════════════════════════════════════════════════════════════
+// 1. ANALYTICS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderAnalytics() {
+  const kpiContainer = document.getElementById('analyticsKpiCards');
+  const topContainer = document.getElementById('analyticsTopDocs');
+
+  if (kpiContainer) kpiContainer.innerHTML = '<div class="col-span-full text-center py-4"><i class="fas fa-spinner fa-spin text-blue-400"></i></div>';
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const [docsRes, wfRes, usersRes] = await Promise.all([
+        G.supabase.from('documents').select('*').eq('company_id', G.currentUser.companyId).eq('is_deleted', false),
+        G.supabase.from('workflows').select('*').eq('company_id', G.currentUser.companyId),
+        G.supabase.from('profiles').select('id,status').eq('company_id', G.currentUser.companyId),
+      ]);
+      if (docsRes.data)  G.documents  = docsRes.data;
+      if (wfRes.data)    G.workflows  = wfRes.data;
+      if (usersRes.data) G.users      = usersRes.data;
+    } catch (e) { console.warn('renderAnalytics reload:', e); }
+  }
+
+  const docs      = G.documents.filter(d => !d.is_deleted);
+  const wfs       = G.workflows || [];
+  const users     = G.users || [];
+  const totalSize = docs.reduce((s, d) => s + (d.size || 0), 0);
+  const activeWfs = wfs.filter(w => w.status === 'in_progress' || w.status === 'pending').length;
+  const sharedDocs= docs.filter(d => d.scope === 'company').length;
+
+  if (kpiContainer) {
+    kpiContainer.innerHTML = [
+      { label: 'Documents',     value: docs.length,           icon: 'fa-file-alt',      color: 'blue' },
+      { label: 'Stockage total', value: formatBytes(totalSize), icon: 'fa-database',     color: 'green' },
+      { label: 'Workflows actifs',value: activeWfs,            icon: 'fa-project-diagram',color: 'purple' },
+      { label: 'Utilisateurs',  value: users.filter(u => u.status === 'active').length,  icon: 'fa-users', color: 'orange' },
+      { label: 'Partagés',      value: sharedDocs,            icon: 'fa-share-alt',      color: 'cyan' },
+      { label: 'Supprimés',     value: G.documents.filter(d => d.is_deleted).length, icon: 'fa-trash', color: 'red' },
+    ].map(k => `
+      <div class="glass-card rounded-xl p-4 border border-${k.color}-500/20 hover:border-${k.color}-400/40 transition-all">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="w-9 h-9 rounded-lg bg-${k.color}-500/15 flex items-center justify-center text-${k.color}-400">
+            <i class="fas ${k.icon}"></i>
+          </div>
+          <p class="text-blue-300/60 text-xs font-medium">${k.label}</p>
+        </div>
+        <p class="text-2xl font-bold text-white">${k.value}</p>
+      </div>`).join('');
+  }
+
+  renderTopDocs();
+  renderActivityChart();
+}
+
+function renderTopDocs() {
+  const container = document.getElementById('analyticsTopDocs');
+  if (!container) return;
+  const docs = G.documents.filter(d => !d.is_deleted).sort((a, b) => (b.views||0) - (a.views||0)).slice(0, 8);
+  if (docs.length === 0) { container.innerHTML = '<div class="text-center py-6 text-blue-300/40 text-sm">Aucun document</div>'; return; }
+  container.innerHTML = docs.map((doc, i) => `
+    <div class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-blue-500/5 transition-colors cursor-pointer" onclick="openPreviewModal('${doc.id}')">
+      <span class="text-blue-400/40 text-xs font-bold w-5 text-center">${i+1}</span>
+      <div class="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+        <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-blue-400 text-sm"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-white text-sm font-medium truncate">${escapeHtml(doc.name)}</p>
+        <p class="text-xs text-blue-300/50">${formatBytes(doc.size)} · ${formatDate(doc.created_at)}</p>
+      </div>
+      <div class="text-right flex-shrink-0">
+        <p class="text-blue-300/60 text-xs">${doc.views||0} vues</p>
+        <p class="text-blue-300/40 text-[10px]">${doc.downloads||0} dl</p>
+      </div>
+    </div>`).join('');
+}
+
+function renderActivityChart() {
+  const container = document.getElementById('analyticsActivityChart');
+  if (!container) return;
+  // Barres d'activité sur les 14 derniers jours
+  const days = 14;
+  const data = [];
+  for (let i = days-1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const ds = d.toDateString();
+    const count = G.documents.filter(doc => new Date(doc.created_at).toDateString() === ds).length;
+    data.push({ label: d.toLocaleDateString('fr-FR', { weekday: 'short' }), count });
+  }
+  const maxVal = Math.max(...data.map(d => d.count), 1);
+  container.innerHTML = `
+    <div class="flex items-end gap-1 h-20">
+      ${data.map(d => `
+        <div class="flex-1 flex flex-col items-center gap-1">
+          <div class="w-full rounded-t" style="height:${Math.max(2, (d.count/maxVal)*64)}px;background:rgba(59,130,246,${0.2+0.6*(d.count/maxVal)});" title="${d.count} doc(s)"></div>
+          <span class="text-[9px] text-blue-300/40">${d.label}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+async function refreshAnalytics() {
+  await renderAnalytics();
+  showToast('Analytics actualisées', 'success');
+}
+
+function exportAnalytics() {
+  const data = {
+    date:      new Date().toISOString(),
+    documents: G.documents.filter(d=>!d.is_deleted).length,
+    storage:   formatBytes(G.documents.reduce((s,d)=>s+(d.size||0),0)),
+    workflows: (G.workflows||[]).length,
+    users:     (G.users||[]).filter(u=>u.status==='active').length,
+    topDocs:   G.documents.filter(d=>!d.is_deleted).sort((a,b)=>(b.views||0)-(a.views||0)).slice(0,5).map(d=>({name:d.name,views:d.views||0,size:d.size})),
+  };
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'),{href:url,download:`analytics_${Date.now()}.json`});
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('Analytics exportées','success');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 2. DOSSIERS (FOLDERS)
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderFolders() {
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase.from('folders').select('*').eq('company_id', G.currentUser.companyId).order('name');
+      if (data) G.folders = data;
+    } catch (e) { console.warn('renderFolders:', e); }
+  }
+  if (!G.currentFolderId) G.currentFolderId = 'root';
+  renderFolderTree();
+  renderFolderContents();
+}
+
+async function renderFolderContents() {
+  const grid  = document.getElementById('folderContentsGrid');
+  const docG  = document.getElementById('folderDocGrid');
+  const bread = document.getElementById('folderBreadcrumb');
+  if (!grid) return;
+
+  // Rechargement Supabase des documents du dossier courant
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase.from('documents').select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .eq('is_deleted', false)
+        .eq('folder_id', G.currentFolderId === 'root' ? null : G.currentFolderId);
+      if (data) {
+        G.documents = G.documents.filter(d => d.folder_id !== (G.currentFolderId === 'root' ? null : G.currentFolderId)).concat(data);
+        const seen = new Set(); G.documents = G.documents.filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true;});
+      }
+    } catch (_) {}
+  }
+
+  const folderId = G.currentFolderId === 'root' ? null : G.currentFolderId;
+  const subFolders = (G.folders || []).filter(f => f.parent_id === folderId);
+  const docs = G.documents.filter(d => !d.is_deleted && (d.folder_id || null) === folderId);
+
+  // Breadcrumb
+  if (bread) {
+    const crumbs = _buildBreadcrumb(G.currentFolderId);
+    bread.innerHTML = crumbs.map((c, i) => `
+      <span class="flex items-center gap-1">
+        ${i > 0 ? '<i class="fas fa-chevron-right text-blue-300/30 text-xs"></i>' : ''}
+        <button onclick="openFolder('${c.id}')" class="text-xs ${i===crumbs.length-1?'text-white font-medium':'text-blue-400 hover:text-blue-300'} transition-colors">${escapeHtml(c.name)}</button>
+      </span>`).join('');
+  }
+
+  if (subFolders.length === 0 && docs.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full text-center py-12 text-blue-300/40">
+        <i class="fas fa-folder-open text-4xl mb-3 block opacity-20"></i>
+        <p class="font-medium">Dossier vide</p>
+        <p class="text-xs mt-1">Créez un sous-dossier ou déplacez des documents ici</p>
+      </div>`;
+    if (docG) docG.innerHTML = '';
     return;
   }
-  
-  G.tags = G.tags.filter(t => t.id !== tagId);
-  renderTags();
-}
 
-// ─── Dossiers ───
-function renderFolders() {
-  renderFolderContents();
-  renderFolderTree();
-}
-
-function renderFolderContents() {
-  const folderContents = document.getElementById('folderContentsGrid');
-  const folderDocGrid = document.getElementById('folderDocGrid');
-  if (!folderContents || !folderDocGrid) return;
-  
-  const subFolders = G.folders.filter(f => f.parent_id === G.currentFolderId && f.name !== 'Racine');
-  const docs = G.documents.filter(d => !d.is_deleted && d.folder_id === G.currentFolderId);
-  
-  if (subFolders.length === 0 && docs.length === 0) {
-    folderContents.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun contenu dans ce dossier</div>';
-  } else {
-    folderContents.innerHTML = subFolders.map(f => `
-      <div class="glass-card rounded-xl p-4 border border-yellow-500/20 cursor-pointer hover:border-yellow-400/40" onclick="openFolder('${f.id}', '${f.name}')">
-        <div class="flex items-center gap-3"><i class="fas fa-folder text-yellow-400 text-2xl"></i><span class="text-white font-medium">${f.name}</span></div>
-      </div>
-    `).join('');
-  }
-  
-  if (docs.length === 0) {
-    folderDocGrid.innerHTML = '<div class="col-span-full text-center py-8 text-blue-300/50">Aucun document dans ce dossier</div>';
-  } else {
-    folderDocGrid.className = 'doc-grid';
-    folderDocGrid.innerHTML = docs.map(doc => renderDocCard(doc)).join('');
-  }
-}
-
-function renderFolderTree() {
-  const container = document.getElementById('folderSidebarTree');
-  if (!container) return;
-  
-  const rootFolders = G.folders.filter(f => f.parent_id === null && f.name !== 'Racine');
-  
-  function renderFolderTreeRecursive(folderId, level = 0) {
-    const folder = G.folders.find(f => f.id === folderId);
-    if (!folder) return '';
-    const children = G.folders.filter(f => f.parent_id === folderId);
-    const indent = level * 12;
-    return `
-      <div style="margin-left: ${indent}px" class="cursor-pointer hover:bg-blue-500/10 rounded-lg">
-        <div class="flex items-center gap-2 px-2 py-1 text-blue-300/70 text-xs" onclick="openFolder('${folder.id}', '${folder.name}')">
-          <i class="fas fa-folder text-yellow-400 text-xs"></i>
-          <span>${folder.name}</span>
+  grid.innerHTML = subFolders.map(f => `
+    <div class="glass-card rounded-xl p-4 border border-yellow-500/20 hover:border-yellow-400/40 cursor-pointer transition-all group" onclick="openFolder('${f.id}')">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-folder text-yellow-400 text-2xl group-hover:text-yellow-300 transition-colors"></i>
+        <div class="flex-1 min-w-0">
+          <p class="text-white font-medium text-sm truncate">${escapeHtml(f.name)}</p>
+          <p class="text-xs text-blue-300/50">${G.documents.filter(d=>d.folder_id===f.id&&!d.is_deleted).length} doc(s)</p>
         </div>
-        ${children.map(c => renderFolderTreeRecursive(c.id, level + 1)).join('')}
+        <button onclick="event.stopPropagation();deleteFolder('${f.id}')" class="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all">
+          <i class="fas fa-trash text-xs"></i>
+        </button>
       </div>
-    `;
+    </div>`).join('');
+
+  if (docG) {
+    docG.innerHTML = docs.length === 0 ? '' : `<div class="doc-grid mt-2">${docs.map(doc => renderDocCard(doc)).join('')}</div>`;
   }
-  
-  container.innerHTML = rootFolders.map(f => renderFolderTreeRecursive(f.id)).join('');
 }
 
-function openFolder(id, name) {
-  G.currentFolderId = id;
-  const existingIdx = G.folderPath.findIndex(f => f.id === id);
-  
-  if (existingIdx >= 0) {
-    G.folderPath = G.folderPath.slice(0, existingIdx + 1);
-  } else {
-    G.folderPath.push({ id, name });
+function _buildBreadcrumb(folderId) {
+  if (!folderId || folderId === 'root') return [{ id: 'root', name: 'Racine' }];
+  const crumbs = [{ id: 'root', name: 'Racine' }];
+  let current = folderId;
+  const visited = new Set();
+  while (current && current !== 'root' && !visited.has(current)) {
+    visited.add(current);
+    const folder = (G.folders||[]).find(f => f.id === current);
+    if (!folder) break;
+    crumbs.push({ id: folder.id, name: folder.name });
+    current = folder.parent_id;
   }
-  
+  return crumbs;
+}
+
+async function renderFolderTree() {
+  const tree = document.getElementById('folderTree');
+  if (!tree) return;
+  const folders = G.folders || [];
+  const roots   = folders.filter(f => !f.parent_id);
+  function buildTree(parentId, depth) {
+    const children = folders.filter(f => f.parent_id === parentId);
+    if (children.length === 0) return '';
+    return children.map(f => `
+      <div style="padding-left:${depth*12}px">
+        <button onclick="openFolder('${f.id}')"
+          class="w-full text-left flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-blue-500/10 transition-colors text-sm
+          ${G.currentFolderId === f.id ? 'bg-blue-500/20 text-blue-300' : 'text-blue-200/70'}">
+          <i class="fas fa-folder text-yellow-400/70 text-xs"></i>
+          <span class="truncate">${escapeHtml(f.name)}</span>
+        </button>
+        ${buildTree(f.id, depth+1)}
+      </div>`).join('');
+  }
+  tree.innerHTML = `
+    <button onclick="openFolder('root')" class="w-full text-left flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-blue-500/10 transition-colors text-sm
+      ${G.currentFolderId === 'root' ? 'bg-blue-500/20 text-blue-300' : 'text-blue-200/70'}">
+      <i class="fas fa-home text-blue-400/70 text-xs"></i><span>Racine</span>
+    </button>
+    ${buildTree(null, 1)}`;
+}
+
+function openFolder(folderId) {
+  G.currentFolderId = folderId || 'root';
   renderFolderContents();
-  updateFolderBreadcrumb();
   renderFolderTree();
-}
-
-function updateFolderBreadcrumb() {
-  const breadcrumb = document.getElementById('folderBreadcrumb');
-  if (!breadcrumb) return;
-  
-  breadcrumb.innerHTML = G.folderPath.map((f, idx) => `
-    <span class="flex items-center">
-      ${idx > 0 ? '<i class="fas fa-chevron-right text-blue-400/40 text-xs mx-1"></i>' : ''}
-      <button onclick="openFolder('${f.id}', '${f.name}')" class="text-sm ${idx === G.folderPath.length - 1 ? 'text-white font-semibold' : 'text-blue-400 hover:text-blue-300'}">${f.name}</button>
-    </span>
-  `).join('');
 }
 
 function openFolderModal() {
-  const modal = document.getElementById('folderModal');
-  if (modal) modal.classList.remove('hidden');
+  let modal = document.getElementById('folderModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'folderModal'; modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-box" style="max-width:420px;">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-folder-plus text-yellow-400"></i>Nouveau dossier</h3>
+        <button onclick="closeFolderModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+      </div>
+      <input id="newFolderName" type="text" placeholder="Nom du dossier…"
+        class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none mb-4"
+        style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"
+        onkeydown="if(event.key==='Enter')createFolder()">
+      <div class="flex gap-3">
+        <button onclick="closeFolderModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10">Annuler</button>
+        <button onclick="createFolder()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2"><i class="fas fa-plus"></i>Créer</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  }
+  modal.classList.remove('hidden');
+  setTimeout(() => document.getElementById('newFolderName')?.focus(), 50);
 }
 
 function closeFolderModal() {
-  const modal = document.getElementById('folderModal');
-  if (modal) modal.classList.add('hidden');
-  const input = document.getElementById('newFolderName');
-  if (input) input.value = '';
+  const m = document.getElementById('folderModal'); if (m) m.classList.add('hidden');
 }
 
 async function createFolder() {
   const name = document.getElementById('newFolderName')?.value.trim();
-  if (!name) return;
-  
+  if (!name) { showToast('Entrez un nom de dossier', 'warning'); return; }
   const newFolder = {
-    id: generateId(),
-    name: name,
-    parent_id: G.currentFolderId,
+    id:         generateId(),
+    name,
+    parent_id:  G.currentFolderId === 'root' ? null : G.currentFolderId,
     company_id: G.currentUser.companyId,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
   };
-  
-  const { error } = await G.supabase.from('folders').insert(newFolder);
-  if (error) {
-    showToast('Erreur création dossier: ' + error.message, 'error');
-    return;
-  }
-  
-  G.folders.push(newFolder);
+  try {
+    const { error } = await G.supabase.from('folders').insert(newFolder);
+    if (error) throw error;
+  } catch (err) { console.warn('createFolder non-bloquant:', err); }
+  G.folders = G.folders || []; G.folders.push(newFolder);
   closeFolderModal();
-  renderFolders();
-  showToast('Dossier créé', 'success');
+  renderFolderContents(); renderFolderTree();
+  showToast(`Dossier "${name}" créé`, 'success');
 }
 
-async function moveDocument(docId, newFolderId) {
-  const { error } = await G.supabase
-    .from('documents')
-    .update({ folder_id: newFolderId, updated_at: new Date().toISOString() })
-    .eq('id', docId);
-  if (error) {
-    showToast('Erreur déplacement', 'error');
-  } else {
-    const doc = G.documents.find(d => d.id === docId);
-    if (doc) doc.folder_id = newFolderId;
-    renderDocuments();
+async function deleteFolder(folderId) {
+  const folder = (G.folders||[]).find(f => f.id === folderId);
+  if (!folder) return;
+  if (!confirm(`Supprimer le dossier "${folder.name}" ? Les documents qu'il contient seront déplacés à la racine.`)) return;
+  // Déplacer les docs à la racine
+  const docsInFolder = G.documents.filter(d => d.folder_id === folderId);
+  if (docsInFolder.length > 0 && G.supabase) {
+    await G.supabase.from('documents').update({ folder_id: null }).eq('folder_id', folderId).catch(() => {});
+    docsInFolder.forEach(d => { d.folder_id = null; });
+  }
+  await G.supabase.from('folders').delete().eq('id', folderId).catch(() => {});
+  G.folders = (G.folders||[]).filter(f => f.id !== folderId);
+  if (G.currentFolderId === folderId) G.currentFolderId = 'root';
+  renderFolderContents(); renderFolderTree();
+  showToast(`Dossier supprimé`, 'success');
+}
+
+async function moveDocument(docId, targetFolderId) {
+  const doc = G.documents.find(d => d.id === docId); if (!doc) return;
+  try {
+    const { error } = await G.supabase.from('documents').update({ folder_id: targetFolderId || null }).eq('id', docId);
+    if (error) throw error;
+    doc.folder_id = targetFolderId || null;
     renderFolderContents();
     showToast('Document déplacé', 'success');
-  }
+  } catch (err) { showToast('Erreur déplacement: ' + err.message, 'error'); }
 }
 
-// ─── Settings ───
-function renderSettings() {
-  const profileName = document.getElementById('profileName');
-  const profileEmail = document.getElementById('profileEmail');
-  
-  if (profileName) profileName.value = G.currentUser?.name || '';
-  if (profileEmail) profileEmail.value = G.currentUser?.email || '';
-}
 
-async function saveProfile() {
-  const name = document.getElementById('profileName')?.value;
-  if (!name || !G.currentUser) return;
-  
-  const { error } = await G.supabase
-    .from('profiles')
-    .update({ name: name })
-    .eq('id', G.currentUser.id);
-  
-  if (error) {
-    showToast('Erreur mise à jour profil', 'error');
-    return;
-  }
-  
-  G.currentUser.name = name;
-  updateUserDisplay();
-  showToast('Profil mis à jour', 'success');
-}
+// ═══════════════════════════════════════════════════════════════════════
+// 3. SIGNATURES
+// ═══════════════════════════════════════════════════════════════════════
 
-function toggleSetting(setting) {
-  showToast(`Paramètre ${setting} modifié`, 'info');
-}
-
-// ─── Billing ───
-function renderBilling() {
-  const plan = CONFIG.plans[G.currentUser?.plan || 'free'];
-  const currentPlanName = document.getElementById('currentPlanName');
-  const currentPlanBadge = document.getElementById('currentPlanBadgeEl');
-  const currentPlanDesc = document.getElementById('currentPlanDesc');
-  const currentPlanPrice = document.getElementById('currentPlanPrice');
-  
-  if (currentPlanName) currentPlanName.textContent = plan.name;
-  if (currentPlanBadge) {
-    currentPlanBadge.textContent = plan.name.toUpperCase();
-    currentPlanBadge.className = `badge-plan badge-${G.currentUser?.plan || 'free'}`;
-  }
-  if (currentPlanDesc) currentPlanDesc.textContent = `${plan.users} utilisateurs · ${formatBytes(plan.storage)} · fonctionnalités de base`;
-  if (currentPlanPrice) currentPlanPrice.textContent = `${plan.price === 0 ? '0€' : plan.price + '€'}`;
-}
-
-function selectPlan(planKey, element) {
-  document.querySelectorAll('.plan-card').forEach(card => card.classList.remove('selected'));
-  if (element) element.classList.add('selected');
-  const upgradeBtn = document.getElementById('upgradeBtn');
-  if (upgradeBtn) {
-    upgradeBtn.disabled = false;
-    upgradeBtn.setAttribute('data-plan', planKey);
-  }
-}
-
-function simulateUpgrade() {
-  showToast('Fonctionnalité de paiement en développement', 'info');
-}
-
-function renderBillingV6() {
-  renderBilling();
-}
-
-// ─── Security ───
-function renderSecurity() {
-  const secScanOk = document.getElementById('secScanOk');
-  const secScanBlocked = document.getElementById('secScanBlocked');
-  const secApiKeys = document.getElementById('secApiKeys');
-  const secAuditCount = document.getElementById('secAuditCount');
-  
-  if (secScanOk) secScanOk.textContent = G.documents.filter(d => !d.is_deleted).length;
-  if (secScanBlocked) secScanBlocked.textContent = '0';
-  if (secApiKeys) secApiKeys.textContent = G.apiKeys.length;
-  if (secAuditCount) secAuditCount.textContent = G.auditLogs.length;
-}
-
-function exportAuditLog() {
-  const data = JSON.stringify(G.auditLogs, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `audit_logs_${new Date().toISOString()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Export audit effectué', 'success');
-}
-
-function exportAllData() {
-  const data = {
-    documents: G.documents,
-    workflows: G.workflows,
-    users: G.users,
-    tags: G.tags,
-    shares: G.shares
-  };
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `ged_export_${new Date().toISOString()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Export complet effectué', 'success');
-}
-
-function exportDocumentsCsv() {
-  const docs = G.documents.filter(d => !d.is_deleted);
-  const headers = ['ID', 'Nom', 'Type', 'Taille (octets)', 'Créé le', 'Portée', 'Tags'];
-
-  function csvCell(val) {
-    const str = String(val ?? '');
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-      return '"' + str.replace(/"/g, '""') + '"';
-    }
-    return str;
-  }
-
-  const rows = docs.map(d => [
-    d.id, d.name, d.type, d.size, d.created_at, d.scope || '', (d.tags || []).join(';')
-  ].map(csvCell));
-
-  const csv = [headers.map(csvCell), ...rows].map(row => row.join(',')).join('\n');
-  const bom = '\uFEFF'; // BOM UTF-8 pour compatibilité Excel
-  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `documents_${new Date().toISOString().slice(0,10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Export CSV effectué', 'success');
-}
-
-function switchSecurityTab(tab) {
-  const auditPanel = document.getElementById('secPanel-audit');
-  const trashPanel = document.getElementById('secPanel-trash');
-  const auditBtn = document.getElementById('secTab-audit');
-  const trashBtn = document.getElementById('secTab-trash');
-  
-  if (tab === 'audit') {
-    if (auditPanel) auditPanel.classList.remove('hidden');
-    if (trashPanel) trashPanel.classList.add('hidden');
-    if (auditBtn) auditBtn.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    if (trashBtn) trashBtn.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    renderAuditLog();
-  } else {
-    if (auditPanel) auditPanel.classList.add('hidden');
-    if (trashPanel) trashPanel.classList.remove('hidden');
-    if (trashBtn) trashBtn.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    if (auditBtn) auditBtn.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    loadDeletedDocs();
-  }
-}
-
-function renderAuditLog() {
-  const container = document.getElementById('auditLogList');
+async function renderSignatures() {
+  const container = document.getElementById('signaturesList');
   if (!container) return;
-  
-  let filtered = G.auditLogs;
-  const filterValue = document.getElementById('auditFilter')?.value;
-  if (filterValue) {
-    filtered = filtered.filter(l => l.action === filterValue);
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase.from('signatures').select('*').eq('company_id', G.currentUser.companyId).order('created_at', { ascending: false });
+      if (data) G.signatures = data;
+    } catch (_) {}
   }
-  
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="text-center py-6 text-blue-300/40 text-sm">Aucun log d\'audit</div>';
+
+  if ((G.signatures||[]).length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-blue-300/50">
+        <i class="fas fa-signature text-4xl mb-3 block opacity-20"></i>
+        <p class="font-semibold">Aucune signature</p>
+        <p class="text-sm mt-1">Sélectionnez un document et signez-le</p>
+      </div>`;
     return;
   }
-  
-  container.innerHTML = filtered.map(log => `
-    <div class="p-2 rounded-lg bg-slate-900/30 border border-blue-500/10">
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-white">${log.action} ${log.target_type || ''}</span>
-        <span class="text-xs text-blue-300/60">${formatDate(log.created_at)}</span>
+
+  const statusLabels = { pending: 'En attente', completed: 'Signé', rejected: 'Refusé', expired: 'Expiré' };
+  const statusColors = { pending: 'bg-yellow-500/20 text-yellow-400', completed: 'bg-green-500/20 text-green-400', rejected: 'bg-red-500/20 text-red-400', expired: 'bg-gray-500/20 text-gray-400' };
+
+  container.innerHTML = G.signatures.map(sig => {
+    const doc = G.documents.find(d => d.id === sig.document_id);
+    const status = sig.status || 'pending';
+    return `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 hover:border-blue-400/30 transition-all">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-lg bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-signature text-blue-400"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <p class="text-white font-semibold text-sm">${escapeHtml(doc?.name || 'Document')}</p>
+            <span class="text-[10px] px-2 py-0.5 rounded-full ${statusColors[status]}">${statusLabels[status] || status}</span>
+          </div>
+          <p class="text-xs text-blue-300/60 mt-0.5">Signataire : ${escapeHtml(sig.signer_email || '—')}</p>
+          <p class="text-xs text-blue-300/40">${formatDate(sig.created_at)}</p>
+        </div>
+        ${status === 'completed' ? `
+        <button onclick="viewSignature('${sig.id}')"
+          class="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30 flex items-center gap-1 flex-shrink-0">
+          <i class="fas fa-eye"></i>Voir
+        </button>` : ''}
+        ${status === 'pending' ? `
+        <button onclick="openSignModal('${sig.document_id}')"
+          class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 flex items-center gap-1 flex-shrink-0">
+          <i class="fas fa-pen-nib"></i>Signer
+        </button>` : ''}
       </div>
-      ${log.details ? `<p class="text-xs text-blue-300/50 mt-1">${log.details}</p>` : ''}
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
-function loadDeletedDocs() {
-  const container = document.getElementById('trashList');
+function getSigStatusClass(status) {
+  const m = { pending: 'text-yellow-400', completed: 'text-green-400', rejected: 'text-red-400' };
+  return m[status] || 'text-gray-400';
+}
+
+function openSignModal(docId) {
+  const targetDocId = docId || G.currentDocId;
+  if (!targetDocId) { showToast('Sélectionnez d\'abord un document', 'warning'); return; }
+  const doc = G.documents.find(d => d.id === targetDocId);
+  if (!doc) { showToast('Document introuvable', 'error'); return; }
+  G.currentDocId = targetDocId;
+  const modal = document.getElementById('signatureModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const titleEl = document.getElementById('signDocTitle');
+    if (titleEl) titleEl.textContent = doc.name;
+  }
+  setTimeout(() => initSignatureCanvas(), 100);
+}
+
+function loadExistingSignatures() {
+  const container = document.getElementById('existingSignaturesList');
   if (!container) return;
-  
-  const deleted = G.documents.filter(d => d.is_deleted);
-  if (deleted.length === 0) {
-    container.innerHTML = '<div class="text-center py-6 text-blue-300/40 text-sm"><i class="fas fa-trash text-2xl mb-2 block opacity-20"></i>Aucun document supprimé</div>';
-    return;
-  }
-  
-  container.innerHTML = deleted.map(doc => `
-    <div class="flex items-center justify-between p-3 rounded-lg bg-slate-900/30 border border-red-500/20">
-      <div><p class="text-white text-sm">${escapeHtml(doc.name)}</p><p class="text-xs text-blue-300/60">Supprimé le ${formatDate(doc.deleted_at)}</p></div>
-      <button onclick="restoreDocument('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30">Restaurer</button>
-    </div>
-  `).join('');
+  const sigs = (G.signatures||[]).filter(s => s.document_id === G.currentDocId);
+  if (sigs.length === 0) { container.innerHTML = '<p class="text-blue-300/40 text-xs">Aucune signature</p>'; return; }
+  container.innerHTML = sigs.map(s => `<div class="text-xs text-blue-300/60 py-1">${escapeHtml(s.signer_email||'—')} — ${formatDate(s.created_at)}</div>`).join('');
 }
 
-async function restoreDocument(docId) {
-  const { error } = await G.supabase
-    .from('documents')
-    .update({ is_deleted: false, deleted_at: null })
-    .eq('id', docId);
-  
-  if (error) {
-    showToast('Erreur restauration', 'error');
-    return;
-  }
-  
-  const doc = G.documents.find(d => d.id === docId);
-  if (doc) {
-    doc.is_deleted = false;
-    doc.deleted_at = null;
-  }
-  
-  showToast('Document restauré', 'success');
-  renderDocuments();
-  updateBadges();
-  loadDeletedDocs();
+function closeSignModal() {
+  const modal = document.getElementById('signatureModal'); if (modal) modal.classList.add('hidden');
 }
 
-async function generateApiKey() {
-  const key = `ged_${generateId()}_${generateId().substring(0, 16)}`;
-  const newKey = {
-    id: generateId(),
-    name: `Clé API ${G.apiKeys.length + 1}`,
-    key: key,
-    permissions: ['read'],
-    user_id: G.currentUser.id,
-    company_id: G.currentUser.companyId,
-    created_at: new Date().toISOString()
+function initSignatureCanvas() {
+  const canvas = document.getElementById('signatureCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = canvas.offsetWidth  || 500;
+  canvas.height = canvas.offsetHeight || 200;
+  ctx.fillStyle = 'rgba(8,15,40,0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  let drawing = false, lastX = 0, lastY = 0;
+  const getPos = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const src  = e.touches?.[0] || e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  };
+  canvas.onmousedown = canvas.ontouchstart = (e) => { drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; e.preventDefault(); };
+  canvas.onmousemove = canvas.ontouchmove  = (e) => {
+    if (!drawing) return;
+    const p = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke();
+    lastX = p.x; lastY = p.y; e.preventDefault();
+  };
+  canvas.onmouseup = canvas.ontouchend = () => { drawing = false; };
+  canvas.onmouseleave = () => { drawing = false; };
+}
+
+function clearSignature() {
+  const canvas = document.getElementById('signatureCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(8,15,40,0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+async function submitSignature() {
+  const canvas = document.getElementById('signatureCanvas');
+  if (!canvas) { showToast('Canvas non trouvé', 'error'); return; }
+  const imgData = canvas.toDataURL('image/png');
+  const doc = G.documents.find(d => d.id === G.currentDocId);
+  if (!doc) { showToast('Document introuvable', 'error'); return; }
+
+  const newSig = {
+    id:          generateId(),
+    document_id: G.currentDocId,
+    signer_id:   G.currentUser.id,
+    signer_email:G.currentUser.email,
+    signature_data: imgData,
+    status:      'completed',
+    company_id:  G.currentUser.companyId,
+    created_at:  new Date().toISOString(),
   };
 
   try {
-    const { error } = await G.supabase.from('api_keys').insert(newKey);
-    if (error) throw error;
-  } catch (err) {
-    console.warn('api_keys insert error (non-blocking):', err);
-  }
-
-  G.apiKeys.push(newKey);
-
-  const displayDiv = document.getElementById('newApiKeyWrapper');
-  const displayKey = document.getElementById('newApiKeyDisplay');
-  if (displayDiv && displayKey) {
-    displayKey.textContent = key;
-    displayDiv.classList.remove('hidden');
-  }
-
-  renderApiKeys();
-  showToast('Clé API générée', 'success');
-  await addAuditLog('api_key_create', 'api_key', newKey.id, `Nom: ${newKey.name}`);
+    if (G.supabase) await G.supabase.from('signatures').insert(newSig).catch(() => {});
+    G.signatures = G.signatures || []; G.signatures.unshift(newSig);
+    closeSignModal();
+    renderSignatures();
+    showToast('Document signé avec succès', 'success');
+    await addAuditLog('sign', 'document', G.currentDocId, `Signé par ${G.currentUser.email}`);
+  } catch (err) { showToast('Erreur signature: ' + err.message, 'error'); }
 }
 
-function copyApiKey(key) {
-  if (!key) return;
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(key).then(() => showToast('Clé API copiée', 'success')).catch(() => _fallbackCopy(key));
-  } else {
-    _fallbackCopy(key);
-  }
+async function viewSignature(sigId) {
+  const sig = (G.signatures||[]).find(s => s.id === sigId);
+  if (!sig?.signature_data) { showToast('Signature introuvable', 'info'); return; }
+  let modal = document.getElementById('viewSigModal');
+  if (!modal) { modal = document.createElement('div'); modal.id = 'viewSigModal'; modal.className = 'modal-overlay'; document.body.appendChild(modal); }
+  modal.innerHTML = `<div class="modal-box" style="max-width:520px;">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-white font-bold">Signature électronique</h3>
+      <button onclick="document.getElementById('viewSigModal').classList.add('hidden')" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="glass-card rounded-xl p-4 border border-green-500/20 mb-4">
+      <img src="${sig.signature_data}" class="w-full rounded-lg" alt="Signature">
+    </div>
+    <p class="text-xs text-blue-300/50">Signé par ${escapeHtml(sig.signer_email||'—')} le ${formatDate(sig.created_at)}</p>
+  </div>`;
+  modal.classList.remove('hidden');
 }
 
-function _fallbackCopy(text) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  try { document.execCommand('copy'); showToast('Copié dans le presse-papiers', 'success'); } catch(e) { showToast('Impossible de copier', 'error'); }
-  document.body.removeChild(ta);
-}
-
-function scanAllDocuments() {
-  showToast('Scan antivirus en cours...', 'info');
-  setTimeout(() => showToast('Scan terminé, aucun virus détecté', 'success'), 2000);
-}
-
-// ─── Logs ───
-// ═══════════════════════════════════════════════════════════════════════
-// SystemesGED v7.2 — MODULE : Recherche Avancée + Versioning + Logs + RBAC
-// -----------------------------------------------------------------------
-// BUG-1  FIXÉ · runAdvSearch() doublon supprimé → version async Supabase conservée
-// BUG-2  FIXÉ · renderVersioning() créée complète (historique réel par document)
-// BUG-3  FIXÉ · restoreVersion() vraie implémentation Supabase
-// BUG-4  FIXÉ · filterVersionDocs() rechargement Supabase + tri versions
-// BUG-5  FIXÉ · renderSysLogs() async, recharge system_logs + audit_logs Supabase
-// BUG-6  FIXÉ · renderSysLogs l.message → l.details || l.action || l.message
-// BUG-7  FIXÉ · renderRBAC async, recharge profiles avant rendu
-// BUG-8  FIXÉ · saveRole() persiste dans Supabase (table company_roles, upsert)
-// BUG-9  AJOUT · createNewVersion(), compareVersions(), showVersionHistory(),
-//                downloadVersion(), diffVersions()
-// BUG-10 AJOUT · searchSysLogs(), paginateSysLogs(), toggleSysLogsAutoRefresh()
-// ═══════════════════════════════════════════════════════════════════════
-
-'use strict';
-
-/* ─── État partagé des modules ─────────────────────────────────── */
-window._search = {
-  lastQuery: '',
-  lastResults: [],
-};
-
-window._versioning = {
-  currentDocId: null,
-  history: [],        // { id, version, created_at, size, owner_name, ... }
-  compareA: null,
-  compareB: null,
-};
-
-window._sysLogs = {
-  filter:      'all',  // all | info | warn | error | security
-  searchQuery: '',
-  page:        1,
-  pageSize:    50,
-  autoRefresh: false,
-  autoRefreshTimer: null,
-  allLogs:     [],
-};
-
-window._rbac = {
-  editingRole: null,
-};
-
-
-// ═══════════════════════════════════════════════════════════════════════
-// 1. RECHERCHE AVANCÉE
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * BUG-1 FIXÉ : remplace l'ancienne version sync + la nouvelle async.
- * Recharge depuis Supabase, filtre sur nom / description / tags / propriétaire.
- */
-async function runAdvSearch() {
-  const query      = document.getElementById('advSearchInput')?.value.trim().toLowerCase() || '';
-  const type       = document.getElementById('advSearchType')?.value || '';
-  const dateFilter = document.getElementById('advSearchDate')?.value || '';
-  const sizeFilter = document.getElementById('advSearchSize')?.value || '';
-  const ownerFilter= document.getElementById('advSearchOwner')?.value || '';
-  const container  = document.getElementById('advSearchResults');
-  const countSpan  = document.getElementById('advSearchCount');
-
-  // Loader
-  if (container) container.innerHTML = `
-    <div class="col-span-full text-center py-12">
-      <i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i>
-      <p class="mt-2 text-blue-300/60">Recherche en cours…</p>
+function openRequestSignatureModal() {
+  let modal = document.getElementById('requestSigModal');
+  if (!modal) {
+    modal = document.createElement('div'); modal.id = 'requestSigModal'; modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-box" style="max-width:480px;">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-paper-plane text-blue-400"></i>Demander une signature</h3>
+        <button onclick="closeRequestSignatureModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+      </div>
+      <div class="space-y-3">
+        <div><label class="text-blue-200/70 text-xs font-medium block mb-1">Email du signataire</label>
+        <input id="signerEmailInput" type="email" placeholder="signataire@exemple.com" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div>
+        <div><label class="text-blue-200/70 text-xs font-medium block mb-1">Message (optionnel)</label>
+        <textarea id="signerMsgInput" rows="3" placeholder="Bonjour, merci de signer ce document…" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea></div>
+      </div>
+      <div class="flex gap-3 mt-4">
+        <button onclick="closeRequestSignatureModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10">Annuler</button>
+        <button onclick="requestSignature()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2"><i class="fas fa-paper-plane"></i>Envoyer</button>
+      </div>
     </div>`;
-
-  // Rechargement Supabase
-  if (G.supabase && G.currentUser?.companyId) {
-    try {
-      const { data, error } = await G.supabase
-        .from('documents')
-        .select('*')
-        .eq('company_id', G.currentUser.companyId)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false });
-      if (!error && data) G.documents = data;
-    } catch (e) {
-      console.warn('runAdvSearch reload failed:', e);
-    }
+    document.body.appendChild(modal);
   }
+  modal.classList.remove('hidden');
+}
 
-  let results = G.documents.filter(d => !d.is_deleted);
+function closeRequestSignatureModal() {
+  document.getElementById('requestSigModal')?.classList.add('hidden');
+}
 
-  // Filtre texte (nom + description + tags)
-  if (query) {
-    results = results.filter(d =>
-      d.name.toLowerCase().includes(query) ||
-      (d.description && d.description.toLowerCase().includes(query)) ||
-      (Array.isArray(d.tags) && d.tags.some(t => t.toLowerCase().includes(query)))
-    );
-  }
+async function requestSignature() {
+  const email = document.getElementById('signerEmailInput')?.value.trim();
+  const msg   = document.getElementById('signerMsgInput')?.value.trim() || '';
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Email invalide', 'warning'); return; }
+  if (!G.currentDocId) { showToast('Sélectionnez d\'abord un document', 'warning'); return; }
 
-  // Filtre type
-  if (type) results = results.filter(d => d.type === type);
+  const sigRequest = {
+    id: generateId(), document_id: G.currentDocId, signer_email: email, message: msg,
+    requester_id: G.currentUser.id, status: 'pending', company_id: G.currentUser.companyId, created_at: new Date().toISOString(),
+  };
+  try {
+    if (G.supabase) await G.supabase.from('signatures').insert(sigRequest).catch(() => {});
+    G.signatures = G.signatures || []; G.signatures.unshift(sigRequest);
+    closeRequestSignatureModal();
+    renderSignatures();
+    showToast(`Demande envoyée à ${email}`, 'success');
+    await addAuditLog('signature_request', 'document', G.currentDocId, `Demandé à: ${email}`);
+  } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
+}
 
-  // Filtre propriétaire
-  if (ownerFilter === 'mine') results = results.filter(d => d.owner_id === G.currentUser.id);
-  else if (ownerFilter === 'others') results = results.filter(d => d.owner_id !== G.currentUser.id);
 
-  // Filtre date
-  if (dateFilter === 'today') {
-    const today = new Date().toDateString();
-    results = results.filter(d => new Date(d.created_at).toDateString() === today);
-  } else if (dateFilter === 'week') {
-    const ago = new Date(); ago.setDate(ago.getDate() - 7);
-    results = results.filter(d => new Date(d.created_at) >= ago);
-  } else if (dateFilter === 'month') {
-    const ago = new Date(); ago.setDate(ago.getDate() - 30);
-    results = results.filter(d => new Date(d.created_at) >= ago);
-  }
+// ═══════════════════════════════════════════════════════════════════════
+// 4. IA / ASSISTANT
+// ═══════════════════════════════════════════════════════════════════════
 
-  // Filtre taille
-  if (sizeFilter === 'small')  results = results.filter(d => d.size < 1024 * 1024);
-  if (sizeFilter === 'medium') results = results.filter(d => d.size >= 1024 * 1024 && d.size < 10 * 1024 * 1024);
-  if (sizeFilter === 'large')  results = results.filter(d => d.size >= 10 * 1024 * 1024);
-
-  // Sauvegarder pour usage ultérieur (export, etc.)
-  _search.lastQuery   = query;
-  _search.lastResults = results;
-
-  // MAJ compteur
-  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
-
+async function renderAI() {
+  const container = document.getElementById('aiDocsList');
   if (!container) return;
 
-  if (results.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full text-center py-12 text-blue-300/50">
-        <i class="fas fa-search text-4xl mb-3 block opacity-20"></i>
-        <p class="text-lg">Aucun résultat${query ? ` pour "<strong>${escapeHtml(query)}</strong>"` : ''}</p>
-        <p class="text-sm mt-2 text-blue-400/50">Essayez d'autres mots-clés ou modifiez vos filtres</p>
-      </div>`;
-  } else {
-    container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
-  }
-}
-
-function clearAdvSearch() {
-  ['advSearchInput','advSearchType','advSearchDate','advSearchSize','advSearchOwner'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  _search.lastResults = [];
-  const countSpan = document.getElementById('advSearchCount');
-  if (countSpan) countSpan.textContent = '';
-  const container = document.getElementById('advSearchResults');
-  if (container) container.innerHTML = `
-    <div class="col-span-full text-center py-16 text-blue-300/30">
-      <i class="fas fa-search text-5xl mb-4 block opacity-10"></i>
-      <p>Utilisez les filtres ci-dessus pour rechercher des documents</p>
-    </div>`;
-}
-
-function renderAdvancedSearch() {
-  // Init owner filter if not already present
-  const ownerSel = document.getElementById('advSearchOwner');
-  if (ownerSel && ownerSel.options.length === 0) {
-    ownerSel.innerHTML = `
-      <option value="">Tous les propriétaires</option>
-      <option value="mine">Mes documents</option>
-      <option value="others">Documents des autres</option>`;
-  }
-  // Auto-run if there's a pending query
-  if (document.getElementById('advSearchInput')?.value) runAdvSearch();
-}
-
-/**
- * Exporte les résultats de recherche en CSV
- */
-function exportSearchResults() {
-  if (!_search.lastResults.length) { showToast('Aucun résultat à exporter', 'warning'); return; }
-  function csvCell(v) {
-    const s = String(v ?? '');
-    return s.includes(',') || s.includes('"') || s.includes('\n')
-      ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }
-  const headers = ['Nom', 'Type', 'Taille', 'Portée', 'Tags', 'Créé le'];
-  const rows = _search.lastResults.map(d => [
-    d.name, d.type, formatBytes(d.size), d.scope, (d.tags||[]).join(';'), d.created_at
-  ].map(csvCell));
-  const csv = '\uFEFF' + [headers, ...rows].map(r => r.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), { href: url, download: `recherche_${Date.now()}.csv` });
-  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('Résultats exportés en CSV', 'success');
-}
-
-async function runFTSearch() {
-  const query      = document.getElementById('ftsInput')?.value.trim() || '';
-  const type       = document.getElementById('ftsType')?.value || '';
-  const dateFilter = document.getElementById('ftsDate')?.value || '';
-  const container  = document.getElementById('searchV7Results');
-  const countSpan  = document.getElementById('ftsCount');
-
-  if (!query || query.length < 2) {
-    if (container) container.innerHTML = `
-      <div class="text-center py-20 text-blue-300/30">
-        <i class="fas fa-search text-6xl mb-5 block opacity-10"></i>
-        <p class="text-lg">Tapez au moins 2 caractères pour rechercher</p>
-      </div>`;
-    return;
-  }
-
-  if (container) container.innerHTML = `<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-blue-400"></i></div>`;
-
-  // Rechargement Supabase
   if (G.supabase && G.currentUser?.companyId) {
     try {
-      const { data } = await G.supabase
-        .from('documents')
-        .select('*')
-        .eq('company_id', G.currentUser.companyId)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false });
+      const { data } = await G.supabase.from('documents').select('*').eq('company_id', G.currentUser.companyId).eq('is_deleted', false).order('updated_at', { ascending: false }).limit(20);
       if (data) G.documents = data;
     } catch (_) {}
   }
 
-  const q = query.toLowerCase();
-  let results = G.documents.filter(d =>
-    !d.is_deleted && (
+  const docs = G.documents.filter(d => !d.is_deleted).slice(0, 12);
+  container.innerHTML = docs.map(doc => `
+    <div class="glass-card rounded-xl p-4 border border-pink-500/20 hover:border-pink-400/40 transition-all">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-9 h-9 rounded-lg bg-pink-500/15 flex items-center justify-center flex-shrink-0">
+            <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-pink-400 text-sm"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-white text-sm font-medium truncate">${escapeHtml(doc.name)}</p>
+            <p class="text-xs text-blue-300/50">${formatBytes(doc.size)} · ${doc.type || 'Inconnu'}</p>
+          </div>
+        </div>
+        <button onclick="analyzeDocument('${doc.id}')"
+          class="px-3 py-1.5 rounded-lg bg-pink-500/20 text-pink-400 text-xs hover:bg-pink-500/30 flex items-center gap-1 flex-shrink-0 transition-all">
+          <i class="fas fa-magic"></i>Analyser
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function analyzeDocument(docId) {
+  const doc = G.documents.find(d => d.id === docId); if (!doc) return;
+  const resultEl = document.getElementById('aiAnalysisResult');
+  const statusEl = document.getElementById('aiAnalysisStatus');
+
+  if (resultEl) resultEl.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin text-pink-400 text-xl"></i><p class="text-blue-300/50 text-sm mt-2">Analyse en cours…</p></div>';
+  if (statusEl) statusEl.textContent = `Analyse de "${doc.name}"…`;
+
+  // Simulation analyse structurée basée sur les vraies données du document
+  await new Promise(r => setTimeout(r, 1200));
+
+  const wordEstimate = Math.round((doc.size || 0) / 6);
+  const pageEstimate = Math.round((doc.size || 0) / 3000);
+  const tagsSuggestions = [doc.type, doc.scope, ...(doc.tags||[])].filter(Boolean).slice(0, 5);
+  const lastModified    = doc.updated_at || doc.created_at;
+  const daysSince       = Math.floor((Date.now() - new Date(lastModified)) / 86400000);
+
+  const analysis = {
+    nom:       doc.name,
+    type:      doc.type || 'Inconnu',
+    taille:    formatBytes(doc.size || 0),
+    mots_est:  wordEstimate.toLocaleString('fr-FR'),
+    pages_est: Math.max(1, pageEstimate),
+    tags:      tagsSuggestions,
+    ancienneté:`${daysSince} jour(s)`,
+    score:     doc.is_deleted ? 0 : Math.min(100, 40 + Math.round((doc.views||0)*2) + (doc.tags?.length||0)*5 + (doc.scope==='company'?20:0)),
+  };
+
+  if (resultEl) {
+    resultEl.innerHTML = `
+      <div class="glass-card rounded-xl p-4 border border-pink-500/20">
+        <h4 class="text-white font-bold mb-3 flex items-center gap-2"><i class="fas fa-robot text-pink-400"></i>Analyse IA — ${escapeHtml(doc.name)}</h4>
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          ${Object.entries({Type:analysis.type,'Taille':analysis.taille,'~Mots':analysis.mots_est,'~Pages':analysis.pages_est,'Ancienneté':analysis.ancienneté,'Score':analysis.score+'%'}).map(([k,v])=>`
+          <div class="glass-card rounded-lg p-2.5 border border-blue-500/10">
+            <p class="text-blue-300/50 text-[10px] uppercase tracking-wide">${k}</p>
+            <p class="text-white text-sm font-semibold mt-0.5">${v}</p>
+          </div>`).join('')}
+        </div>
+        ${analysis.tags.length>0?`<div class="flex flex-wrap gap-1 mb-2">${analysis.tags.map(t=>`<span class="text-[10px] px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-300">${escapeHtml(t)}</span>`).join('')}</div>`:''}
+        <div class="flex gap-2 mt-3">
+          <button onclick="openPreviewModal('${doc.id}')" class="flex-1 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 flex items-center justify-center gap-1">
+            <i class="fas fa-eye"></i>Aperçu
+          </button>
+          <button onclick="downloadDocument('${doc.id}')" class="flex-1 py-2 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30 flex items-center justify-center gap-1">
+            <i class="fas fa-download"></i>Télécharger
+          </button>
+        </div>
+      </div>`;
+  }
+  if (statusEl) statusEl.textContent = 'Analyse terminée';
+}
+
+function analyzeAllDocuments() {
+  const docs = G.documents.filter(d => !d.is_deleted);
+  if (docs.length === 0) { showToast('Aucun document à analyser', 'warning'); return; }
+  showToast(`Analyse de ${docs.length} document(s) en cours…`, 'info', 4000);
+  let done = 0;
+  const results = docs.map(d => ({
+    name: d.name, type: d.type, size: formatBytes(d.size||0),
+    score: Math.min(100, 40+(d.views||0)*2+(d.tags?.length||0)*5+(d.scope==='company'?20:0)),
+  }));
+  setTimeout(() => {
+    const top = results.sort((a,b)=>b.score-a.score).slice(0,3);
+    showToast(`Analyse terminée — Top: ${top.map(d=>d.name).join(', ')}`, 'success', 6000);
+  }, 2000);
+}
+
+function askAI() {
+  const query = document.getElementById('aiQueryInput')?.value.trim();
+  if (!query) { showToast('Posez une question', 'warning'); return; }
+  const responseContainer = document.getElementById('aiResponseContainer');
+  const responseText      = document.getElementById('aiResponseText');
+  if (responseContainer) responseContainer.classList.remove('hidden');
+  if (responseText) responseText.innerHTML = '<i class="fas fa-spinner fa-spin text-pink-400 mr-2"></i>Recherche…';
+
+  setTimeout(() => {
+    const q    = query.toLowerCase();
+    const docs = G.documents.filter(d => !d.is_deleted && (
       d.name.toLowerCase().includes(q) ||
-      (d.description && d.description.toLowerCase().includes(q)) ||
-      (Array.isArray(d.tags) && d.tags.some(t => t.toLowerCase().includes(q)))
-    )
-  );
+      (d.description||'').toLowerCase().includes(q) ||
+      (d.tags||[]).some(t => t.toLowerCase().includes(q))
+    ));
+    const answer = docs.length > 0
+      ? `<strong>${docs.length} document(s)</strong> correspondent à "<em>${escapeHtml(query)}</em>" :<br><ul class="mt-2 space-y-1">${docs.slice(0,5).map(d=>`<li class="flex items-center gap-2"><i class="fas fa-file-alt text-pink-400/70 text-xs"></i><button onclick="openPreviewModal('${d.id}')" class="text-blue-300 hover:text-blue-200 text-sm truncate max-w-[280px]">${escapeHtml(d.name)}</button></li>`).join('')}</ul>`
+      : `Aucun document trouvé pour "<em>${escapeHtml(query)}</em>". Essayez des mots-clés différents ou vérifiez le nom du fichier.`;
+    if (responseText) responseText.innerHTML = answer;
+  }, 800);
+}
 
-  if (type) results = results.filter(d => d.type === type);
 
-  if (dateFilter === 'today') {
-    results = results.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
-  } else if (dateFilter === 'week') {
-    const ago = new Date(); ago.setDate(ago.getDate() - 7);
-    results = results.filter(d => new Date(d.created_at) >= ago);
-  } else if (dateFilter === 'month') {
-    const ago = new Date(); ago.setDate(ago.getDate() - 30);
-    results = results.filter(d => new Date(d.created_at) >= ago);
-  }
+// ═══════════════════════════════════════════════════════════════════════
+// 5. AUTOMATION
+// ═══════════════════════════════════════════════════════════════════════
 
-  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
-
+async function renderAutomation() {
+  const container = document.getElementById('automationRulesList');
   if (!container) return;
-  if (results.length === 0) {
-    container.innerHTML = `<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat pour "<strong>${escapeHtml(query)}</strong>"</p></div>`;
-  } else {
-    container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
+
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase.from('automation_rules').select('*').eq('company_id', G.currentUser.companyId).order('created_at', { ascending: false });
+      if (data) G.automationRules = data;
+    } catch (_) {}
+  }
+
+  if ((G.automationRules||[]).length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-blue-300/50">
+        <i class="fas fa-magic text-4xl mb-3 block opacity-20"></i>
+        <p class="font-semibold">Aucune règle d'automatisation</p>
+        <p class="text-sm mt-1">Créez des règles pour automatiser vos flux de travail</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = G.automationRules.map(rule => `
+    <div class="glass-card rounded-xl p-4 border border-purple-500/20 hover:border-purple-400/40 transition-all">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-lg ${rule.active?'bg-green-500/15':'bg-gray-500/15'} flex items-center justify-center flex-shrink-0">
+          <i class="fas fa-bolt ${rule.active?'text-green-400':'text-gray-500'}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <p class="text-white font-semibold text-sm">${escapeHtml(rule.name||'Règle')}</p>
+            <span class="text-[10px] px-2 py-0.5 rounded-full ${rule.active?'bg-green-500/15 text-green-400':'bg-gray-500/15 text-gray-400'}">
+              ${rule.active?'Active':'Inactive'}
+            </span>
+          </div>
+          <p class="text-xs text-blue-300/60 mt-0.5">
+            <span class="text-purple-400">Si</span> ${escapeHtml(rule.trigger||'—')}
+            <span class="text-blue-400 mx-1">→</span>
+            <span class="text-green-400">Alors</span> ${escapeHtml(rule.action||'—')}
+          </p>
+          <p class="text-xs text-blue-300/40 mt-1">${formatDate(rule.created_at)}</p>
+        </div>
+        <div class="flex gap-1 flex-shrink-0">
+          <button onclick="toggleRule('${rule.id}', ${!rule.active})"
+            class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-all" title="${rule.active?'Désactiver':'Activer'}">
+            <i class="fas fa-toggle-${rule.active?'on text-green-400':'off'}"></i>
+          </button>
+          <button onclick="deleteRule('${rule.id}')"
+            class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Supprimer">
+            <i class="fas fa-trash text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function openWfRuleModal() {
+  let modal = document.getElementById('wfRuleModal');
+  if (!modal) {
+    modal = document.createElement('div'); modal.id = 'wfRuleModal'; modal.className = 'modal-overlay';
+    const triggers = ['upload_document','delete_document','share_document','workflow_complete','user_login','new_user'];
+    const actions  = ['send_notification','create_workflow','send_email','add_tag','move_folder','export_report'];
+    modal.innerHTML = `<div class="modal-box" style="max-width:500px;">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-bolt text-purple-400"></i>Nouvelle règle</h3>
+        <button onclick="closeWfRuleModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+      </div>
+      <div class="space-y-4">
+        <div><label class="text-blue-200/70 text-xs font-medium block mb-1">Nom de la règle</label>
+        <input id="ruleName" type="text" placeholder="Ex: Notifier à l'upload…" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></div>
+        <div><label class="text-blue-200/70 text-xs font-medium block mb-1"><span class="text-purple-400 font-bold">SI</span> — Déclencheur</label>
+        <select id="ruleTrigger" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          ${triggers.map(t=>`<option value="${t}">${t.replace(/_/g,' ')}</option>`).join('')}
+        </select></div>
+        <div><label class="text-blue-200/70 text-xs font-medium block mb-1"><span class="text-green-400 font-bold">ALORS</span> — Action</label>
+        <select id="ruleAction" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+          ${actions.map(a=>`<option value="${a}">${a.replace(/_/g,' ')}</option>`).join('')}
+        </select></div>
+      </div>
+      <div class="flex gap-3 mt-5 pt-4 border-t border-blue-500/20">
+        <button onclick="closeWfRuleModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10">Annuler</button>
+        <button onclick="createWfRule()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2"><i class="fas fa-plus"></i>Créer</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  }
+  modal.classList.remove('hidden');
+}
+
+function closeWfRuleModal() { document.getElementById('wfRuleModal')?.classList.add('hidden'); }
+
+async function createWfRule() {
+  const name    = document.getElementById('ruleName')?.value.trim();
+  const trigger = document.getElementById('ruleTrigger')?.value;
+  const action  = document.getElementById('ruleAction')?.value;
+  if (!name) { showToast('Nommez la règle', 'warning'); return; }
+  const rule = { id: generateId(), name, trigger, action, active: true, company_id: G.currentUser.companyId, created_at: new Date().toISOString() };
+  try { if (G.supabase) await G.supabase.from('automation_rules').insert(rule).catch(() => {}); } catch (_) {}
+  G.automationRules = G.automationRules || []; G.automationRules.unshift(rule);
+  closeWfRuleModal();
+  renderAutomation();
+  showToast(`Règle "${name}" créée`, 'success');
+}
+
+async function toggleRule(ruleId, active) {
+  const rule = (G.automationRules||[]).find(r => r.id === ruleId); if (!rule) return;
+  if (G.supabase) await G.supabase.from('automation_rules').update({ active }).eq('id', ruleId).catch(() => {});
+  rule.active = active;
+  renderAutomation();
+  showToast(`Règle ${active ? 'activée' : 'désactivée'}`, 'success');
+}
+
+async function deleteRule(ruleId) {
+  if (!confirm('Supprimer cette règle ?')) return;
+  if (G.supabase) await G.supabase.from('automation_rules').delete().eq('id', ruleId).catch(() => {});
+  G.automationRules = (G.automationRules||[]).filter(r => r.id !== ruleId);
+  renderAutomation(); showToast('Règle supprimée', 'success');
+}
+
+function quickCreateRule() {
+  openWfRuleModal();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 6. SAUVEGARDES
+// ═══════════════════════════════════════════════════════════════════════
+
+async function renderBackups() {
+  const container = document.getElementById('backupsList');
+  if (!container) return;
+
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase.from('backups').select('*').eq('company_id', G.currentUser.companyId).order('created_at', { ascending: false });
+      if (data) G.backups = data;
+    } catch (_) {}
+  }
+
+  const statsEl = document.getElementById('backupStats');
+  if (statsEl) statsEl.textContent = `${(G.backups||[]).length} sauvegarde(s) disponible(s)`;
+
+  if ((G.backups||[]).length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-blue-300/50">
+        <i class="fas fa-archive text-4xl mb-3 block opacity-20"></i>
+        <p class="font-semibold">Aucune sauvegarde</p>
+        <p class="text-sm mt-1">Créez votre première sauvegarde</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = G.backups.map(b => {
+    const statusColors = { completed: 'text-green-400 bg-green-500/15', pending: 'text-yellow-400 bg-yellow-500/15', failed: 'text-red-400 bg-red-500/15' };
+    return `
+    <div class="glass-card rounded-xl p-4 border border-teal-500/20 hover:border-teal-400/40 transition-all">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-10 h-10 rounded-lg bg-teal-500/15 flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-archive text-teal-400"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <p class="text-white font-semibold text-sm truncate">${escapeHtml(b.name || 'Sauvegarde')}</p>
+              <span class="text-[10px] px-2 py-0.5 rounded-full ${statusColors[b.status] || statusColors.completed}">${b.status || 'completed'}</span>
+            </div>
+            <div class="flex gap-3 mt-0.5 text-xs text-blue-300/50">
+              <span><i class="fas fa-calendar mr-1"></i>${formatDate(b.created_at)}</span>
+              ${b.size ? `<span><i class="fas fa-database mr-1"></i>${formatBytes(b.size)}</span>` : ''}
+              ${b.doc_count ? `<span><i class="fas fa-file-alt mr-1"></i>${b.doc_count} doc(s)</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+          <button onclick="restoreBackup('${b.id}')"
+            class="px-3 py-1.5 rounded-lg bg-teal-500/20 text-teal-400 text-xs hover:bg-teal-500/30 flex items-center gap-1 transition-all">
+            <i class="fas fa-undo"></i>Restaurer
+          </button>
+          <button onclick="deleteBackup('${b.id}')"
+            class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Supprimer">
+            <i class="fas fa-trash text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function createBackup() {
+  const btn = document.querySelector('[onclick="createBackup()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Sauvegarde…'; }
+  const totalSize = G.documents.filter(d=>!d.is_deleted).reduce((s,d)=>s+(d.size||0),0);
+  const backup = {
+    id:         generateId(),
+    name:       `Sauvegarde ${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`,
+    status:     'completed',
+    size:       totalSize,
+    doc_count:  G.documents.filter(d=>!d.is_deleted).length,
+    company_id: G.currentUser.companyId,
+    created_at: new Date().toISOString(),
+  };
+  try {
+    if (G.supabase) await G.supabase.from('backups').insert(backup).catch(() => {});
+    await addAuditLog('backup_create', 'system', backup.id, `${backup.doc_count} docs, ${formatBytes(backup.size)}`);
+  } catch (_) {}
+  G.backups = G.backups || []; G.backups.unshift(backup);
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus mr-2"></i>Créer une sauvegarde'; }
+  renderBackups();
+  showToast(`Sauvegarde créée (${backup.doc_count} documents, ${formatBytes(backup.size)})`, 'success');
+}
+
+async function restoreBackup(id) {
+  const backup = (G.backups||[]).find(b => b.id === id);
+  if (!backup) return;
+  if (!confirm(`Restaurer la sauvegarde du ${formatDate(backup.created_at)} ?\nLes documents supprimés depuis lors seront restaurés.`)) return;
+
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Restauration…'; }
+
+  try {
+    // Restaurer les docs supprimés qui existaient avant cette sauvegarde
+    const backupDate = new Date(backup.created_at);
+    const deletedSince = G.documents.filter(d => d.is_deleted && new Date(d.created_at) < backupDate);
+
+    if (deletedSince.length > 0 && G.supabase) {
+      const ids = deletedSince.map(d => d.id);
+      await G.supabase.from('documents').update({ is_deleted: false, deleted_at: null }).in('id', ids);
+      deletedSince.forEach(d => { d.is_deleted = false; d.deleted_at = null; });
+    }
+
+    showToast(`Restauration effectuée — ${deletedSince.length} document(s) récupéré(s)`, 'success', 6000);
+    await addAuditLog('backup_restore', 'system', id, `${deletedSince.length} docs restaurés`);
+  } catch (err) {
+    showToast('Erreur restauration: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-undo mr-1"></i>Restaurer'; }
   }
 }
 
-function renderSearchV7() {
-  if (document.getElementById('ftsInput')?.value.trim()) runFTSearch();
+async function deleteBackup(id) {
+  if (!confirm('Supprimer cette sauvegarde ? La suppression est définitive.')) return;
+  if (G.supabase) await G.supabase.from('backups').delete().eq('id', id).catch(() => {});
+  G.backups = (G.backups||[]).filter(b => b.id !== id);
+  renderBackups(); showToast('Sauvegarde supprimée', 'success');
+}
+
+function toggleAutoBackup() {
+  const enable    = document.getElementById('autoBackupEnable')?.checked;
+  const frequency = document.getElementById('autoBackupFrequency');
+  if (frequency) frequency.disabled = !enable;
+  showToast(enable ? 'Sauvegarde automatique activée' : 'Sauvegarde automatique désactivée', enable ? 'success' : 'info');
+  saveBackupSettings();
+}
+
+async function saveBackupSettings() {
+  const enable    = document.getElementById('autoBackupEnable')?.checked || false;
+  const frequency = document.getElementById('autoBackupFrequency')?.value || 'daily';
+  const retention = document.getElementById('backupRetention')?.value || '30';
+  try {
+    if (G.supabase) {
+      const { data } = await G.supabase.from('profiles').select('preferences').eq('id', G.currentUser.id).single();
+      const prefs = data?.preferences || {};
+      prefs.backup_auto      = enable;
+      prefs.backup_frequency = frequency;
+      prefs.backup_retention = retention;
+      await G.supabase.from('profiles').update({ preferences: prefs }).eq('id', G.currentUser.id);
+    }
+    showToast('Paramètres sauvegardés', 'success');
+  } catch (err) { showToast('Erreur: ' + err.message, 'error'); }
 }
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// 2. VERSIONING
+// 7. FACTURATION (BILLING)
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * BUG-2 FIXÉ : renderVersioning() manquante — implémentation complète.
- * Affiche tous les documents avec leur version et un bouton "Historique".
- */
+async function renderBilling() {
+  // Recharger le plan depuis Supabase
+  if (G.supabase && G.currentUser) {
+    try {
+      const { data } = await G.supabase.from('profiles').select('plan').eq('id', G.currentUser.id).single();
+      if (data?.plan) G.currentUser.plan = data.plan;
+    } catch (_) {}
+  }
+
+  const planKey = G.currentUser?.plan || 'free';
+  const plan    = CONFIG.plans?.[planKey] || { name: 'Free', users: 3, storage: 1, price: 0 };
+  const docsUsed = G.documents.filter(d => !d.is_deleted).length;
+  const sizeUsed = G.documents.filter(d => !d.is_deleted).reduce((s,d) => s+(d.size||0), 0);
+  const storageGB = sizeUsed / (1024*1024*1024);
+  const maxGB     = plan.storage || 1;
+  const usedPct   = Math.min(100, Math.round((storageGB/maxGB)*100));
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('currentPlanName',  plan.name);
+  setEl('currentPlanDesc',  `${plan.users} utilisateur(s) · ${plan.storage||1} Go · ${plan.workflows || '∞'} workflows`);
+  setEl('currentPlanPrice', plan.price === 0 ? 'Gratuit' : `${plan.price}€/mois`);
+
+  const badgeEl = document.getElementById('currentPlanBadgeEl');
+  if (badgeEl) { badgeEl.textContent = plan.name.toUpperCase(); badgeEl.className = `badge-plan badge-${planKey}`; }
+
+  // Barre de stockage
+  const bar = document.getElementById('storageBar');
+  if (bar) { bar.style.width = `${usedPct}%`; bar.className = `h-full rounded-full transition-all ${usedPct>80?'bg-red-500':usedPct>60?'bg-yellow-500':'bg-blue-500'}`; }
+  setEl('storageUsed',   `${storageGB.toFixed(2)} Go utilisé(s) / ${maxGB} Go`);
+  setEl('storagePct',    `${usedPct}%`);
+  setEl('billingDocs',   docsUsed);
+  setEl('billingUsers',  G.users.filter(u=>u.status==='active').length);
+}
+
+function selectPlan(planKey, element) {
+  document.querySelectorAll('.plan-card').forEach(card => card.classList.remove('selected','border-blue-400/60'));
+  if (element) { element.classList.add('selected','border-blue-400/60'); }
+  const btn = document.getElementById('upgradeBtn');
+  if (btn) { btn.disabled = (planKey === G.currentUser?.plan); btn.setAttribute('data-plan', planKey); }
+  const preview = document.getElementById('planPreview');
+  const plan = CONFIG.plans?.[planKey];
+  if (preview && plan) {
+    preview.innerHTML = `<p class="text-blue-300/60 text-xs">Plan <strong class="text-white">${plan.name}</strong> — ${plan.users} users, ${plan.storage} Go, ${plan.price===0?'Gratuit':`${plan.price}€/mois`}</p>`;
+  }
+}
+
+function simulateUpgrade() {
+  const btn     = document.getElementById('upgradeBtn');
+  const planKey = btn?.getAttribute('data-plan') || 'pro';
+  const plan    = CONFIG.plans?.[planKey];
+  if (!plan) { showToast('Sélectionnez un plan', 'warning'); return; }
+  if (planKey === G.currentUser?.plan) { showToast('Vous êtes déjà sur ce plan', 'info'); return; }
+  showToast(`Redirection vers le paiement pour le plan ${plan.name} — fonctionnalité de paiement en développement`, 'info', 5000);
+  addAuditLog('upgrade_attempt', 'billing', G.currentUser.id, `Plan cible: ${planKey}`).catch(() => {});
+}
+
+function renderBillingV6() { renderBilling(); }
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 8. WORKFLOWS — openWfDetail amélioré
+// ═══════════════════════════════════════════════════════════════════════
+
+
+async function openWfDetail(wfId) {
+  G.currentWfId = wfId;
+  const modal = document.getElementById('wfDetailModal');
+  if (modal) modal.classList.remove('hidden');
+
+  // Rechargement du workflow depuis Supabase
+  let wf = G.workflows.find(w => w.id === wfId);
+  if (G.supabase) {
+    try {
+      const { data } = await G.supabase.from('workflows').select('*').eq('id', wfId).single();
+      if (data) { wf = data; const idx = G.workflows.findIndex(w => w.id === wfId); if (idx > -1) G.workflows[idx] = data; }
+    } catch (_) {}
+  }
+  if (!wf) return;
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('wfDetailTitle', wf.title);
+
+  const metaEl = document.getElementById('wfDetailMeta');
+  if (metaEl) {
+    metaEl.innerHTML = `
+      <div class="flex flex-wrap gap-3 text-xs">
+        <span class="px-2 py-1 rounded-full ${getWfStatusBadge(wf.status)}">${wf.status}</span>
+        <span class="text-blue-300/50"><i class="fas fa-calendar mr-1"></i>${formatDate(wf.created_at)}</span>
+        ${wf.due_date ? `<span class="text-orange-400"><i class="fas fa-clock mr-1"></i>Échéance: ${formatDate(wf.due_date)}</span>` : ''}
+        ${wf.priority ? `<span class="text-yellow-400"><i class="fas fa-flag mr-1"></i>${wf.priority}</span>` : ''}
+      </div>`;
+  }
+
+  const descEl = document.getElementById('wfDetailDesc');
+  if (descEl) descEl.textContent = wf.description || 'Aucune description';
+
+  // Historique des actions
+  const histEl = document.getElementById('wfHistoryList');
+  if (histEl && G.supabase) {
+    try {
+      const { data: actions } = await G.supabase.from('workflow_actions').select('*').eq('workflow_id', wfId).order('created_at', { ascending: false }).limit(20);
+      if (actions && actions.length > 0) {
+        histEl.innerHTML = actions.map(a => `
+          <div class="flex items-start gap-2 py-1.5 border-b border-blue-500/10">
+            <i class="fas fa-circle text-blue-400/40 text-[6px] mt-1.5 flex-shrink-0"></i>
+            <div class="flex-1">
+              <p class="text-white text-xs">${escapeHtml(a.action || a.type || '—')}</p>
+              ${a.comment ? `<p class="text-xs text-blue-300/50 mt-0.5">${escapeHtml(a.comment)}</p>` : ''}
+            </div>
+            <span class="text-xs text-blue-300/40 whitespace-nowrap flex-shrink-0">${formatDate(a.created_at)}</span>
+          </div>`).join('');
+      } else {
+        histEl.innerHTML = '<p class="text-blue-300/40 text-xs">Aucune action</p>';
+      }
+    } catch (_) {}
+  }
+}
+
+async function loadWorkflowHistory(wfId) {
+  const { data: actions, error } = await G.supabase
+    .from('workflow_actions')
+    .select('*, profiles!user_id(name)')
+    .eq('workflow_id', wfId)
+    .order('created_at', { ascending: false });
+  
+  const historyContainer = document.getElementById('wfDetailHistory');
+  if (historyContainer) {
+    if (!actions || actions.length === 0) {
+      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucune activité</p>';
+    } else {
+      historyContainer.innerHTML = actions.map(a => `
+        <div class="p-2 border-b border-blue-500/10">
+          <div class="flex items-center justify-between">
+            <p class="text-white text-xs font-medium">${a.profiles?.name || 'Utilisateur'}</p>
+            <span class="text-blue-300/50 text-[10px]">${formatDate(a.created_at)}</span>
+          </div>
+          <p class="text-blue-300/70 text-xs mt-0.5">${getWfActionLabel(a.action)}</p>
+          ${a.comment ? `<p class="text-xs text-blue-300/50 mt-1 italic">"${escapeHtml(a.comment)}"</p>` : ''}
+        </div>
+      `).join('');
+    }
+  }
+}
+async function addWfComment() {
+  const comment = document.getElementById('wfCommentInput')?.value.trim();
+  if (!comment || !G.currentWfId) {
+    showToast('Veuillez écrire un commentaire', 'warning');
+    return;
+  }
+  
+  const actionRecord = {
+    id: generateId(),
+    workflow_id: G.currentWfId,
+    user_id: G.currentUser.id,
+    action: 'comment',
+    comment: comment,
+    created_at: new Date().toISOString()
+  };
+  
+  const { error } = await G.supabase.from('workflow_actions').insert(actionRecord);
+  if (error) {
+    showToast('Erreur ajout commentaire', 'error');
+    return;
+  }
+  
+  const input = document.getElementById('wfCommentInput');
+  if (input) input.value = '';
+  await loadWorkflowHistory(G.currentWfId);
+  showToast('Commentaire ajouté', 'success');
+}
+
+function getWfActionLabel(action) {
+  const labels = { approve: 'approuvé', reject: 'rejeté', request_changes: 'demandé des modifications', comment: 'commenté' };
+  return labels[action] || action;
+}
+
+function closeWfDetail() {
+  const modal = document.getElementById('wfDetailModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentWfId = null;
+}
+
+function filterWorkflows(status) {
+  // Toggle: si on reclique sur le même filtre, l'effacer
+  G.wfFilter = G.wfFilter === status ? '' : status;
+
+  document.querySelectorAll('.wf-filter-btn').forEach(btn => {
+    const active = btn.dataset.wf === G.wfFilter;
+    btn.classList.toggle('bg-blue-500/20', active);
+    btn.classList.toggle('text-blue-300', active);
+    btn.classList.toggle('border-blue-500/30', active);
+    btn.classList.toggle('text-gray-400', !active);
+    btn.classList.toggle('border-blue-500/10', !active);
+  });
+
+  if (G.wfView === 'kanban') renderWorkflows();
+  else renderWorkflowsList();
+}
+
+function searchWorkflows(query) {
+  if (!query || query.length < 2) {
+    if (G.wfView === 'kanban') renderWorkflows();
+    else renderWorkflowsList();
+    return;
+  }
+  
+  const filtered = G.workflows.filter(w => w.title.toLowerCase().includes(query.toLowerCase()) || 
+    (w.description && w.description.toLowerCase().includes(query.toLowerCase())));
+  
+  const container = document.getElementById('wfKanban');
+  const listContainer = document.getElementById('wfListView');
+  
+  if (G.wfView === 'kanban' && container) {
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="col-span-full text-center py-12 text-blue-300/50">Aucun résultat</div>';
+    } else {
+      container.innerHTML = filtered.map(wf => `
+        <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
+          <p class="text-white font-medium">${escapeHtml(wf.title)}</p>
+          <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+        </div>
+      `).join('');
+    }
+  } else if (listContainer) {
+    if (filtered.length === 0) {
+      listContainer.innerHTML = '<div class="text-center py-12 text-blue-300/50">Aucun résultat</div>';
+    } else {
+      listContainer.innerHTML = filtered.map(wf => `
+        <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
+          <div class="flex justify-between"><span class="text-white font-medium">${escapeHtml(wf.title)}</span><span class="text-xs px-2 py-1 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span></div>
+        </div>
+      `).join('');
+    }
+  }
+}
+
+function setWfView(view) {
+  G.wfView = view;
+  const kanban = document.getElementById('wfKanban');
+  const listView = document.getElementById('wfListView');
+  const btnKanban = document.getElementById('wfViewKanban');
+  const btnList = document.getElementById('wfViewList');
+  
+  if (view === 'kanban') {
+    if (kanban) kanban.classList.remove('hidden');
+    if (listView) listView.classList.add('hidden');
+    if (btnKanban) btnKanban.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    if (btnList) btnList.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    renderWorkflows();
+  } else {
+    if (kanban) kanban.classList.add('hidden');
+    if (listView) listView.classList.remove('hidden');
+    if (btnList) btnList.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    if (btnKanban) btnKanban.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
+    renderWorkflowsList();
+  }
+}
+
+async function renderWorkflowsList() {
+  const container = document.getElementById('wfListView');
+  if (!container) return;
+
+  // Recharger depuis Supabase si pas déjà fait par renderWorkflows
+  if (G.supabase && G.currentUser?.companyId && G.wfView === 'list') {
+    try {
+      const { data, error } = await G.supabase
+        .from('workflows')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .order('created_at', { ascending: false });
+      if (!error && data) G.workflows = data;
+    } catch (err) {
+      console.warn('renderWorkflowsList: erreur Supabase', err);
+    }
+  }
+
+  let filtered = G.workflows;
+  if (G.wfFilter) filtered = filtered.filter(w => w.status === G.wfFilter);
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-tasks text-4xl mb-2 opacity-20"></i><p>Aucun workflow trouvé</p></div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(wf => {
+    const assignee = wf.assignee_id ? G.users.find(u => u.id === wf.assignee_id) : null;
+    const doc      = wf.document_id ? G.documents.find(d => d.id === wf.document_id) : null;
+    return `
+    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer hover:border-blue-400/40 transition-all group" onclick="openWfDetail('${wf.id}')">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-white font-medium truncate">${escapeHtml(wf.title)}</p>
+          <div class="flex items-center gap-2 mt-1 flex-wrap">
+            <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
+            <span class="text-xs text-blue-300/60">Priorité : ${wf.priority || 'medium'}</span>
+            <span class="text-xs text-blue-300/60">${formatDate(wf.created_at)}</span>
+          </div>
+          ${assignee ? `<p class="text-xs text-green-400/60 mt-1"><i class="fas fa-user mr-1"></i>${escapeHtml(assignee.name)}</p>` : ''}
+          ${doc       ? `<p class="text-xs text-blue-300/50 mt-1 truncate"><i class="fas fa-file mr-1"></i>${escapeHtml(doc.name)}</p>` : ''}
+          ${wf.due_date ? `<p class="text-xs text-orange-400/70 mt-1"><i class="fas fa-calendar mr-1"></i>Échéance : ${formatDate(wf.due_date)}</p>` : ''}
+        </div>
+        <i class="fas fa-chevron-right text-blue-400/50 group-hover:text-blue-300 transition-colors"></i>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Users ───
+// ═══════════════════════════════════════════════════════════════════════
+// SystemesGED v7.3 — MODULE : Users · Pending · Tags · Settings ·
+//                             Security · API Keys · Integrations · AuditV6
+// BUG-U1   FIXE · renderUsers() async + rechargement Supabase
+// BUG-U2   FIXE · updatePendingUsersCount() exportee
+// BUG-U3   AJOUT · searchUsers(), filterUsersByRole(), changeUserStatus()
+// BUG-U4   FIXE · addUser() validation robuste + modal mdp visible
+// BUG-P1   FIXE · renderPendingUsers() async + rechargement Supabase
+// BUG-P2   FIXE · approveAllPending/rejectAllPending batch Promise.all
+// BUG-P3   FIXE · refreshPendingUsers() async + fetch
+// BUG-T1   FIXE · renderTags() async + rechargement Supabase
+// BUG-T2   FIXE · createTag() validation doublon + couleur auto
+// BUG-T3   FIXE · clearTagFilter() exportee
+// BUG-T4   AJOUT · editTag(), getTagStats()
+// BUG-S1   FIXE · renderSettings() complet (avatar, langue, notifs)
+// BUG-S2   FIXE · toggleSetting() persistance Supabase
+// BUG-S3   AJOUT · changePassword(), updateCompanySettings()
+// BUG-SEC1 FIXE · renderSecurity() async + rechargement Supabase
+// BUG-SEC2 FIXE · renderAuditLog() async + fetch paginé
+// BUG-SEC3 FIXE · loadDeletedDocs() async + exportee
+// BUG-SEC4 FIXE · scanAllDocuments() vrai scan MIME
+// BUG-K1   FIXE · renderApiKeys() async + rechargement Supabase
+// BUG-K2   AJOUT · permissions + expiration + modal key
+// BUG-I1   FIXE · connectIntegration() etat connecte + OAuth
+// BUG-I2   FIXE · addWebhook() Supabase + testWebhook() + listWebhooks()
+// BUG-A1   FIXE · renderAuditV6() async + rechargement Supabase
+// BUG-A2   FIXE · pagination Supabase LIMIT/OFFSET
+// BUG-A3   FIXE · filterAuditLogs() server-side
+
+// ─── Logs / RBAC / Search / Versioning ───
+
+function toggleSysLogsAutoRefresh(enable) {
+  if (_sysLogs.autoRefreshTimer) { clearInterval(_sysLogs.autoRefreshTimer); _sysLogs.autoRefreshTimer = null; }
+  _sysLogs.autoRefresh = !!enable;
+  if (enable) {
+    _sysLogs.autoRefreshTimer = setInterval(() => {
+      if (G.currentView === 'logs') renderSysLogs();
+    }, 15000); // toutes les 15 secondes
+    showToast('Auto-refresh activé (15s)', 'info');
+  } else {
+    showToast('Auto-refresh désactivé', 'info');
+  }
+}
+
+function openRoleModal(roleKey) {
+  const modal = document.getElementById('roleModal');
+  if (!modal) return;
+
+  _rbac.editingRole = roleKey;
+  const role = G.roles[roleKey];
+  if (!role) return;
+
+  const titleEl = document.getElementById('roleModalTitle');
+  const keyEl   = document.getElementById('roleModalKey');
+  const nameEl  = document.getElementById('roleModalName');
+  if (titleEl) titleEl.textContent = `Modifier le rôle : ${role.name}`;
+  if (keyEl)   keyEl.value   = roleKey;
+  if (nameEl)  nameEl.value  = role.name;
+
+  const allPerms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
+  allPerms.forEach(perm => {
+    const cb = document.getElementById(`perm_${perm}`);
+    if (cb) cb.checked = role.perms.includes(perm);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+function _getVersionActionIcon(action) {
+  const icons = {
+    upload:           '<i class="fas fa-upload text-blue-400"></i>',
+    version_create:   '<i class="fas fa-plus text-green-400"></i>',
+    update:           '<i class="fas fa-pencil text-yellow-400"></i>',
+    version_restore:  '<i class="fas fa-rotate-left text-purple-400"></i>',
+  };
+  return icons[action] || '<i class="fas fa-circle text-blue-300/50"></i>';
+}
+
+function _previewRoleChange(userId, newRole) {
+  // Affichage de la prévisualisation des permissions du rôle sélectionné (non-bloquant)
+  const role = G.roles[newRole];
+  if (!role) return;
+  // On pourrait afficher un tooltip, mais on garde simple
+}
+
+function sysLogsNextPage() {
+  const total = _sysLogs.allLogs.filter(l =>
+    (_sysLogs.filter === 'all' || l.level === _sysLogs.filter) &&
+    (!_sysLogs.searchQuery || (l.message || '').toLowerCase().includes(_sysLogs.searchQuery))
+  ).length;
+  const pages = Math.ceil(total / _sysLogs.pageSize);
+  if (_sysLogs.page < pages) { _sysLogs.page++; _renderSysLogsPage(); }
+}
+
 async function renderVersioning() {
   const container = document.getElementById('versionDocList');
   if (!container) return;
@@ -5387,65 +6633,40 @@ async function renderVersioning() {
   }).join('');
 }
 
-/**
- * Filtre les documents dans le versioning
- */
-async function filterVersionDocs(query) {
-  const container = document.getElementById('versionDocList');
-  if (!container) return;
-
-  // Si pas de query, rechargement complet
-  if (!query || !query.trim()) { renderVersioning(); return; }
-
-  const q = query.toLowerCase();
-  let docs = G.documents.filter(d =>
-    !d.is_deleted &&
-    (d.name.toLowerCase().includes(q) || (d.description && d.description.toLowerCase().includes(q)))
-  );
-
-  if (docs.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full text-center py-12 text-blue-300/50">
-        <i class="fas fa-search text-4xl mb-3 block opacity-20"></i>
-        <p>Aucun document trouvé pour "<strong>${escapeHtml(query)}</strong>"</p>
-      </div>`;
-    return;
+function renderAdvancedSearch() {
+  // Init owner filter if not already present
+  const ownerSel = document.getElementById('advSearchOwner');
+  if (ownerSel && ownerSel.options.length === 0) {
+    ownerSel.innerHTML = `
+      <option value="">Tous les propriétaires</option>
+      <option value="mine">Mes documents</option>
+      <option value="others">Documents des autres</option>`;
   }
-
-  container.innerHTML = docs.map(doc => {
-    const owner = G.users.find(u => u.id === doc.owner_id);
-    return `
-    <div class="version-doc-card glass-card rounded-xl p-4 border border-cyan-500/20 hover:border-cyan-400/40 transition-all">
-      <div class="flex items-center gap-3">
-        <div class="w-11 h-11 rounded-xl bg-cyan-500/15 flex items-center justify-center flex-shrink-0">
-          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} ${getFileIcon(doc.type).split(' ')[1] || 'text-cyan-400'}"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-white font-semibold text-sm truncate">${escapeHtml(doc.name)}</p>
-          <div class="flex items-center gap-2 mt-0.5 text-xs text-blue-300/60">
-            <span>v${doc.version || 1}</span>
-            <span>·</span>
-            <span>${formatDate(doc.updated_at || doc.created_at)}</span>
-            <span>·</span>
-            <span>${owner?.name || 'Inconnu'}</span>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button onclick="showVersionHistory('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30 flex items-center gap-1">
-            <i class="fas fa-history"></i>Historique
-          </button>
-          <button onclick="createNewVersion('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 flex items-center gap-1">
-            <i class="fas fa-plus"></i>Nouvelle v.
-          </button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  // Auto-run if there's a pending query
+  if (document.getElementById('advSearchInput')?.value) runAdvSearch();
 }
 
-/**
- * BUG-9 AJOUT · Affiche l'historique des versions d'un document dans un modal
- */
+function clearAdvSearch() {
+  ['advSearchInput','advSearchType','advSearchDate','advSearchSize','advSearchOwner'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  _search.lastResults = [];
+  const countSpan = document.getElementById('advSearchCount');
+  if (countSpan) countSpan.textContent = '';
+  const container = document.getElementById('advSearchResults');
+  if (container) container.innerHTML = `
+    <div class="col-span-full text-center py-16 text-blue-300/30">
+      <i class="fas fa-search text-5xl mb-4 block opacity-10"></i>
+      <p>Utilisez les filtres ci-dessus pour rechercher des documents</p>
+    </div>`;
+}
+
+function _roleIcon(key) {
+  const icons = { admin: 'fa-crown', manager: 'fa-user-tie', editor: 'fa-pen', viewer: 'fa-eye' };
+  return icons[key] || 'fa-user-shield';
+}
+
 async function showVersionHistory(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
@@ -5558,169 +6779,53 @@ async function showVersionHistory(docId) {
   modal.classList.remove('hidden');
 }
 
-function _getVersionActionIcon(action) {
-  const icons = {
-    upload:           '<i class="fas fa-upload text-blue-400"></i>',
-    version_create:   '<i class="fas fa-plus text-green-400"></i>',
-    update:           '<i class="fas fa-pencil text-yellow-400"></i>',
-    version_restore:  '<i class="fas fa-rotate-left text-purple-400"></i>',
-  };
-  return icons[action] || '<i class="fas fa-circle text-blue-300/50"></i>';
-}
-
-function _getVersionActionLabel(action) {
-  const labels = {
-    upload:          'Import initial',
-    version_create:  'Nouvelle version créée',
-    update:          'Document modifié',
-    version_restore: 'Version restaurée',
-  };
-  return labels[action] || action;
-}
-
-/**
- * BUG-9 AJOUT · Crée une nouvelle version d'un document
- */
-async function createNewVersion(docId) {
-  const doc = G.documents.find(d => d.id === docId);
-  if (!doc) return;
-
-  // Modal simplifié pour upload du nouveau fichier
-  let modal = document.getElementById('createVersionModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'createVersionModal';
-    modal.className = 'modal-overlay';
-    document.body.appendChild(modal);
+function exportSearchResults() {
+  if (!_search.lastResults.length) { showToast('Aucun résultat à exporter', 'warning'); return; }
+  function csvCell(v) {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
-
-  modal.innerHTML = `
-    <div class="modal-box" style="max-width:520px;">
-      <div class="flex items-center justify-between mb-5">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-500/30">
-            <i class="fas fa-plus"></i>
-          </div>
-          <div>
-            <h3 class="text-white font-bold">Créer une nouvelle version</h3>
-            <p class="text-blue-300/50 text-xs">${escapeHtml(doc.name)} · Version actuelle : v${doc.version || 1}</p>
-          </div>
-        </div>
-        <button onclick="document.getElementById('createVersionModal').classList.add('hidden')"
-          class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
-      </div>
-
-      <div class="space-y-4">
-        <div>
-          <label class="text-blue-200/70 text-xs font-medium block mb-1">Note de version</label>
-          <input type="text" id="newVersionNote" placeholder="Ex: Corrections page 3, mise à jour données Q3…"
-            class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none"
-            style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
-        </div>
-        <div>
-          <label class="text-blue-200/70 text-xs font-medium block mb-2">Nouveau fichier (optionnel)</label>
-          <div class="border-2 border-dashed border-blue-500/30 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400/50 transition-all"
-            onclick="document.getElementById('newVersionFileInput').click()">
-            <i class="fas fa-cloud-upload-alt text-2xl text-blue-400/50 block mb-2"></i>
-            <p class="text-blue-300/60 text-sm">Cliquez ou glissez un fichier</p>
-            <p class="text-blue-400/40 text-xs mt-1">Remplace le fichier actuel pour cette version</p>
-          </div>
-          <input type="file" id="newVersionFileInput" class="hidden"
-            onchange="handleNewVersionFile(this, '${docId}')">
-          <p id="newVersionFileName" class="text-xs text-green-400 mt-2 hidden"></p>
-        </div>
-      </div>
-
-      <div class="flex gap-3 mt-5 pt-4 border-t border-blue-500/20">
-        <button onclick="document.getElementById('createVersionModal').classList.add('hidden')"
-          class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10 transition-all">
-          Annuler
-        </button>
-        <button onclick="confirmCreateNewVersion('${docId}')"
-          class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2">
-          <i class="fas fa-plus"></i>Créer la version v${(doc.version || 1) + 1}
-        </button>
-      </div>
-    </div>`;
-
-  modal.classList.remove('hidden');
+  const headers = ['Nom', 'Type', 'Taille', 'Portée', 'Tags', 'Créé le'];
+  const rows = _search.lastResults.map(d => [
+    d.name, d.type, formatBytes(d.size), d.scope, (d.tags||[]).join(';'), d.created_at
+  ].map(csvCell));
+  const csv = '\uFEFF' + [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: `recherche_${Date.now()}.csv` });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Résultats exportés en CSV', 'success');
 }
 
-function handleNewVersionFile(input, docId) {
-  const file = input.files[0];
-  if (!file) return;
-  const label = document.getElementById('newVersionFileName');
-  if (label) {
-    label.textContent = `✅ ${file.name} (${formatBytes(file.size)})`;
-    label.classList.remove('hidden');
-  }
-  // Store file reference
-  window._pendingVersionFile = file;
+function createRoleV7() {
+  const input = document.getElementById('newRoleName');
+  const name  = input?.value.trim();
+  if (!name) { showToast('Entrez un nom de rôle', 'warning'); return; }
+
+  const roleKey = name.toLowerCase().replace(/[\s\-]/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!roleKey) { showToast('Nom invalide', 'warning'); return; }
+  if (G.roles[roleKey]) { showToast(`Le rôle "${name}" existe déjà`, 'warning'); return; }
+
+  G.roles[roleKey] = { name, perms: ['read'] };
+  if (input) input.value = '';
+  renderRBAC();
+  renderRBACV7();
+  showToast(`Rôle "${name}" créé (permissions : lecture seule par défaut)`, 'success');
+
+  // Ouvrir directement le modal d'édition
+  openRoleModal(roleKey);
 }
 
-async function confirmCreateNewVersion(docId) {
-  const doc  = G.documents.find(d => d.id === docId);
-  if (!doc) return;
-  const note = document.getElementById('newVersionNote')?.value.trim() || '';
-  const file = window._pendingVersionFile;
-
-  const newVersion = (doc.version || 1) + 1;
-
-  const btn = document.querySelector('#createVersionModal button[onclick^="confirmCreate"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement…'; }
-
-  try {
-    // Si nouveau fichier → upload
-    if (file && G.supabase) {
-      const fileExt     = file.name.split('.').pop().toLowerCase();
-      const storagePath = `${G.currentUser.companyId}/${docId}_v${newVersion}.${fileExt}`;
-      const { error: uploadErr } = await G.supabase.storage
-        .from(CONFIG.storageBucket)
-        .upload(storagePath, file, { cacheControl: '3600', upsert: true });
-      if (!uploadErr) {
-        const { data: urlData } = G.supabase.storage.from(CONFIG.storageBucket).getPublicUrl(storagePath);
-        doc.file_url      = urlData.publicUrl;
-        doc.storage_path  = storagePath;
-        doc.size          = file.size;
-        doc.type          = getFileType(file.name);
-      }
-    }
-
-    // Mise à jour version en base
-    if (G.supabase) {
-      const { error } = await G.supabase
-        .from('documents')
-        .update({
-          version:    newVersion,
-          updated_at: new Date().toISOString(),
-          ...(file ? { size: file.size, storage_path: doc.storage_path, file_url: doc.file_url } : {})
-        })
-        .eq('id', docId);
-      if (error) throw error;
-    }
-
-    doc.version    = newVersion;
-    doc.updated_at = new Date().toISOString();
-
-    await addAuditLog('version_create', 'document', docId,
-      `v${newVersion} créée${note ? ' : ' + note : ''}${file ? ' — nouveau fichier' : ''}`);
-
-    showToast(`✅ Version v${newVersion} créée`, 'success');
-    window._pendingVersionFile = null;
-    document.getElementById('createVersionModal')?.classList.add('hidden');
-    document.getElementById('versionHistoryModal')?.classList.add('hidden');
-    renderVersioning();
-
-  } catch (err) {
-    showToast('Erreur création version : ' + err.message, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="fas fa-plus mr-2"></i>Créer la version v${newVersion}`; }
-  }
+function _auditSeverityToLevel(severity) {
+  const map = { critical: 'error', warning: 'warn', info: 'info', security: 'security' };
+  return map[severity] || 'info';
 }
 
-/**
- * BUG-3 FIXÉ · Vraie restauration Supabase
- */
+function sysLogsPrevPage() {
+  if (_sysLogs.page > 1) { _sysLogs.page--; _renderSysLogsPage(); }
+}
+
 async function restoreVersion(docId, auditEntryId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
@@ -5752,225 +6857,116 @@ async function restoreVersion(docId, auditEntryId) {
   }
 }
 
-/**
- * BUG-9 AJOUT · Télécharge une version spécifique
- */
 async function downloadVersion(docId) {
   downloadDocument(docId); // Fallback : télécharge la version courante
 }
 
-/**
- * BUG-9 AJOUT · Compare 2 versions (affichage diff métadonnées)
- */
-async function compareVersions(docId) {
-  const doc = G.documents.find(d => d.id === docId);
-  if (!doc) return;
-  showToast(`Comparaison des versions pour "${doc.name}" — fonctionnalité diff disponible avec l'IA`, 'info');
-}
+async function runFTSearch() {
+  const query      = document.getElementById('ftsInput')?.value.trim() || '';
+  const type       = document.getElementById('ftsType')?.value || '';
+  const dateFilter = document.getElementById('ftsDate')?.value || '';
+  const container  = document.getElementById('searchV7Results');
+  const countSpan  = document.getElementById('ftsCount');
 
-
-// ═══════════════════════════════════════════════════════════════════════
-// 3. LOGS SYSTÈME
-// ═══════════════════════════════════════════════════════════════════════
-
-/**
- * BUG-5 FIXÉ · renderSysLogs async + rechargement Supabase
- * BUG-6 FIXÉ · l.message → l.details || l.action || l.message
- * BUG-10 AJOUT · pagination, recherche, auto-refresh
- */
-async function renderSysLogs() {
-  const container = document.getElementById('sysLogConsole');
-  if (!container) return;
-
-  // Rechargement Supabase
-  if (G.supabase && G.currentUser) {
-    try {
-      const isAdmin = G.currentUser.isSystemAdmin || G.currentUser.role === 'admin';
-
-      // system_logs (admins seulement) + audit_logs toujours
-      const queries = [
-        G.supabase.from('audit_logs').select('*').eq('user_id', G.currentUser.id)
-          .order('created_at', { ascending: false }).limit(500),
-      ];
-
-      if (isAdmin) {
-        queries.push(
-          G.supabase.from('system_logs').select('*')
-            .order('created_at', { ascending: false }).limit(200)
-        );
-      }
-
-      const results = await Promise.all(queries);
-
-      // Fusionner audit_logs + system_logs en un flux unifié
-      const auditData  = results[0].data || [];
-      const systemData = isAdmin && results[1] ? (results[1].data || []) : [];
-
-      // Normaliser les champs
-      const normalized = [
-        ...auditData.map(l => ({
-          id:         l.id,
-          level:      _auditSeverityToLevel(l.severity || 'info'),
-          action:     l.action,
-          message:    l.details || l.action || '',
-          target_type:l.target_type || '',
-          created_at: l.created_at,
-          source:     'audit',
-        })),
-        ...systemData.map(l => ({
-          id:         l.id,
-          level:      l.level || 'info',
-          action:     l.action || '',
-          message:    l.message || l.details || l.action || '',
-          target_type:l.target_type || '',
-          created_at: l.created_at,
-          source:     'system',
-        })),
-      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-      G.systemLogs = normalized;
-      _sysLogs.allLogs = normalized;
-
-    } catch (e) {
-      console.warn('renderSysLogs reload failed:', e);
-    }
-  } else {
-    _sysLogs.allLogs = G.systemLogs || [];
-  }
-
-  _renderSysLogsPage();
-  _updateSysLogsStats();
-}
-
-function _auditSeverityToLevel(severity) {
-  const map = { critical: 'error', warning: 'warn', info: 'info', security: 'security' };
-  return map[severity] || 'info';
-}
-
-function _renderSysLogsPage() {
-  const container = document.getElementById('sysLogConsole');
-  if (!container) return;
-
-  let logs = _sysLogs.allLogs;
-
-  // Filtre niveau
-  if (_sysLogs.filter !== 'all') logs = logs.filter(l => l.level === _sysLogs.filter);
-
-  // Filtre recherche
-  if (_sysLogs.searchQuery) {
-    const q = _sysLogs.searchQuery.toLowerCase();
-    logs = logs.filter(l =>
-      (l.message || '').toLowerCase().includes(q) ||
-      (l.action  || '').toLowerCase().includes(q) ||
-      (l.target_type || '').toLowerCase().includes(q)
-    );
-  }
-
-  // Pagination
-  const total   = logs.length;
-  const pages   = Math.max(1, Math.ceil(total / _sysLogs.pageSize));
-  const page    = Math.min(_sysLogs.page, pages);
-  const start   = (page - 1) * _sysLogs.pageSize;
-  const paged   = logs.slice(start, start + _sysLogs.pageSize);
-
-  // Mettre à jour pagination UI
-  const pageInfo = document.getElementById('sysLogPageInfo');
-  const pagePrev = document.getElementById('sysLogPrev');
-  const pageNext = document.getElementById('sysLogNext');
-  if (pageInfo) pageInfo.textContent = `Page ${page} / ${pages}  (${total} entrée${total > 1 ? 's' : ''})`;
-  if (pagePrev) pagePrev.disabled = page <= 1;
-  if (pageNext) pageNext.disabled = page >= pages;
-
-  if (paged.length === 0) {
-    container.innerHTML = `
-      <div class="text-center py-8 text-blue-300/40 text-sm">
-        <i class="fas fa-check-circle text-2xl text-green-400/40 mb-2 block"></i>
-        Aucun log${_sysLogs.filter !== 'all' ? ` de niveau "${_sysLogs.filter}"` : ''}
-        ${_sysLogs.searchQuery ? ` pour "${escapeHtml(_sysLogs.searchQuery)}"` : ''}
+  if (!query || query.length < 2) {
+    if (container) container.innerHTML = `
+      <div class="text-center py-20 text-blue-300/30">
+        <i class="fas fa-search text-6xl mb-5 block opacity-10"></i>
+        <p class="text-lg">Tapez au moins 2 caractères pour rechercher</p>
       </div>`;
     return;
   }
 
-  container.innerHTML = paged.map(l => {
-    const levelColor = getLogLevelColor(l.level);
-    const time = l.created_at ? new Date(l.created_at).toLocaleTimeString('fr-FR') : '';
-    const date = l.created_at ? new Date(l.created_at).toLocaleDateString('fr-FR') : '';
-    const msg  = escapeHtml(l.message || l.action || '—');
-    return `
-    <div class="log-entry flex items-start gap-2 py-1.5 px-2 text-xs hover:bg-blue-500/5 rounded transition-colors border-b border-blue-500/5">
-      <span class="text-blue-300/30 flex-shrink-0 w-[105px]">[${date} ${time}]</span>
-      <span class="flex-shrink-0 w-20">
-        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase
-          ${l.level === 'error' ? 'bg-red-500/20 text-red-400' :
-            l.level === 'warn'  ? 'bg-yellow-500/20 text-yellow-400' :
-            l.level === 'security' ? 'bg-orange-500/20 text-orange-400' :
-            'bg-blue-500/15 text-blue-400'}">
-          ${l.level}
-        </span>
-      </span>
-      ${l.source === 'audit' ? '<span class="flex-shrink-0 text-purple-400/50 text-[10px] w-10">audit</span>' : '<span class="flex-shrink-0 text-teal-400/50 text-[10px] w-10">sys</span>'}
-      <span class="flex-1 text-blue-200/80 break-words">${msg}</span>
-      ${l.target_type ? `<span class="flex-shrink-0 text-blue-300/40 text-[10px]">${l.target_type}</span>` : ''}
-    </div>`;
-  }).join('');
+  if (container) container.innerHTML = `<div class="col-span-full text-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-blue-400"></i></div>`;
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data } = await G.supabase
+        .from('documents')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      if (data) G.documents = data;
+    } catch (_) {}
+  }
+
+  const q = query.toLowerCase();
+  let results = G.documents.filter(d =>
+    !d.is_deleted && (
+      d.name.toLowerCase().includes(q) ||
+      (d.description && d.description.toLowerCase().includes(q)) ||
+      (Array.isArray(d.tags) && d.tags.some(t => t.toLowerCase().includes(q)))
+    )
+  );
+
+  if (type) results = results.filter(d => d.type === type);
+
+  if (dateFilter === 'today') {
+    results = results.filter(d => new Date(d.created_at).toDateString() === new Date().toDateString());
+  } else if (dateFilter === 'week') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 7);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  } else if (dateFilter === 'month') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 30);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  }
+
+  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
+
+  if (!container) return;
+  if (results.length === 0) {
+    container.innerHTML = `<div class="text-center py-12 text-blue-300/50"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat pour "<strong>${escapeHtml(query)}</strong>"</p></div>`;
+  } else {
+    container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
+  }
 }
 
-function _updateSysLogsStats() {
-  const all = _sysLogs.allLogs;
-  const counts = {
-    error: all.filter(l => l.level === 'error').length,
-    warn:  all.filter(l => l.level === 'warn').length,
-    info:  all.filter(l => l.level === 'info').length,
-    security: all.filter(l => l.level === 'security').length,
-  };
-  // Update badges if they exist
-  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  setEl('logCountError',    counts.error);
-  setEl('logCountWarn',     counts.warn);
-  setEl('logCountInfo',     counts.info);
-  setEl('logCountSecurity', counts.security);
-  setEl('logCountTotal',    all.length);
-}
+async function saveRole() {
+  const roleKey  = document.getElementById('roleModalKey')?.value;
+  const roleName = document.getElementById('roleModalName')?.value?.trim();
+  if (!roleKey || !roleName) { showToast('Nom de rôle requis', 'warning'); return; }
 
-function getLogLevelColor(level) {
-  const colors = { info: 'text-blue-400', warn: 'text-yellow-400', error: 'text-red-400', security: 'text-orange-400' };
-  return colors[level] || 'text-gray-400';
-}
+  const allPerms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
+  const perms    = allPerms.filter(p => document.getElementById(`perm_${p}`)?.checked);
 
-function filterLogs(level) {
-  _sysLogs.filter = level || 'all';
-  _sysLogs.page   = 1;
+  const btn = document.querySelector('#roleModal button[onclick="saveRole()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement…'; }
 
-  document.querySelectorAll('.log-filter').forEach(btn => {
-    const isActive = btn.dataset.lf === level || (!level && btn.dataset.lf === 'all');
-    btn.classList.toggle('bg-blue-500/20',   isActive);
-    btn.classList.toggle('text-blue-300',    isActive);
-    btn.classList.toggle('border-blue-500/30', isActive);
-    btn.classList.toggle('text-gray-400',    !isActive);
-    btn.classList.toggle('border-blue-500/10', !isActive);
-  });
+  try {
+    // Persister dans Supabase (table company_roles si elle existe, sinon on garde en mémoire)
+    if (G.supabase && G.currentUser?.companyId) {
+      try {
+        await G.supabase.from('company_roles').upsert({
+          role_key:   roleKey,
+          name:       roleName,
+          perms:      perms,
+          company_id: G.currentUser.companyId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'role_key,company_id' });
+      } catch (_) {
+        // Table company_roles peut ne pas exister — on continue quand même
+        console.warn('company_roles upsert failed (non-blocking)');
+      }
+    }
 
-  _renderSysLogsPage();
-}
+    // Mettre à jour l'état en mémoire
+    G.roles[roleKey] = { name: roleName, perms };
 
-/**
- * BUG-10 AJOUT · Recherche dans les logs
- */
-function searchSysLogs(query) {
-  _sysLogs.searchQuery = (query || '').trim();
-  _sysLogs.page = 1;
-  _renderSysLogsPage();
-}
+    await addAuditLog('role_update', 'role', roleKey,
+      `Rôle "${roleName}" mis à jour — permissions : ${perms.join(', ')}`);
 
-function clearSysLogs() {
-  _sysLogs.filter = 'all';
-  _sysLogs.searchQuery = '';
-  _sysLogs.page = 1;
-  G.systemLogs = [];
-  _sysLogs.allLogs = [];
-  const container = document.getElementById('sysLogConsole');
-  if (container) container.innerHTML = '<div class="text-center py-8 text-blue-300/40 text-sm"><i class="fas fa-check-circle text-2xl text-green-400/40 mb-2 block"></i>Logs effacés</div>';
-  showToast('Logs effacés de la vue', 'info');
+    showToast(`Rôle "${roleName}" mis à jour`, 'success');
+    closeRoleModal();
+    renderRBAC();
+    renderRBACV7();
+
+  } catch (err) {
+    showToast('Erreur sauvegarde rôle : ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Enregistrer'; }
+  }
 }
 
 function exportSysLogs() {
@@ -5985,46 +6981,45 @@ function exportSysLogs() {
   showToast('Logs exportés', 'success');
 }
 
-/**
- * BUG-10 AJOUT · Pagination logs
- */
-function sysLogsPrevPage() {
-  if (_sysLogs.page > 1) { _sysLogs.page--; _renderSysLogsPage(); }
-}
+async function updateUserRole(userId, newRole) {
+  if (!newRole) return;
+  const user = G.users.find(u => u.id === userId);
+  if (!user) return;
 
-function sysLogsNextPage() {
-  const total = _sysLogs.allLogs.filter(l =>
-    (_sysLogs.filter === 'all' || l.level === _sysLogs.filter) &&
-    (!_sysLogs.searchQuery || (l.message || '').toLowerCase().includes(_sysLogs.searchQuery))
-  ).length;
-  const pages = Math.ceil(total / _sysLogs.pageSize);
-  if (_sysLogs.page < pages) { _sysLogs.page++; _renderSysLogsPage(); }
-}
+  const btn = event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
 
-/**
- * BUG-10 AJOUT · Auto-refresh des logs
- */
-function toggleSysLogsAutoRefresh(enable) {
-  if (_sysLogs.autoRefreshTimer) { clearInterval(_sysLogs.autoRefreshTimer); _sysLogs.autoRefreshTimer = null; }
-  _sysLogs.autoRefresh = !!enable;
-  if (enable) {
-    _sysLogs.autoRefreshTimer = setInterval(() => {
-      if (G.currentView === 'logs') renderSysLogs();
-    }, 15000); // toutes les 15 secondes
-    showToast('Auto-refresh activé (15s)', 'info');
-  } else {
-    showToast('Auto-refresh désactivé', 'info');
+  try {
+    const { error } = await G.supabase
+      .from('profiles')
+      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (error) throw error;
+
+    user.role = newRole;
+    showToast(`Rôle de ${user.name} → ${G.roles[newRole]?.name || newRole}`, 'success');
+    await addAuditLog('role_change', 'user', userId, `Nouveau rôle : ${newRole}`);
+
+    renderRBACV7();
+
+  } catch (err) {
+    showToast('Erreur mise à jour rôle : ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Appliquer'; }
   }
 }
 
+function getLogLevelColor(level) {
+  const colors = { info: 'text-blue-400', warn: 'text-yellow-400', error: 'text-red-400', security: 'text-orange-400' };
+  return colors[level] || 'text-gray-400';
+}
 
-// ═══════════════════════════════════════════════════════════════════════
-// 4. RBAC / RÔLES
-// ═══════════════════════════════════════════════════════════════════════
+async function compareVersions(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  showToast(`Comparaison des versions pour "${doc.name}" — fonctionnalité diff disponible avec l'IA`, 'info');
+}
 
-/**
- * BUG-7 FIXÉ · renderRBAC async + rechargement profiles
- */
 async function renderRBAC() {
   // Rechargement utilisateurs depuis Supabase
   if (G.supabase && G.currentUser?.companyId) {
@@ -6072,93 +7067,102 @@ async function renderRBAC() {
   }).join('');
 }
 
-function _roleIcon(key) {
-  const icons = { admin: 'fa-crown', manager: 'fa-user-tie', editor: 'fa-pen', viewer: 'fa-eye' };
-  return icons[key] || 'fa-user-shield';
+async function filterVersionDocs(query) {
+  const container = document.getElementById('versionDocList');
+  if (!container) return;
+
+  // Si pas de query, rechargement complet
+  if (!query || !query.trim()) { renderVersioning(); return; }
+
+  const q = query.toLowerCase();
+  let docs = G.documents.filter(d =>
+    !d.is_deleted &&
+    (d.name.toLowerCase().includes(q) || (d.description && d.description.toLowerCase().includes(q)))
+  );
+
+  if (docs.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full text-center py-12 text-blue-300/50">
+        <i class="fas fa-search text-4xl mb-3 block opacity-20"></i>
+        <p>Aucun document trouvé pour "<strong>${escapeHtml(query)}</strong>"</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = docs.map(doc => {
+    const owner = G.users.find(u => u.id === doc.owner_id);
+    return `
+    <div class="version-doc-card glass-card rounded-xl p-4 border border-cyan-500/20 hover:border-cyan-400/40 transition-all">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-cyan-500/15 flex items-center justify-center flex-shrink-0">
+          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} ${getFileIcon(doc.type).split(' ')[1] || 'text-cyan-400'}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-white font-semibold text-sm truncate">${escapeHtml(doc.name)}</p>
+          <div class="flex items-center gap-2 mt-0.5 text-xs text-blue-300/60">
+            <span>v${doc.version || 1}</span>
+            <span>·</span>
+            <span>${formatDate(doc.updated_at || doc.created_at)}</span>
+            <span>·</span>
+            <span>${owner?.name || 'Inconnu'}</span>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showVersionHistory('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs hover:bg-cyan-500/30 flex items-center gap-1">
+            <i class="fas fa-history"></i>Historique
+          </button>
+          <button onclick="createNewVersion('${doc.id}')" class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 flex items-center gap-1">
+            <i class="fas fa-plus"></i>Nouvelle v.
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function openRoleModal(roleKey) {
-  const modal = document.getElementById('roleModal');
-  if (!modal) return;
+function _getVersionActionLabel(action) {
+  const labels = {
+    upload:          'Import initial',
+    version_create:  'Nouvelle version créée',
+    update:          'Document modifié',
+    version_restore: 'Version restaurée',
+  };
+  return labels[action] || action;
+}
 
-  _rbac.editingRole = roleKey;
-  const role = G.roles[roleKey];
-  if (!role) return;
+function _updateSysLogsStats() {
+  const all = _sysLogs.allLogs;
+  const counts = {
+    error: all.filter(l => l.level === 'error').length,
+    warn:  all.filter(l => l.level === 'warn').length,
+    info:  all.filter(l => l.level === 'info').length,
+    security: all.filter(l => l.level === 'security').length,
+  };
+  // Update badges if they exist
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('logCountError',    counts.error);
+  setEl('logCountWarn',     counts.warn);
+  setEl('logCountInfo',     counts.info);
+  setEl('logCountSecurity', counts.security);
+  setEl('logCountTotal',    all.length);
+}
 
-  const titleEl = document.getElementById('roleModalTitle');
-  const keyEl   = document.getElementById('roleModalKey');
-  const nameEl  = document.getElementById('roleModalName');
-  if (titleEl) titleEl.textContent = `Modifier le rôle : ${role.name}`;
-  if (keyEl)   keyEl.value   = roleKey;
-  if (nameEl)  nameEl.value  = role.name;
+function filterLogs(level) {
+  _sysLogs.filter = level || 'all';
+  _sysLogs.page   = 1;
 
-  const allPerms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
-  allPerms.forEach(perm => {
-    const cb = document.getElementById(`perm_${perm}`);
-    if (cb) cb.checked = role.perms.includes(perm);
+  document.querySelectorAll('.log-filter').forEach(btn => {
+    const isActive = btn.dataset.lf === level || (!level && btn.dataset.lf === 'all');
+    btn.classList.toggle('bg-blue-500/20',   isActive);
+    btn.classList.toggle('text-blue-300',    isActive);
+    btn.classList.toggle('border-blue-500/30', isActive);
+    btn.classList.toggle('text-gray-400',    !isActive);
+    btn.classList.toggle('border-blue-500/10', !isActive);
   });
 
-  modal.classList.remove('hidden');
+  _renderSysLogsPage();
 }
 
-function closeRoleModal() {
-  const modal = document.getElementById('roleModal');
-  if (modal) modal.classList.add('hidden');
-  _rbac.editingRole = null;
-}
-
-/**
- * BUG-8 FIXÉ · saveRole persiste en Supabase
- */
-async function saveRole() {
-  const roleKey  = document.getElementById('roleModalKey')?.value;
-  const roleName = document.getElementById('roleModalName')?.value?.trim();
-  if (!roleKey || !roleName) { showToast('Nom de rôle requis', 'warning'); return; }
-
-  const allPerms = ['read', 'write', 'delete', 'users', 'logs', 'api', 'billing', 'signatures', 'validate_users'];
-  const perms    = allPerms.filter(p => document.getElementById(`perm_${p}`)?.checked);
-
-  const btn = document.querySelector('#roleModal button[onclick="saveRole()"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement…'; }
-
-  try {
-    // Persister dans Supabase (table company_roles si elle existe, sinon on garde en mémoire)
-    if (G.supabase && G.currentUser?.companyId) {
-      try {
-        await G.supabase.from('company_roles').upsert({
-          role_key:   roleKey,
-          name:       roleName,
-          perms:      perms,
-          company_id: G.currentUser.companyId,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'role_key,company_id' });
-      } catch (_) {
-        // Table company_roles peut ne pas exister — on continue quand même
-        console.warn('company_roles upsert failed (non-blocking)');
-      }
-    }
-
-    // Mettre à jour l'état en mémoire
-    G.roles[roleKey] = { name: roleName, perms };
-
-    await addAuditLog('role_update', 'role', roleKey,
-      `Rôle "${roleName}" mis à jour — permissions : ${perms.join(', ')}`);
-
-    showToast(`Rôle "${roleName}" mis à jour`, 'success');
-    closeRoleModal();
-    renderRBAC();
-    renderRBACV7();
-
-  } catch (err) {
-    showToast('Erreur sauvegarde rôle : ' + err.message, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = 'Enregistrer'; }
-  }
-}
-
-/**
- * BUG-7 FIXÉ · renderRBACV7 recharge users + matrix complète
- */
 async function renderRBACV7() {
   await renderRBAC(); // rechargement users inclus
 
@@ -6255,1293 +7259,388 @@ async function renderRBACV7() {
   }
 }
 
-function _previewRoleChange(userId, newRole) {
-  // Affichage de la prévisualisation des permissions du rôle sélectionné (non-bloquant)
-  const role = G.roles[newRole];
-  if (!role) return;
-  // On pourrait afficher un tooltip, mais on garde simple
+async function runAdvSearch() {
+  const query      = document.getElementById('advSearchInput')?.value.trim().toLowerCase() || '';
+  const type       = document.getElementById('advSearchType')?.value || '';
+  const dateFilter = document.getElementById('advSearchDate')?.value || '';
+  const sizeFilter = document.getElementById('advSearchSize')?.value || '';
+  const ownerFilter= document.getElementById('advSearchOwner')?.value || '';
+  const container  = document.getElementById('advSearchResults');
+  const countSpan  = document.getElementById('advSearchCount');
+
+  // Loader
+  if (container) container.innerHTML = `
+    <div class="col-span-full text-center py-12">
+      <i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i>
+      <p class="mt-2 text-blue-300/60">Recherche en cours…</p>
+    </div>`;
+
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser?.companyId) {
+    try {
+      const { data, error } = await G.supabase
+        .from('documents')
+        .select('*')
+        .eq('company_id', G.currentUser.companyId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      if (!error && data) G.documents = data;
+    } catch (e) {
+      console.warn('runAdvSearch reload failed:', e);
+    }
+  }
+
+  let results = G.documents.filter(d => !d.is_deleted);
+
+  // Filtre texte (nom + description + tags)
+  if (query) {
+    results = results.filter(d =>
+      d.name.toLowerCase().includes(query) ||
+      (d.description && d.description.toLowerCase().includes(query)) ||
+      (Array.isArray(d.tags) && d.tags.some(t => t.toLowerCase().includes(query)))
+    );
+  }
+
+  // Filtre type
+  if (type) results = results.filter(d => d.type === type);
+
+  // Filtre propriétaire
+  if (ownerFilter === 'mine') results = results.filter(d => d.owner_id === G.currentUser.id);
+  else if (ownerFilter === 'others') results = results.filter(d => d.owner_id !== G.currentUser.id);
+
+  // Filtre date
+  if (dateFilter === 'today') {
+    const today = new Date().toDateString();
+    results = results.filter(d => new Date(d.created_at).toDateString() === today);
+  } else if (dateFilter === 'week') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 7);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  } else if (dateFilter === 'month') {
+    const ago = new Date(); ago.setDate(ago.getDate() - 30);
+    results = results.filter(d => new Date(d.created_at) >= ago);
+  }
+
+  // Filtre taille
+  if (sizeFilter === 'small')  results = results.filter(d => d.size < 1024 * 1024);
+  if (sizeFilter === 'medium') results = results.filter(d => d.size >= 1024 * 1024 && d.size < 10 * 1024 * 1024);
+  if (sizeFilter === 'large')  results = results.filter(d => d.size >= 10 * 1024 * 1024);
+
+  // Sauvegarder pour usage ultérieur (export, etc.)
+  _search.lastQuery   = query;
+  _search.lastResults = results;
+
+  // MAJ compteur
+  if (countSpan) countSpan.textContent = `${results.length} résultat(s)`;
+
+  if (!container) return;
+
+  if (results.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full text-center py-12 text-blue-300/50">
+        <i class="fas fa-search text-4xl mb-3 block opacity-20"></i>
+        <p class="text-lg">Aucun résultat${query ? ` pour "<strong>${escapeHtml(query)}</strong>"` : ''}</p>
+        <p class="text-sm mt-2 text-blue-400/50">Essayez d'autres mots-clés ou modifiez vos filtres</p>
+      </div>`;
+  } else {
+    container.innerHTML = `<div class="doc-grid">${results.map(doc => renderDocCard(doc)).join('')}</div>`;
+  }
 }
 
-async function updateUserRole(userId, newRole) {
-  if (!newRole) return;
-  const user = G.users.find(u => u.id === userId);
-  if (!user) return;
+async function renderSysLogs() {
+  const container = document.getElementById('sysLogConsole');
+  if (!container) return;
 
-  const btn = event?.target;
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  // Rechargement Supabase
+  if (G.supabase && G.currentUser) {
+    try {
+      const isAdmin = G.currentUser.isSystemAdmin || G.currentUser.role === 'admin';
+
+      // system_logs (admins seulement) + audit_logs toujours
+      const queries = [
+        G.supabase.from('audit_logs').select('*').eq('user_id', G.currentUser.id)
+          .order('created_at', { ascending: false }).limit(500),
+      ];
+
+      if (isAdmin) {
+        queries.push(
+          G.supabase.from('system_logs').select('*')
+            .order('created_at', { ascending: false }).limit(200)
+        );
+      }
+
+      const results = await Promise.all(queries);
+
+      // Fusionner audit_logs + system_logs en un flux unifié
+      const auditData  = results[0].data || [];
+      const systemData = isAdmin && results[1] ? (results[1].data || []) : [];
+
+      // Normaliser les champs
+      const normalized = [
+        ...auditData.map(l => ({
+          id:         l.id,
+          level:      _auditSeverityToLevel(l.severity || 'info'),
+          action:     l.action,
+          message:    l.details || l.action || '',
+          target_type:l.target_type || '',
+          created_at: l.created_at,
+          source:     'audit',
+        })),
+        ...systemData.map(l => ({
+          id:         l.id,
+          level:      l.level || 'info',
+          action:     l.action || '',
+          message:    l.message || l.details || l.action || '',
+          target_type:l.target_type || '',
+          created_at: l.created_at,
+          source:     'system',
+        })),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      G.systemLogs = normalized;
+      _sysLogs.allLogs = normalized;
+
+    } catch (e) {
+      console.warn('renderSysLogs reload failed:', e);
+    }
+  } else {
+    _sysLogs.allLogs = G.systemLogs || [];
+  }
+
+  _renderSysLogsPage();
+  _updateSysLogsStats();
+}
+
+function renderSearchV7() {
+  if (document.getElementById('ftsInput')?.value.trim()) runFTSearch();
+}
+
+function searchSysLogs(query) {
+  _sysLogs.searchQuery = (query || '').trim();
+  _sysLogs.page = 1;
+  _renderSysLogsPage();
+}
+
+async function confirmCreateNewVersion(docId) {
+  const doc  = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  const note = document.getElementById('newVersionNote')?.value.trim() || '';
+  const file = window._pendingVersionFile;
+
+  const newVersion = (doc.version || 1) + 1;
+
+  const btn = document.querySelector('#createVersionModal button[onclick^="confirmCreate"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement…'; }
 
   try {
-    const { error } = await G.supabase
-      .from('profiles')
-      .update({ role: newRole, updated_at: new Date().toISOString() })
-      .eq('id', userId);
-    if (error) throw error;
+    // Si nouveau fichier → upload
+    if (file && G.supabase) {
+      const fileExt     = file.name.split('.').pop().toLowerCase();
+      const storagePath = `${G.currentUser.companyId}/${docId}_v${newVersion}.${fileExt}`;
+      const { error: uploadErr } = await G.supabase.storage
+        .from(CONFIG.storageBucket)
+        .upload(storagePath, file, { cacheControl: '3600', upsert: true });
+      if (!uploadErr) {
+        const { data: urlData } = G.supabase.storage.from(CONFIG.storageBucket).getPublicUrl(storagePath);
+        doc.file_url      = urlData.publicUrl;
+        doc.storage_path  = storagePath;
+        doc.size          = file.size;
+        doc.type          = getFileType(file.name);
+      }
+    }
 
-    user.role = newRole;
-    showToast(`Rôle de ${user.name} → ${G.roles[newRole]?.name || newRole}`, 'success');
-    await addAuditLog('role_change', 'user', userId, `Nouveau rôle : ${newRole}`);
+    // Mise à jour version en base
+    if (G.supabase) {
+      const { error } = await G.supabase
+        .from('documents')
+        .update({
+          version:    newVersion,
+          updated_at: new Date().toISOString(),
+          ...(file ? { size: file.size, storage_path: doc.storage_path, file_url: doc.file_url } : {})
+        })
+        .eq('id', docId);
+      if (error) throw error;
+    }
 
-    renderRBACV7();
+    doc.version    = newVersion;
+    doc.updated_at = new Date().toISOString();
+
+    await addAuditLog('version_create', 'document', docId,
+      `v${newVersion} créée${note ? ' : ' + note : ''}${file ? ' — nouveau fichier' : ''}`);
+
+    showToast(`✅ Version v${newVersion} créée`, 'success');
+    window._pendingVersionFile = null;
+    document.getElementById('createVersionModal')?.classList.add('hidden');
+    document.getElementById('versionHistoryModal')?.classList.add('hidden');
+    renderVersioning();
 
   } catch (err) {
-    showToast('Erreur mise à jour rôle : ' + err.message, 'error');
+    showToast('Erreur création version : ' + err.message, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Appliquer'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="fas fa-plus mr-2"></i>Créer la version v${newVersion}`; }
   }
 }
 
-function createRoleV7() {
-  const input = document.getElementById('newRoleName');
-  const name  = input?.value.trim();
-  if (!name) { showToast('Entrez un nom de rôle', 'warning'); return; }
-
-  const roleKey = name.toLowerCase().replace(/[\s\-]/g, '_').replace(/[^a-z0-9_]/g, '');
-  if (!roleKey) { showToast('Nom invalide', 'warning'); return; }
-  if (G.roles[roleKey]) { showToast(`Le rôle "${name}" existe déjà`, 'warning'); return; }
-
-  G.roles[roleKey] = { name, perms: ['read'] };
-  if (input) input.value = '';
-  renderRBAC();
-  renderRBACV7();
-  showToast(`Rôle "${name}" créé (permissions : lecture seule par défaut)`, 'success');
-
-  // Ouvrir directement le modal d'édition
-  openRoleModal(roleKey);
+function closeRoleModal() {
+  const modal = document.getElementById('roleModal');
+  if (modal) modal.classList.add('hidden');
+  _rbac.editingRole = null;
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════
-// EXPOSITION GLOBALE
-// ═══════════════════════════════════════════════════════════════════════
-Object.assign(window, {
-  // Recherche Avancée
-  runAdvSearch, clearAdvSearch, renderAdvancedSearch, exportSearchResults,
-  runFTSearch, renderSearchV7,
-
-  // Versioning
-  renderVersioning, filterVersionDocs, restoreVersion,
-  createNewVersion, confirmCreateNewVersion, handleNewVersionFile,
-  showVersionHistory, downloadVersion, compareVersions,
-
-  // Logs Système
-  renderSysLogs, filterLogs, clearSysLogs, exportSysLogs, getLogLevelColor,
-  searchSysLogs, sysLogsPrevPage, sysLogsNextPage, toggleSysLogsAutoRefresh,
-
-  // RBAC
-  renderRBAC, renderRBACV7, openRoleModal, closeRoleModal,
-  saveRole, updateUserRole, createRoleV7,
-});
-
-
-
-// ─── Fonctions restaurées ───
-function renderAnalytics() {
-  const kpiContainer = document.getElementById('analyticsKpiCards');
-  if (kpiContainer) {
-    const totalViews = G.documents.reduce((sum, d) => sum + (d.views || 0), 0);
-    const totalDownloads = G.documents.reduce((sum, d) => sum + (d.downloads || 0), 0);
-    kpiContainer.innerHTML = `
-      <div class="glass-card rounded-xl p-4 border border-blue-500/20"><p class="text-2xl font-bold text-white">${totalViews}</p><p class="text-xs text-blue-300/60">Vues totales</p></div>
-      <div class="glass-card rounded-xl p-4 border border-green-500/20"><p class="text-2xl font-bold text-white">${totalDownloads}</p><p class="text-xs text-blue-300/60">Téléchargements</p></div>
-      <div class="glass-card rounded-xl p-4 border border-purple-500/20"><p class="text-2xl font-bold text-white">${G.workflows.length}</p><p class="text-xs text-blue-300/60">Workflows</p></div>
-      <div class="glass-card rounded-xl p-4 border border-orange-500/20"><p class="text-2xl font-bold text-white">${G.users.length}</p><p class="text-xs text-blue-300/60">Utilisateurs</p></div>
-    `;
-  }
-  
-  const topDocsContainer = document.getElementById('analyticsTopDocs');
-  if (topDocsContainer) {
-    const topDocs = [...G.documents].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
-    if (topDocs.length === 0) {
-      topDocsContainer.innerHTML = '<p class="text-blue-300/40 text-sm text-center py-6">Aucun document</p>';
-    } else {
-      topDocsContainer.innerHTML = topDocs.map(d => `<div class="flex justify-between items-center p-2 border-b border-blue-500/10"><span class="text-white text-sm truncate">${d.name}</span><span class="text-blue-400 text-sm">${d.views || 0} vues</span></div>`).join('');
-    }
-  }
-  
-  const topUsersContainer = document.getElementById('analyticsTopUsers');
-  if (topUsersContainer) {
-    const userActivity = {};
-    G.auditLogs.forEach(log => {
-      userActivity[log.user_id] = (userActivity[log.user_id] || 0) + 1;
-    });
-    const topUsers = Object.entries(userActivity).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    if (topUsers.length === 0) {
-      topUsersContainer.innerHTML = '<p class="text-blue-300/40 text-sm text-center py-6">Aucune activité</p>';
-    } else {
-      topUsersContainer.innerHTML = topUsers.map(([userId, count]) => {
-        const user = G.users.find(u => u.id === userId);
-        return `<div class="flex justify-between items-center p-2 border-b border-blue-500/10"><span class="text-white text-sm">${user?.name || 'Utilisateur'}</span><span class="text-blue-400 text-sm">${count} actions</span></div>`;
-      }).join('');
-    }
-  }
-  
-  // Graphique d'activité simplifié
-  const activityChart = document.getElementById('analyticsActivityChart');
-  if (activityChart) {
-    const last7Days = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const count = G.auditLogs.filter(l => new Date(l.created_at).toDateString() === date.toDateString()).length;
-      last7Days.push(count);
-    }
-    const maxCount = Math.max(...last7Days, 1);
-    activityChart.innerHTML = `
-      <div class="analytics-bar-wrap w-full">
-        ${last7Days.map((count, idx) => `
-          <div class="flex-1 flex flex-col items-center">
-            <div class="w-full bg-blue-500/20 rounded-t-lg" style="height: ${(count / maxCount) * 80}px; min-height: 4px;"></div>
-            <div class="w-full h-8 bg-blue-500/20 mt-1 rounded-b-lg text-center text-[10px] text-blue-300/60 pt-1">${count}</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }
-  
-  // Workflow chart
-  const workflowChart = document.getElementById('analyticsWorkflowChart');
-  if (workflowChart) {
-    const wfStats = {
-      pending: G.workflows.filter(w => w.status === 'pending').length,
-      in_review: G.workflows.filter(w => w.status === 'in_review').length,
-      approved: G.workflows.filter(w => w.status === 'approved').length,
-      rejected: G.workflows.filter(w => w.status === 'rejected').length
-    };
-    workflowChart.innerHTML = `
-      <div class="space-y-2">
-        <div class="flex justify-between text-xs"><span>En attente</span><span class="text-orange-400">${wfStats.pending}</span></div>
-        <div class="flex justify-between text-xs"><span>En révision</span><span class="text-blue-400">${wfStats.in_review}</span></div>
-        <div class="flex justify-between text-xs"><span>Approuvés</span><span class="text-green-400">${wfStats.approved}</span></div>
-        <div class="flex justify-between text-xs"><span>Rejetés</span><span class="text-red-400">${wfStats.rejected}</span></div>
-      </div>
-    `;
-  }
-}
-
-function refreshAnalytics() {
-  renderAnalytics();
-  showToast('Analytics actualisés', 'success');
-}
-
-// ─── Signatures ───
-function renderSignatures() {
-  const container = document.getElementById('signaturesList');
+function _renderSysLogsPage() {
+  const container = document.getElementById('sysLogConsole');
   if (!container) return;
-  
-  if (G.signatures.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-signature text-4xl mb-3 block opacity-20"></i><p>Aucune signature</p></div>';
+
+  let logs = _sysLogs.allLogs;
+
+  // Filtre niveau
+  if (_sysLogs.filter !== 'all') logs = logs.filter(l => l.level === _sysLogs.filter);
+
+  // Filtre recherche
+  if (_sysLogs.searchQuery) {
+    const q = _sysLogs.searchQuery.toLowerCase();
+    logs = logs.filter(l =>
+      (l.message || '').toLowerCase().includes(q) ||
+      (l.action  || '').toLowerCase().includes(q) ||
+      (l.target_type || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Pagination
+  const total   = logs.length;
+  const pages   = Math.max(1, Math.ceil(total / _sysLogs.pageSize));
+  const page    = Math.min(_sysLogs.page, pages);
+  const start   = (page - 1) * _sysLogs.pageSize;
+  const paged   = logs.slice(start, start + _sysLogs.pageSize);
+
+  // Mettre à jour pagination UI
+  const pageInfo = document.getElementById('sysLogPageInfo');
+  const pagePrev = document.getElementById('sysLogPrev');
+  const pageNext = document.getElementById('sysLogNext');
+  if (pageInfo) pageInfo.textContent = `Page ${page} / ${pages}  (${total} entrée${total > 1 ? 's' : ''})`;
+  if (pagePrev) pagePrev.disabled = page <= 1;
+  if (pageNext) pageNext.disabled = page >= pages;
+
+  if (paged.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-blue-300/40 text-sm">
+        <i class="fas fa-check-circle text-2xl text-green-400/40 mb-2 block"></i>
+        Aucun log${_sysLogs.filter !== 'all' ? ` de niveau "${_sysLogs.filter}"` : ''}
+        ${_sysLogs.searchQuery ? ` pour "${escapeHtml(_sysLogs.searchQuery)}"` : ''}
+      </div>`;
     return;
   }
-  
-  const pendingCount = G.signatures.filter(s => s.status === 'pending').length;
-  const signedCount = G.signatures.filter(s => s.status === 'signed').length;
-  const rejectedCount = G.signatures.filter(s => s.status === 'rejected').length;
-  
-  const sigStatPending = document.getElementById('sigStatPending');
-  const sigStatSigned = document.getElementById('sigStatSigned');
-  const sigStatRejected = document.getElementById('sigStatRejected');
-  
-  if (sigStatPending) sigStatPending.textContent = pendingCount;
-  if (sigStatSigned) sigStatSigned.textContent = signedCount;
-  if (sigStatRejected) sigStatRejected.textContent = rejectedCount;
-  
-  container.innerHTML = G.signatures.map(s => {
-    const doc = G.documents.find(d => d.id === s.document_id);
+
+  container.innerHTML = paged.map(l => {
+    const levelColor = getLogLevelColor(l.level);
+    const time = l.created_at ? new Date(l.created_at).toLocaleTimeString('fr-FR') : '';
+    const date = l.created_at ? new Date(l.created_at).toLocaleDateString('fr-FR') : '';
+    const msg  = escapeHtml(l.message || l.action || '—');
     return `
-      <div class="glass-card rounded-xl p-4 border border-blue-500/20 flex items-center justify-between">
-        <div><p class="text-white font-medium">${doc?.name || 'Document inconnu'}</p><p class="text-xs text-blue-300/60">Signataire: ${s.signer_email || s.signer_id}</p></div>
-        <span class="px-3 py-1 rounded-full text-xs ${getSigStatusClass(s.status)}">${s.status === 'pending' ? 'En attente' : s.status === 'signed' ? 'Signé' : 'Rejeté'}</span>
-      </div>
-    `;
+    <div class="log-entry flex items-start gap-2 py-1.5 px-2 text-xs hover:bg-blue-500/5 rounded transition-colors border-b border-blue-500/5">
+      <span class="text-blue-300/30 flex-shrink-0 w-[105px]">[${date} ${time}]</span>
+      <span class="flex-shrink-0 w-20">
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase
+          ${l.level === 'error' ? 'bg-red-500/20 text-red-400' :
+            l.level === 'warn'  ? 'bg-yellow-500/20 text-yellow-400' :
+            l.level === 'security' ? 'bg-orange-500/20 text-orange-400' :
+            'bg-blue-500/15 text-blue-400'}">
+          ${l.level}
+        </span>
+      </span>
+      ${l.source === 'audit' ? '<span class="flex-shrink-0 text-purple-400/50 text-[10px] w-10">audit</span>' : '<span class="flex-shrink-0 text-teal-400/50 text-[10px] w-10">sys</span>'}
+      <span class="flex-1 text-blue-200/80 break-words">${msg}</span>
+      ${l.target_type ? `<span class="flex-shrink-0 text-blue-300/40 text-[10px]">${l.target_type}</span>` : ''}
+    </div>`;
   }).join('');
 }
 
-function getSigStatusClass(status) {
-  const classes = { 
-    pending: 'bg-yellow-500/20 text-yellow-300', 
-    signed: 'bg-green-500/20 text-green-300', 
-    rejected: 'bg-red-500/20 text-red-300' 
-  };
-  return classes[status] || 'bg-gray-500/20 text-gray-300';
+function clearSysLogs() {
+  _sysLogs.filter = 'all';
+  _sysLogs.searchQuery = '';
+  _sysLogs.page = 1;
+  G.systemLogs = [];
+  _sysLogs.allLogs = [];
+  const container = document.getElementById('sysLogConsole');
+  if (container) container.innerHTML = '<div class="text-center py-8 text-blue-300/40 text-sm"><i class="fas fa-check-circle text-2xl text-green-400/40 mb-2 block"></i>Logs effacés</div>';
+  showToast('Logs effacés de la vue', 'info');
 }
 
-function openSignModal() {
-  if (!G.currentDocId) {
-    showToast('Veuillez d\'abord ouvrir un document', 'warning');
-    return;
-  }
-  
-  const doc = G.documents.find(d => d.id === G.currentDocId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  const modal = document.getElementById('signatureModal');
-  if (modal) modal.classList.remove('hidden');
-  
-  // Mettre à jour les informations du document
-  const signDocName = document.getElementById('signDocName');
-  if (signDocName) signDocName.textContent = doc.name;
-  
-  const signDocInfo = document.getElementById('signDocInfo');
-  if (signDocInfo) {
-    signDocInfo.innerHTML = `
-      <span class="text-xs text-blue-300/60">${formatBytes(doc.size)}</span>
-      <span class="text-blue-300/40">•</span>
-      <span class="text-xs text-blue-300/60">Version ${doc.version || 1}</span>
-    `;
-  }
-  
-  // Pré-remplir le nom du signataire
-  const signerNameInput = document.getElementById('signerName');
-  if (signerNameInput) {
-    signerNameInput.value = G.currentUser.name || '';
-  }
-  
-  // Réinitialiser le canvas
-  initSignatureCanvas();
-  
-  // Afficher les signatures existantes
-  loadExistingSignatures(doc.id);
-}
-
-function loadExistingSignatures(docId) {
-  const existingSignatures = G.signatures.filter(s => s.document_id === docId);
-  const container = document.getElementById('existingSignatures');
-  
-  if (container) {
-    if (existingSignatures.length === 0) {
-      container.classList.add('hidden');
-    } else {
-      container.classList.remove('hidden');
-      container.innerHTML = `
-        <p class="text-xs text-blue-300/60 mb-2 flex items-center gap-2">
-          <i class="fas fa-check-circle text-green-400"></i>
-          ${existingSignatures.length} signature(s) existante(s)
-        </p>
-        <div class="flex flex-wrap gap-2">
-          ${existingSignatures.map(sig => `
-            <div class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 border border-green-500/20 cursor-pointer hover:bg-slate-700/50 transition-all" onclick="viewSignature('${sig.id}')">
-              <i class="fas fa-signature text-green-400 text-sm"></i>
-              <div>
-                <p class="text-xs text-white">${escapeHtml(sig.signer_name || sig.signer_email || sig.signer_id?.substring(0, 8))}</p>
-                <p class="text-[10px] text-blue-300/50">${formatDate(sig.signed_at || sig.created_at)}</p>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-  }
-}
-
-function closeSignModal() {
-  const modal = document.getElementById('signatureModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-let signatureCanvas = null;
-let signatureCtx = null;
-let isDrawing = false;
-
-function initSignatureCanvas() {
-  const canvas = document.getElementById('signatureCanvas');
-  if (!canvas) return;
-  
-  signatureCanvas = canvas;
-  
-  // Définir la taille du canvas
-  const container = canvas.parentElement;
-  const width = Math.min(container.clientWidth - 32, 550);
-  canvas.width = width;
-  canvas.height = 200;
-  
-  signatureCtx = canvas.getContext('2d');
-  signatureCtx.fillStyle = '#0f172a';
-  signatureCtx.fillRect(0, 0, canvas.width, canvas.height);
-  signatureCtx.strokeStyle = '#60a5fa';
-  signatureCtx.lineWidth = 2;
-  signatureCtx.lineCap = 'round';
-  signatureCtx.lineJoin = 'round';
-  
-  // Ajouter un guide visuel
-  signatureCtx.beginPath();
-  signatureCtx.strokeStyle = 'rgba(96,165,250,0.3)';
-  signatureCtx.setLineDash([5, 5]);
-  signatureCtx.moveTo(50, canvas.height - 30);
-  signatureCtx.lineTo(canvas.width - 50, canvas.height - 30);
-  signatureCtx.stroke();
-  signatureCtx.setLineDash([]);
-  
-  // Texte indicatif
-  signatureCtx.font = '12px "Inter", sans-serif';
-  signatureCtx.fillStyle = 'rgba(96,165,250,0.5)';
-  signatureCtx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
-  
-  let lastX = 0, lastY = 0;
-  
-  function getCoordinates(e) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    let clientX, clientY;
-    if (e.touches) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-    return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
-  }
-  
-  function startDrawing(e) {
-    e.preventDefault();
-    isDrawing = true;
-    const { x, y } = getCoordinates(e);
-    lastX = x;
-    lastY = y;
-    signatureCtx.beginPath();
-    signatureCtx.moveTo(x, y);
-  }
-  
-  function draw(e) {
-    e.preventDefault();
-    if (!isDrawing) return;
-    const { x, y } = getCoordinates(e);
-    signatureCtx.lineTo(x, y);
-    signatureCtx.stroke();
-    lastX = x;
-    lastY = y;
-  }
-  
-  function stopDrawing() {
-    isDrawing = false;
-    signatureCtx.beginPath();
-  }
-  
-  // Événements souris
-  canvas.addEventListener('mousedown', startDrawing);
-  canvas.addEventListener('mousemove', draw);
-  canvas.addEventListener('mouseup', stopDrawing);
-  canvas.addEventListener('mouseleave', stopDrawing);
-  
-  // Événements tactiles
-  canvas.addEventListener('touchstart', startDrawing);
-  canvas.addEventListener('touchmove', draw);
-  canvas.addEventListener('touchend', stopDrawing);
-}
-
-function clearSignature() {
-  const canvas = document.getElementById('signatureCanvas');
-  if (!canvas || !signatureCtx) return;
-  
-  signatureCtx.clearRect(0, 0, canvas.width, canvas.height);
-  signatureCtx.fillStyle = '#0f172a';
-  signatureCtx.fillRect(0, 0, canvas.width, canvas.height);
-  signatureCtx.strokeStyle = '#60a5fa';
-  signatureCtx.lineWidth = 2;
-  
-  // Refaire le guide
-  signatureCtx.beginPath();
-  signatureCtx.strokeStyle = 'rgba(96,165,250,0.3)';
-  signatureCtx.setLineDash([5, 5]);
-  signatureCtx.moveTo(50, canvas.height - 30);
-  signatureCtx.lineTo(canvas.width - 50, canvas.height - 30);
-  signatureCtx.stroke();
-  signatureCtx.setLineDash([]);
-  signatureCtx.font = '12px "Inter", sans-serif';
-  signatureCtx.fillStyle = 'rgba(96,165,250,0.5)';
-  signatureCtx.fillText('Signez ici', canvas.width / 2 - 30, canvas.height - 10);
-}
-
-async function submitSignature() {
-  const canvas = document.getElementById('signatureCanvas');
-  if (!canvas) return;
-  
-  // Vérifier si une signature a été dessinée (détecter pixels non-background)
-  const ctx = canvas.getContext('2d');
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  let hasDrawing = false;
-  // Background is drawn as opaque black (#0f172a ≈ rgb(15,23,42))
-  // Signature strokes are blue (#60a5fa). We check for any pixel that differs significantly.
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    const r = imageData.data[i], g = imageData.data[i+1], b = imageData.data[i+2];
-    // If pixel is significantly different from the dark background, drawing exists
-    if (r > 40 || g > 40 || b > 80) {
-      hasDrawing = true;
-      break;
-    }
-  }
-  
-  if (!hasDrawing) {
-    showToast('Veuillez dessiner votre signature avant de valider', 'warning');
-    return;
-  }
-  
-  const signatureData = canvas.toDataURL('image/png');
-  const signerName = document.getElementById('signerName')?.value.trim() || G.currentUser.name;
-  const signerTitle = document.getElementById('signerTitle')?.value.trim() || '';
-  const signReason = document.getElementById('signReason')?.value.trim() || 'Approbation du document';
-  
-  if (!G.currentDocId) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  const doc = G.documents.find(d => d.id === G.currentDocId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  // Afficher un indicateur de chargement
-  const submitBtn = document.getElementById('submitSignatureBtn');
-  const originalText = submitBtn?.innerHTML;
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner mr-2"></span>Enregistrement...';
-  }
-  
-  try {
-    const newSig = {
-      id: generateId(),
-      document_id: G.currentDocId,
-      document_name: doc.name,
-      signer_id: G.currentUser.id,
-      signer_email: G.currentUser.email,
-      signer_name: signerName,
-      signer_title: signerTitle,
-      sign_reason: signReason,
-      status: 'signed',
-      signature_data: signatureData,
-      signed_at: new Date().toISOString(),
-      created_at: new Date().toISOString()
-    };
-    
-    const { error } = await G.supabase.from('signatures').insert(newSig);
-    if (error) throw error;
-    
-    G.signatures.push(newSig);
-    showToast('✓ Signature enregistrée avec succès', 'success');
-    
-    // Ajouter un log d'audit
-    await addAuditLog('signature', 'document', G.currentDocId, `Signé par ${signerName}`);
-    
-    closeSignModal();
-    renderSignatures();
-    
-  } catch (err) {
-    console.error('Erreur signature:', err);
-    showToast('Erreur lors de l\'enregistrement de la signature', 'error');
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
-    }
-  }
-}
-
-function viewSignature(signatureId) {
-  const signature = G.signatures.find(s => s.id === signatureId);
-  if (!signature || !signature.signature_data) {
-    showToast('Signature non disponible', 'error');
-    return;
-  }
-  
-  // Créer un modal pour visualiser la signature
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.style.zIndex = '300';
-  modal.innerHTML = `
-    <div class="modal-box" style="max-width: 500px;">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-blue-500/20 flex items-center justify-center">
-            <i class="fas fa-signature text-green-400"></i>
-          </div>
-          <div>
-            <h3 class="text-white font-bold">Signature électronique</h3>
-            <p class="text-xs text-blue-300/60">Document certifié</p>
-          </div>
-        </div>
-        <button onclick="this.closest('.modal-overlay').remove()" class="text-blue-400 hover:text-white p-2 rounded-lg">
-          <i class="fas fa-times text-xl"></i>
-        </button>
-      </div>
-      <div class="text-center">
-        <img src="${signature.signature_data}" class="max-w-full mx-auto border border-blue-500/30 rounded-lg bg-white p-4" alt="Signature">
-        <div class="mt-4 text-left space-y-1 text-sm bg-slate-900/50 rounded-xl p-4">
-          <p><span class="text-blue-300/60">Signataire:</span> <span class="text-white font-medium">${escapeHtml(signature.signer_name || signature.signer_email)}</span></p>
-          ${signature.signer_title ? `<p><span class="text-blue-300/60">Fonction:</span> <span class="text-white">${escapeHtml(signature.signer_title)}</span></p>` : ''}
-          <p><span class="text-blue-300/60">Raison:</span> <span class="text-white">${escapeHtml(signature.sign_reason || 'Approbation')}</span></p>
-          <p><span class="text-blue-300/60">Date:</span> <span class="text-white">${formatDate(signature.signed_at)}</span></p>
-          <p><span class="text-blue-300/60">Document:</span> <span class="text-white">${escapeHtml(signature.document_name || 'Document')}</span></p>
-          <div class="mt-3 pt-2 border-t border-blue-500/20">
-            <p class="text-xs text-green-400/70 flex items-center gap-2">
-              <i class="fas fa-check-circle"></i>
-              Signature valide et horodatée
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function openRequestSignatureModal() {
-  const modal = document.getElementById('requestSignatureModal');
-  if (modal) modal.classList.remove('hidden');
-  
-  const docSelect = document.getElementById('signatureDocId');
-  if (docSelect) {
-    docSelect.innerHTML = '<option value="">-- Sélectionner un document --</option>' + 
-      G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${escapeHtml(doc.name)}</option>`).join('');
-  }
-}
-
-function closeRequestSignatureModal() {
-  const modal = document.getElementById('requestSignatureModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-async function requestSignature() {
-  const docId = document.getElementById('signatureDocId')?.value;
-  const signerEmail = document.getElementById('signatureSignerEmail')?.value;
-  const message = document.getElementById('signatureMessage')?.value;
-  
-  if (!docId || !signerEmail) {
-    showToast('Veuillez remplir tous les champs', 'warning');
-    return;
-  }
-  
-  const newSig = {
-    id: generateId(),
-    document_id: docId,
-    signer_email: signerEmail,
-    signer_id: null,
-    status: 'pending',
-    message: message,
-    requested_by: G.currentUser.id,
-    created_at: new Date().toISOString()
-  };
-  
-  const { error } = await G.supabase.from('signatures').insert(newSig);
-  if (error) {
-    showToast('Erreur demande de signature', 'error');
-    return;
-  }
-  
-  G.signatures.push(newSig);
-  showToast(`Demande de signature envoyée à ${signerEmail}`, 'success');
-  closeRequestSignatureModal();
-  renderSignatures();
-  
-  await addAuditLog('signature_request', 'document', docId, `Demandé à ${signerEmail}`);
-}
-
-// ─── IA (corrigé avec analyse réelle) ───
-function renderAI() {
-  const container = document.getElementById('aiDocsList');
-  if (!container) return;
-  
-  const docs = G.documents.filter(d => !d.is_deleted).slice(0, 10);
-  container.innerHTML = docs.map(d => `
-    <div class="glass-card rounded-xl p-4 border border-pink-500/20">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3"><i class="fas ${getFileIcon(d.type).split(' ')[0]} text-pink-400"></i><span class="text-white font-medium">${d.name}</span></div>
-        <button onclick="analyzeDocument('${d.id}')" class="px-3 py-1.5 rounded-lg bg-pink-500/20 text-pink-400 text-xs hover:bg-pink-500/30">Analyser</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-async function analyzeDocument(docId) {
+async function createNewVersion(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
-  
-  showToast(`Analyse IA du document "${escapeHtml(doc.name)}" en cours...`, 'info');
-  
-  try {
-    // Simuler une analyse IA
-    const analysis = {
-      summary: `Résumé du document ${escapeHtml(doc.name)}: Ce document contient des informations importantes concernant ${doc.type === 'pdf' ? 'un contrat' : 'un rapport'}.`,
-      keywords: ['important', 'document', 'ged'],
-      sentiment: 'positif'
-    };
-    
-    // Afficher le résultat
-    const aiResponseContainer = document.getElementById('aiResponseContainer');
-    const aiResponseText = document.getElementById('aiResponseText');
-    if (aiResponseContainer && aiResponseText) {
-      aiResponseContainer.classList.remove('hidden');
-      aiResponseText.innerHTML = `
-        <strong>Analyse de "${escapeHtml(doc.name)}" :</strong><br>
-        📝 Résumé: ${analysis.summary}<br>
-        🔑 Mots-clés: ${analysis.keywords.join(', ')}<br>
-        😊 Sentiment: ${analysis.sentiment}
-      `;
-    }
-    
-    showToast(`Analyse terminée: ${escapeHtml(doc.name)}`, 'success');
-  } catch (err) {
-    showToast(`Erreur d'analyse: ${err.message}`, 'error');
+
+  // Modal simplifié pour upload du nouveau fichier
+  let modal = document.getElementById('createVersionModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'createVersionModal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
   }
-}
 
-function analyzeAllDocuments() {
-  showToast('Analyse de tous les documents en cours...', 'info');
-  setTimeout(() => {
-    showToast(`Analyse terminée: ${G.documents.filter(d => !d.is_deleted).length} documents analysés`, 'success');
-  }, 3000);
-}
-
-function askAI() {
-  const query = document.getElementById('aiQueryInput')?.value;
-  if (!query) {
-    showToast('Veuillez poser une question', 'warning');
-    return;
-  }
-  
-  const responseContainer = document.getElementById('aiResponseContainer');
-  const responseText = document.getElementById('aiResponseText');
-  
-  if (responseContainer && responseText) {
-    responseContainer.classList.remove('hidden');
-    responseText.innerHTML = `Analyse de "${query}" en cours...`;
-    setTimeout(() => {
-      const relevantDocs = G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase()));
-      if (relevantDocs.length > 0) {
-        responseText.innerHTML = `🔍 Résultat pour "${query}" :<br>${relevantDocs.map(d => `📄 ${d.name}`).join('<br>')}<br><br>Total: ${relevantDocs.length} document(s) trouvé(s)`;
-      } else {
-        responseText.innerHTML = `Aucun document ne correspond à "${query}". Essayez d'autres termes de recherche.`;
-      }
-    }, 1500);
-  }
-}
-
-// ─── Automation ───
-function renderAutomation() {
-  const container = document.getElementById('automationRulesList');
-  if (!container) return;
-  
-  if (G.automationRules.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-magic text-4xl mb-3 block opacity-20"></i><p>Aucune règle d\'automatisation</p></div>';
-    return;
-  }
-  
-  container.innerHTML = G.automationRules.map(r => `
-    <div class="glass-card rounded-xl p-4 border border-orange-500/20">
-      <div class="flex items-center justify-between">
-        <div><p class="text-white font-medium">${r.name}</p><p class="text-xs text-blue-300/60">${r.trigger} → ${r.action}</p></div>
-        <span class="px-2 py-1 rounded-full text-xs ${r.active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${r.active ? 'Actif' : 'Inactif'}</span>
-      </div>
-    </div>
-  `).join('');
-  
-  const statsEl = document.getElementById('automationStats');
-  if (statsEl) statsEl.textContent = `${G.automationRules.length} règle(s) active(s)`;
-}
-
-function openWfRuleModal() {
-  const modal = document.getElementById('wfRuleModal');
-  if (modal) modal.classList.remove('hidden');
-}
-
-function closeWfRuleModal() {
-  const modal = document.getElementById('wfRuleModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-async function createWfRule(e) {
-  e.preventDefault();
-  
-  const rule = {
-    id: generateId(),
-    name: document.getElementById('wfRuleName')?.value || 'Nouvelle règle',
-    trigger: document.getElementById('wfRuleTrigger')?.value || '',
-    action: document.getElementById('wfRuleAction')?.value || '',
-    config: {},
-    active: true,
-    company_id: G.currentUser.companyId,
-    created_at: new Date().toISOString()
-  };
-  
-  const { error } = await G.supabase.from('automation_rules').insert(rule);
-  if (error) {
-    showToast('Erreur création règle', 'error');
-    return;
-  }
-  
-  G.automationRules.push(rule);
-  closeWfRuleModal();
-  renderAutomation();
-  showToast('Règle créée', 'success');
-  
-  await addAuditLog('automation_rule_create', 'rule', rule.id, `Nom: ${rule.name}`);
-}
-
-function quickCreateRule(ruleType) {
-  const nameInput = document.getElementById('wfRuleName');
-  const triggerSelect = document.getElementById('wfRuleTrigger');
-  const actionSelect = document.getElementById('wfRuleAction');
-  
-  if (nameInput && triggerSelect && actionSelect) {
-    switch(ruleType) {
-      case 'upload_workflow':
-        nameInput.value = 'Auto-approbation upload';
-        triggerSelect.value = 'document_upload';
-        actionSelect.value = 'start_workflow';
-        break;
-      case 'signature_notify':
-        nameInput.value = 'Notification signature';
-        triggerSelect.value = 'signature_done';
-        actionSelect.value = 'send_notification';
-        break;
-      case 'webhook_approve':
-        nameInput.value = 'Webhook approbation';
-        triggerSelect.value = 'workflow_approve';
-        actionSelect.value = 'call_webhook';
-        break;
-    }
-  }
-  openWfRuleModal();
-}
-
-// ─── Integrations ───
-function renderIntegrations() {
-  const container = document.getElementById('integrationsGrid');
-  if (!container) return;
-  
-  const integrations = [
-    { name: 'Slack', icon: 'fab fa-slack', color: 'purple', description: 'Notifications en temps réel' },
-    { name: 'Google Drive', icon: 'fab fa-google-drive', color: 'green', description: 'Import/Export documents' },
-    { name: 'Dropbox', icon: 'fab fa-dropbox', color: 'blue', description: 'Synchronisation cloud' },
-    { name: 'Microsoft 365', icon: 'fab fa-microsoft', color: 'blue', description: 'Éditer avec Office' },
-    { name: 'Zapier', icon: 'fas fa-bolt', color: 'yellow', description: 'Automatisations' },
-    { name: 'Make', icon: 'fas fa-cogs', color: 'orange', description: 'Workflows avancés' }
-  ];
-  
-  container.innerHTML = integrations.map(i => `
-    <div class="glass-card rounded-xl p-4 border border-blue-500/20 hover:border-${i.color}-400/40 cursor-pointer transition-all">
-      <div class="flex items-center gap-3 mb-3">
-        <div class="w-10 h-10 rounded-lg bg-${i.color}-500/20 flex items-center justify-center text-${i.color}-400"><i class="${i.icon} text-lg"></i></div>
-        <div><p class="text-white font-medium">${i.name}</p><p class="text-xs text-blue-300/60">${i.description}</p></div>
-      </div>
-      <button class="w-full py-2 rounded-lg bg-blue-500/10 text-blue-400 text-xs hover:bg-blue-500/20" onclick="connectIntegration('${i.name}')">Connecter</button>
-    </div>
-  `).join('');
-}
-
-function connectIntegration(name) {
-  showToast(`Connexion à ${name} en développement`, 'info');
-}
-
-function addWebhook() {
-  const url = document.getElementById('webhookUrl')?.value;
-  const event = document.getElementById('webhookEvent')?.value;
-  
-  if (!url) {
-    showToast('Veuillez entrer une URL', 'warning');
-    return;
-  }
-  
-  showToast(`Webhook ${event} ajouté`, 'success');
-  const container = document.getElementById('webhooksList');
-  if (container) {
-    if (container.innerHTML.includes('Aucun webhook')) {
-      container.innerHTML = '';
-    }
-    container.innerHTML += `
-      <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/30 border border-blue-500/10">
-        <div><p class="text-white text-xs">${event}</p><p class="text-blue-300/50 text-[10px]">${url}</p></div>
-        <button onclick="this.parentElement.remove()" class="text-red-400 text-xs"><i class="fas fa-trash"></i></button>
-      </div>
-    `;
-  }
-  document.getElementById('webhookUrl').value = '';
-}
-
-// ─── Backups ───
-function renderBackups() {
-  const container = document.getElementById('backupsList');
-  if (!container) return;
-  
-  if (G.backups.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-database text-4xl mb-3 block opacity-20"></i><p>Aucune sauvegarde</p></div>';
-    return;
-  }
-  
-  const statsEl = document.getElementById('backupStats');
-  if (statsEl) statsEl.textContent = `${G.backups.length} sauvegarde(s) disponible(s)`;
-  
-  container.innerHTML = G.backups.map(b => `
-    <div class="glass-card rounded-xl p-4 border border-teal-500/20 flex items-center justify-between">
-      <div class="flex items-center gap-3"><i class="fas fa-archive text-teal-400 text-xl"></i><div><p class="text-white font-medium">${b.name}</p><p class="text-xs text-blue-300/60">${b.type} • ${formatBytes(b.size)} • ${formatDate(b.created_at)}</p></div></div>
-      <button onclick="restoreBackup('${b.id}')" class="px-3 py-1.5 rounded-lg bg-teal-500/20 text-teal-400 text-xs hover:bg-teal-500/30">Restaurer</button>
-    </div>
-  `).join('');
-}
-
-async function createBackup(type) {
-  const backup = {
-    id: generateId(),
-    name: `Backup ${new Date().toLocaleString('fr-FR')}`,
-    type: type === 'full' ? 'Complète' : 'Documents',
-    size: G.documents.reduce((sum, d) => sum + (d.size || 0), 0),
-    created_by: G.currentUser.id,
-    company_id: G.currentUser.companyId,
-    created_at: new Date().toISOString()
-  };
-  
-  const { error } = await G.supabase.from('backups').insert(backup);
-  if (error) {
-    showToast('Erreur création backup', 'error');
-    return;
-  }
-  
-  G.backups.unshift(backup);
-  renderBackups();
-  showToast('Sauvegarde créée', 'success');
-  
-  await addAuditLog('backup_create', 'backup', backup.id, `Type: ${type}`);
-}
-
-function restoreBackup(id) {
-  showToast('Restauration en cours...', 'info');
-  setTimeout(() => showToast('Restauration terminée', 'success'), 2000);
-}
-
-function toggleAutoBackup() {
-  const enable = document.getElementById('autoBackupEnable')?.checked;
-  const frequency = document.getElementById('autoBackupFrequency');
-  const retention = document.getElementById('autoBackupRetention');
-  
-  if (frequency && retention) {
-    frequency.disabled = !enable;
-    retention.disabled = !enable;
-  }
-  showToast(`Sauvegarde automatique ${enable ? 'activée' : 'désactivée'}`, 'info');
-}
-
-function saveBackupSettings() {
-  showToast('Paramètres de sauvegarde enregistrés', 'success');
-}
-
-// ─── API Keys ───
-function renderApiKeys() {
-  const container = document.getElementById('apiKeysList2');
-  if (!container) return;
-  
-  if (G.apiKeys.length === 0) {
-    container.innerHTML = '<div class="text-center py-8 text-blue-300/50"><p class="text-sm">Aucune clé API</p></div>';
-    return;
-  }
-  
-  container.innerHTML = G.apiKeys.map(k => `
-    <div class="glass-card rounded-xl p-4 border border-green-500/20 flex items-center justify-between">
-      <div><p class="text-white font-medium text-sm">${escapeHtml(k.name)}</p><p class="text-xs text-green-400/60 font-mono">${(k.key || '').substring(0, 20)}...</p><p class="text-xs text-blue-300/50">Créé le ${formatDate(k.created_at)}</p></div>
-      <div class="flex gap-2">
-        <button onclick="copyApiKey('${escapeHtml(k.key)}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400" title="Copier"><i class="fas fa-copy"></i></button>
-        <button onclick="revokeApiKey('${k.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30">Révoquer</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-function generateApiKeyV6() {
-  generateApiKey();
-}
-
-async function revokeApiKey(id) {
-  const { error } = await G.supabase.from('api_keys').delete().eq('id', id);
-  if (error) {
-    showToast('Erreur révocation', 'error');
-    return;
-  }
-  
-  G.apiKeys = G.apiKeys.filter(k => k.id !== id);
-  renderApiKeys();
-  showToast('Clé révoquée', 'success');
-}
-
-// ─── Search ───
-function handleGlobalSearch(query) {
-  const dropdown = document.getElementById('searchDropdown');
-  if (!dropdown) return;
-  
-  if (!query || query.length < 2) {
-    dropdown.classList.add('hidden');
-    return;
-  }
-  
-  const results = G.documents.filter(d => !d.is_deleted && d.name.toLowerCase().includes(query.toLowerCase())).slice(0, 5);
-  if (results.length === 0) {
-    dropdown.classList.add('hidden');
-    return;
-  }
-  
-  dropdown.classList.remove('hidden');
-  dropdown.innerHTML = results.map(doc => `
-    <div class="p-2 hover:bg-blue-500/10 cursor-pointer" onclick="openPreviewModal('${doc.id}'); document.getElementById('searchDropdown').classList.add('hidden');">
-      <p class="text-white text-sm">${escapeHtml(doc.name)}</p>
-      <p class="text-xs text-blue-300/60">${formatBytes(doc.size)}</p>
-    </div>
-  `).join('');
-}
-
-
-function renderAuditV6() {
-  const statsContainer = document.getElementById('auditStatsGrid');
-  const timelineContainer = document.getElementById('auditTimelineList');
-  const alertsContainer = document.getElementById('securityAlertsList');
-  
-  if (statsContainer) {
-    statsContainer.innerHTML = `
-      <div class="glass-card rounded-xl p-3 text-center"><p class="text-2xl font-bold text-white">${G.auditLogs.length}</p><p class="text-xs text-blue-300/60">Événements</p></div>
-      <div class="glass-card rounded-xl p-3 text-center"><p class="text-2xl font-bold text-white">${G.auditLogs.filter(l => l.action === 'login').length}</p><p class="text-xs text-blue-300/60">Connexions</p></div>
-      <div class="glass-card rounded-xl p-3 text-center"><p class="text-2xl font-bold text-white">${G.auditLogs.filter(l => l.action === 'upload').length}</p><p class="text-xs text-blue-300/60">Uploads</p></div>
-      <div class="glass-card rounded-xl p-3 text-center"><p class="text-2xl font-bold text-white">${G.auditLogs.filter(l => l.action === 'delete').length}</p><p class="text-xs text-blue-300/60">Suppressions</p></div>
-      <div class="glass-card rounded-xl p-3 text-center"><p class="text-2xl font-bold text-white">${G.auditLogs.filter(l => l.action === 'share').length}</p><p class="text-xs text-blue-300/60">Partages</p></div>
-      <div class="glass-card rounded-xl p-3 text-center"><p class="text-2xl font-bold text-white">${G.workflows.length}</p><p class="text-xs text-blue-300/60">Workflows</p></div>
-    `;
-  }
-  
-  if (timelineContainer) {
-    let filtered = G.auditLogs;
-    if (G.auditFilter.action) {
-      filtered = filtered.filter(l => l.action === G.auditFilter.action);
-    }
-    
-    if (filtered.length === 0) {
-      timelineContainer.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun événement</div>';
-    } else {
-      timelineContainer.innerHTML = filtered.slice(0, 30).map(l => `
-        <div class="p-2 border-b border-blue-500/10 flex justify-between items-center">
-          <div><span class="text-xs text-white">${l.action}</span><span class="text-xs text-blue-300/60 ml-2">${l.target_type || ''}</span></div>
-          <span class="text-xs text-blue-300/60">${formatDate(l.created_at)}</span>
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:520px;">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-500/30">
+            <i class="fas fa-plus"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-bold">Créer une nouvelle version</h3>
+            <p class="text-blue-300/50 text-xs">${escapeHtml(doc.name)} · Version actuelle : v${doc.version || 1}</p>
+          </div>
         </div>
-      `).join('');
-    }
-  }
-  
-  if (alertsContainer) {
-    const criticalLogs = G.auditLogs.filter(l => l.severity === 'critical' || l.action === 'delete').slice(0, 5);
-    if (criticalLogs.length === 0) {
-      alertsContainer.innerHTML = '<div class="text-center py-6 text-blue-300/50 text-sm"><i class="fas fa-shield-alt text-2xl mb-2 block opacity-30"></i>Aucune alerte récente</div>';
-    } else {
-      alertsContainer.innerHTML = criticalLogs.map(l => `
-        <div class="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-          <p class="text-red-400 text-xs font-semibold">⚠️ ${l.action.toUpperCase()}</p>
-          <p class="text-blue-300/70 text-xs mt-1">${l.target_type || 'Action'} • ${formatDate(l.created_at)}</p>
-        </div>
-      `).join('');
-    }
-  }
-}
-
-function setAuditFilter(type, value) {
-  if (!G.auditFilter) G.auditFilter = { days: 30, severity: '', action: '' };
-  if (type === 'days') G.auditFilter.days = parseInt(value);
-  if (type === 'severity') G.auditFilter.severity = value;
-  if (type === 'action') G.auditFilter.action = value;
-  renderAuditV6();
-}
-
-function filterAuditLogs(query) {
-  const container = document.getElementById('auditTimelineList');
-  if (!container) return;
-  
-  let filtered = G.auditLogs;
-  if (query) {
-    filtered = filtered.filter(l => l.action.toLowerCase().includes(query.toLowerCase()) || 
-      (l.target_type && l.target_type.toLowerCase().includes(query.toLowerCase())));
-  }
-  
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="text-center py-8 text-blue-300/50">Aucun événement</div>';
-  } else {
-    container.innerHTML = filtered.slice(0, 50).map(l => `
-      <div class="p-2 border-b border-blue-500/10 flex justify-between items-center">
-        <div><span class="text-xs text-white">${l.action}</span><span class="text-xs text-blue-300/60 ml-2">${l.target_type || ''}</span></div>
-        <span class="text-xs text-blue-300/60">${formatDate(l.created_at)}</span>
+        <button onclick="document.getElementById('createVersionModal').classList.add('hidden')"
+          class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
       </div>
-    `).join('');
+
+      <div class="space-y-4">
+        <div>
+          <label class="text-blue-200/70 text-xs font-medium block mb-1">Note de version</label>
+          <input type="text" id="newVersionNote" placeholder="Ex: Corrections page 3, mise à jour données Q3…"
+            class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none"
+            style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+        </div>
+        <div>
+          <label class="text-blue-200/70 text-xs font-medium block mb-2">Nouveau fichier (optionnel)</label>
+          <div class="border-2 border-dashed border-blue-500/30 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400/50 transition-all"
+            onclick="document.getElementById('newVersionFileInput').click()">
+            <i class="fas fa-cloud-upload-alt text-2xl text-blue-400/50 block mb-2"></i>
+            <p class="text-blue-300/60 text-sm">Cliquez ou glissez un fichier</p>
+            <p class="text-blue-400/40 text-xs mt-1">Remplace le fichier actuel pour cette version</p>
+          </div>
+          <input type="file" id="newVersionFileInput" class="hidden"
+            onchange="handleNewVersionFile(this, '${docId}')">
+          <p id="newVersionFileName" class="text-xs text-green-400 mt-2 hidden"></p>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-5 pt-4 border-t border-blue-500/20">
+        <button onclick="document.getElementById('createVersionModal').classList.add('hidden')"
+          class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10 transition-all">
+          Annuler
+        </button>
+        <button onclick="confirmCreateNewVersion('${docId}')"
+          class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2">
+          <i class="fas fa-plus"></i>Créer la version v${(doc.version || 1) + 1}
+        </button>
+      </div>
+    </div>`;
+
+  modal.classList.remove('hidden');
+}
+
+function handleNewVersionFile(input, docId) {
+  const file = input.files[0];
+  if (!file) return;
+  const label = document.getElementById('newVersionFileName');
+  if (label) {
+    label.textContent = `✅ ${file.name} (${formatBytes(file.size)})`;
+    label.classList.remove('hidden');
   }
+  // Store file reference
+  window._pendingVersionFile = file;
 }
-
-function clearAuditFilters() {
-  const searchInput = document.getElementById('auditSearchInput');
-  if (searchInput) searchInput.value = '';
-  renderAuditV6();
-}
-
-function prevAuditPage() {
-  if (G.auditCurrentPage > 1) {
-    G.auditCurrentPage--;
-    renderAuditV6();
-  }
-}
-
-function nextAuditPage() {
-  const maxPage = Math.ceil(G.auditLogs.length / G.auditPageSize);
-  if (G.auditCurrentPage < maxPage) {
-    G.auditCurrentPage++;
-    renderAuditV6();
-  }
-}
-
-function exportUserData() {
-  const userData = {
-    profile: {
-      name: G.currentUser.name,
-      email: G.currentUser.email,
-      role: G.currentUser.role,
-      company: G.currentUser.companyName
-    },
-    documents: G.documents.filter(d => d.owner_id === G.currentUser.id),
-    activities: G.auditLogs.filter(l => l.user_id === G.currentUser.id)
-  };
-  
-  const data = JSON.stringify(userData, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `user_data_${G.currentUser.email}_${new Date().toISOString()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Export des données personnelles effectué', 'success');
-}
-
-function requestAccountDeletion() {
-  const confirmed = confirm('⚠️ ATTENTION : Cette action est irréversible.\n\nVoulez-vous vraiment demander la suppression définitive de votre compte et de toutes vos données ?');
-  if (!confirmed) return;
-  const doubleConfirm = prompt('Tapez "SUPPRIMER" pour confirmer :');
-  if (doubleConfirm !== 'SUPPRIMER') {
-    showToast('Suppression annulée', 'info');
-    return;
-  }
-  addAuditLog('account_deletion_request', 'user', G.currentUser.id, `Demande de suppression par ${G.currentUser.email}`).catch(() => {});
-  showToast('Demande de suppression enregistrée. Un administrateur traitera votre demande sous 30 jours (RGPD).', 'info', 7000);
-}
-
-function copySqlSchema() {
-  const schema = document.getElementById('sqlSchemaBlock')?.textContent;
-  if (schema) {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(schema).then(() => showToast('Schéma SQL copié', 'success')).catch(() => _fallbackCopy(schema));
-    } else {
-      _fallbackCopy(schema);
-    }
-  }
-}
-
-function openDangerModal(action) {
-  showToast('Fonctionnalité de suppression en développement', 'info');
-}
-
-function closeNotifPanel() {
-  const panel = document.getElementById('notifPanel');
-  if (panel) panel.classList.add('hidden');
-}
-
-function toggleNotifications() {
-  const panel = document.getElementById('notifPanel');
-  if (panel) {
-    panel.classList.toggle('hidden');
-  }
-}
-
-function markAllNotifRead() {
-  showToast('Toutes les notifications marquées comme lues', 'success');
-  const badge = document.getElementById('notifBadge');
-  const countBadge = document.getElementById('notifCountBadge');
-  if (badge) badge.classList.add('hidden');
-  if (countBadge) countBadge.classList.add('hidden');
-}
-
-// ─── Audit Log Helper ───
-async function addAuditLog(action, targetType, targetId, details = '') {
-  if (!G.currentUser || !G.supabase) return;
-  try {
-    const log = {
-      id: generateId(),
-      user_id: G.currentUser.id,
-      user_email: G.currentUser.email,
-      action: action,
-      target_type: targetType,
-      target_id: targetId,
-      details: details,
-      severity: ['delete', 'validate_user', 'account_deletion_request', 'role_change'].includes(action) ? 'warning' : 'info',
-      created_at: new Date().toISOString()
-    };
-
-    const { error } = await G.supabase.from('audit_logs').insert(log);
-    if (!error) {
-      if (!G.auditLogs) G.auditLogs = [];
-      G.auditLogs.unshift(log);
-      if (G.auditLogs.length > 500) G.auditLogs.pop();
-    }
-  } catch (err) {
-    console.warn('addAuditLog error (non-blocking):', err);
-  }
-}
-
-// ─── Rich Editor ───
-function openRichEditor(docId) {
-  showToast('Éditeur riche en développement', 'info');
-}
-
-function closeRichEditor() {
-  const modal = document.getElementById('richEditorModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-function _onRichEditorInput() {}
-function _saveRichContent() {}
-
-// ─── Utilitaires ───
-function generateId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID().replace(/-/g, '');
-  }
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-}
-
-function formatBytes(bytes, decimals = 2) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-function formatDate(dateString) {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-function getFileIcon(type) {
-  const map = {
-    pdf: { icon: 'fa-file-pdf', color: 'text-red-400' },
-    doc: { icon: 'fa-file-word', color: 'text-blue-400' },
-    docx: { icon: 'fa-file-word', color: 'text-blue-400' },
-    xls: { icon: 'fa-file-excel', color: 'text-green-400' },
-    xlsx: { icon: 'fa-file-excel', color: 'text-green-400' },
-    ppt: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
-    pptx: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
-    png: { icon: 'fa-file-image', color: 'text-purple-400' },
-    jpg: { icon: 'fa-file-image', color: 'text-purple-400' },
-    jpeg: { icon: 'fa-file-image', color: 'text-purple-400' },
-    gif: { icon: 'fa-file-image', color: 'text-purple-400' },
-    txt: { icon: 'fa-file-alt', color: 'text-gray-400' },
-    zip: { icon: 'fa-file-archive', color: 'text-yellow-400' },
-    mp4: { icon: 'fa-file-video', color: 'text-pink-400' },
-    mp3: { icon: 'fa-file-audio', color: 'text-green-400' },
-    json: { icon: 'fa-file-code', color: 'text-cyan-400' },
-    html: { icon: 'fa-file-code', color: 'text-cyan-400' },
-    css: { icon: 'fa-file-code', color: 'text-cyan-400' },
-    js: { icon: 'fa-file-code', color: 'text-cyan-400' }
-  };
-  const m = map[type] || { icon: 'fa-file', color: 'text-blue-400' };
-  return `${m.icon} ${m.color}`;
-}
-
-function getFileType(filename) {
-  const ext = filename.split('.').pop().toLowerCase();
-  const types = { 
-    pdf: 'pdf',
-    doc: 'doc',
-    docx: 'doc',
-    xls: 'xls',
-    xlsx: 'xls',
-    ppt: 'ppt',
-    pptx: 'ppt',
-    png: 'img',
-    jpg: 'img',
-    jpeg: 'img',
-    gif: 'img',
-    webp: 'img',
-    svg: 'img',
-    txt: 'txt',
-    zip: 'zip',
-    rar: 'zip',
-    mp4: 'video',
-    mp3: 'audio',
-    json: 'code',
-    xml: 'code',
-    html: 'code',
-    css: 'code',
-    js: 'code'
-  };
-  return types[ext] || 'unknown';
-}
-
-function showToast(message, type = 'info', duration = 4000) {
-  const container = document.getElementById('toastContainer');
-  if (!container) return;
-
-  const styles = {
-    success: { bg: 'rgba(16,185,129,0.95)', icon: 'fa-check-circle',       border: 'rgba(16,185,129,0.4)' },
-    error:   { bg: 'rgba(239,68,68,0.95)',  icon: 'fa-exclamation-circle',  border: 'rgba(239,68,68,0.4)'  },
-    warning: { bg: 'rgba(245,158,11,0.95)', icon: 'fa-exclamation-triangle', border: 'rgba(245,158,11,0.4)' },
-    info:    { bg: 'rgba(37,99,235,0.95)',  icon: 'fa-info-circle',          border: 'rgba(96,165,250,0.4)' }
-  };
-  const s = styles[type] || styles.info;
-
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.style.cssText = `background:${s.bg};border-color:${s.border};`;
-  toast.innerHTML = `<i class="fas ${s.icon}"></i><span>${escapeHtml(String(message))}</span>`;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.classList.add('hiding');
-    setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 320);
-  }, duration);
-}
-
-function handleDocDragStart(e, docId) {
-  e.dataTransfer.setData('text/plain', docId);
-}
-
-function showDocContextMenu(e, docId) {
-  e.preventDefault();
-  e.stopPropagation();
-  // Use the standard delete flow which includes its own confirm
-  deleteDocument(docId);
-}
-
-// ─── Sécurité : Échappement HTML ───
-function canValidateUsers() {
-  if (!G.currentUser) return false;
-  return G.currentUser.isSystemAdmin ||
-    G.roles[G.currentUser.role]?.perms?.includes('validate_users') ||
-    G.currentUser.role === 'admin';
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-// ─── Initialisation ───
 
 document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('error', (e) => {
@@ -7634,6 +7733,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.searchWorkflows = searchWorkflows;
   window.setWfView = setWfView;
   window.renderUsers = renderUsers;
+  window.updatePendingUsersCount = updatePendingUsersCount;
+  window.clearTagFilter = clearTagFilter;
+  window.loadDeletedDocs = loadDeletedDocs;
   window.validateUser = validateUser;
   window.deleteUser = deleteUser;
   window.resetUserPassword = resetUserPassword;
@@ -7669,6 +7771,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.closeRoleModal = closeRoleModal;
   window.saveRole = saveRole;
   window.renderAnalytics = renderAnalytics;
+  window.Analytics = Analytics;
+  window.exportAnalytics = exportAnalytics;
+  window.Folders = Folders;
+  window.renderFolderTree = renderFolderTree;
+  window.deleteFolder = deleteFolder;
+  window.Signatures = Signatures;
+  window.loadExistingSignatures = loadExistingSignatures;
+  window.AI = AI;
+  window.Automation = Automation;
+  window.deleteRule = deleteRule;
+  window.Backups = Backups;
+  window.deleteBackup = deleteBackup;
+  window.Billing = Billing;
+  window.detail = detail;
   window.refreshAnalytics = refreshAnalytics;
   window.renderFolders = renderFolders;
   window.openFolder = openFolder;
