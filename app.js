@@ -1930,130 +1930,158 @@ function setDocScope(scope) {
 
 // ─── Preview et téléchargement ───
 function openPreviewModal(docId) {
-  console.log('👁️ Ouverture de l\'aperçu pour:', docId);
   G.currentDocId = docId;
-  
   const modal = document.getElementById('previewModal');
   if (modal) modal.classList.remove('hidden');
-  
+
   const doc = G.documents.find(d => d.id === docId);
-  if (!doc) {
-    showToast('Document introuvable', 'error');
-    return;
-  }
-  
-  // Afficher le chargement
+  if (!doc) { showToast('Document introuvable', 'error'); return; }
+
   showPreviewLoading();
-  
-  // Mettre à jour le titre
+
   const titleEl = document.getElementById('previewTitle');
   if (titleEl) titleEl.textContent = doc.name;
-  
-  // Mettre à jour les métadonnées
   updatePreviewMetadata(doc);
-  
+
   const fileUrl = doc.file_url;
-  const fileType = doc.type;
-  const fileName = doc.name;
-  const fileExt = fileName.includes('.') 
-    ? fileName.split('.').pop().toLowerCase()
-    : (doc.storage_path ? doc.storage_path.split('.').pop().toLowerCase() : '');
-  
-  // Normaliser fileType depuis doc.type ou déduire depuis l'extension
-  const typeToExt = { img: 'jpg', pdf: 'pdf', doc: 'docx', xls: 'xlsx', ppt: 'pptx', txt: 'txt', video: 'mp4', audio: 'mp3', code: 'js' };
+  if (!fileUrl) { hidePreviewLoading(); showUnsupportedPreview(doc); updateDocViews(docId); return; }
+
+  // Détecter l'extension: nom > storage_path > type
+  const nameExt  = doc.name && doc.name.includes('.') ? doc.name.split('.').pop().toLowerCase() : '';
+  const pathExt  = doc.storage_path ? doc.storage_path.split('.').pop().toLowerCase() : '';
+  const fileExt  = nameExt || pathExt;
+  const fileType = doc.type || '';
+  const typeToExt = { img:'jpg', pdf:'pdf', doc:'docx', xls:'xlsx', ppt:'pptx', txt:'txt', video:'mp4', audio:'mp3', code:'js' };
   const effectiveExt = fileExt || typeToExt[fileType] || '';
-  const isImageByType = fileType === 'img' || ['jpg','jpeg','png','gif','webp','svg','bmp'].includes(effectiveExt);
-  
-  // Récupérer les éléments
-  const previewFrame = document.getElementById('previewFrame');
-  const previewImage = document.getElementById('previewImage');
-  const previewContent = document.getElementById('previewContent');
-  const previewOffice = document.getElementById('previewOffice');
-  const previewUnsupported = document.getElementById('previewUnsupported');
-  
-  // Cacher tous les conteneurs
-  if (previewFrame) previewFrame.classList.add('hidden');
-  if (previewImage) previewImage.classList.add('hidden');
-  if (previewContent) previewContent.classList.add('hidden');
-  if (previewOffice) previewOffice.classList.add('hidden');
-  if (previewUnsupported) previewUnsupported.classList.add('hidden');
-  
-  // Types de fichiers supportés
-  const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
-  const pdfTypes = ['pdf'];
-  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
-  const textTypes = ['txt', 'json', 'xml', 'html', 'css', 'js', 'md'];
-  
+  const isImage = fileType === 'img' || ['jpg','jpeg','png','gif','webp','svg','bmp'].includes(effectiveExt);
+
+  // Masquer tous les panneaux
+  ['previewFrame','previewImage','previewContent','previewOffice','previewUnsupported'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+
+  const previewFrame       = document.getElementById('previewFrame');
+  const previewImage       = document.getElementById('previewImage');
+  const previewContent     = document.getElementById('previewContent');
+  const previewOffice      = document.getElementById('previewOffice');
+
+  const imageExts  = ['jpg','jpeg','png','gif','webp','svg','bmp'];
+  const pdfExts    = ['pdf'];
+  const officeExts = ['doc','docx','xls','xlsx','ppt','pptx'];
+  const textExts   = ['txt','json','xml','html','css','js','md','csv'];
+
   try {
-    if (isImageByType || imageTypes.includes(effectiveExt)) {
+    if (isImage || imageExts.includes(effectiveExt)) {
+      // Images: essayer img.src direct, fallback sur Signed URL si 400/403
       if (previewImage) {
-        // Supabase public URL — direct load, no fetch needed
         previewImage.classList.remove('hidden');
         previewImage.onload  = () => hidePreviewLoading();
-        previewImage.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
-        previewImage.src = fileUrl;
-      }
-    } else if (pdfTypes.includes(effectiveExt)) {
-      if (previewFrame) {
-        previewFrame.classList.remove('hidden');
-        fetch(fileUrl)
-          .then(r => {
-            if (!r.ok) throw new Error('Fetch failed: ' + r.status);
-            return r.blob();
-          })
-          .then(blob => {
-            const blobUrl = URL.createObjectURL(blob);
-            previewFrame.src = blobUrl;
-            previewFrame.onload = () => {
-              hidePreviewLoading();
-              setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-            };
-          })
-          .catch(() => {
+        previewImage.onerror = () => {
+          // Fallback: générer une Signed URL (bucket privé)
+          if (G.supabase && doc.storage_path) {
+            G.supabase.storage.from(CONFIG.storageBucket)
+              .createSignedUrl(doc.storage_path, 3600)
+              .then(({ data, error }) => {
+                if (!error && data?.signedUrl) {
+                  previewImage.src = data.signedUrl;
+                } else {
+                  hidePreviewLoading();
+                  showUnsupportedPreview(doc);
+                }
+              })
+              .catch(() => { hidePreviewLoading(); showUnsupportedPreview(doc); });
+          } else {
             hidePreviewLoading();
             showUnsupportedPreview(doc);
+          }
+        };
+        previewImage.src = fileUrl;
+      }
+    } else if (pdfExts.includes(effectiveExt)) {
+      // PDF: essayer iframe direct, fallback signed URL si échec
+      if (previewFrame) {
+        previewFrame.classList.remove('hidden');
+        const loadPdf = (url) => {
+          previewFrame.src = url;
+          previewFrame.onload  = () => hidePreviewLoading();
+          previewFrame.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
+        };
+        // Essayer l'URL publique directement d'abord
+        fetch(fileUrl, { method: 'HEAD' })
+          .then(r => {
+            if (r.ok) {
+              loadPdf(fileUrl);
+            } else if (G.supabase && doc.storage_path) {
+              // URL privée → Signed URL
+              G.supabase.storage.from(CONFIG.storageBucket)
+                .createSignedUrl(doc.storage_path, 3600)
+                .then(({ data, error }) => {
+                  if (!error && data?.signedUrl) loadPdf(data.signedUrl);
+                  else { hidePreviewLoading(); showUnsupportedPreview(doc); }
+                });
+            } else {
+              hidePreviewLoading();
+              showUnsupportedPreview(doc);
+            }
+          })
+          .catch(() => {
+            // fetch HEAD bloqué par CORS → essayer directement
+            loadPdf(fileUrl);
           });
       }
-    } else if (officeTypes.includes(effectiveExt)) {
-      if (previewOffice) {
-        previewOffice.src = 'https://docs.google.com/viewer?url=' + encodeURIComponent(fileUrl) + '&embedded=true';
-        previewOffice.classList.remove('hidden');
-        previewOffice.onload = () => {
-          hidePreviewLoading();
-          console.log('✅ Document Office chargé');
-        };
-        previewOffice.onerror = () => {
-          hidePreviewLoading();
-          showUnsupportedPreview(doc);
-        };
+    } else if (officeExts.includes(effectiveExt)) {
+      // Office: pas d'iframe (CSP bloque Vercel + Google Viewer)
+      // → Proposer téléchargement direct
+      hidePreviewLoading();
+      const previewUnsupported = document.getElementById('previewUnsupported');
+      if (previewUnsupported) {
+        previewUnsupported.classList.remove('hidden');
+        const info = document.getElementById('unsupportedFileInfo');
+        if (info) {
+          info.innerHTML = `
+            <i class="fas fa-file-word text-5xl mb-4 block text-blue-400/60"></i>
+            <p class="text-white font-semibold">${escapeHtml(doc.name)}</p>
+            <p class="text-sm text-blue-300/50 mt-1">${formatBytes(doc.size || 0)} &bull; ${effectiveExt.toUpperCase()}</p>
+            <p class="text-xs text-blue-400/40 mt-3 mb-4">L'aperçu en ligne n'est pas disponible pour ce type de fichier.</p>
+            <div class="flex gap-3 justify-center flex-wrap">
+              <button onclick="downloadDocument('${doc.id}')" class="btn-primary px-5 py-2 rounded-xl text-white text-sm flex items-center gap-2">
+                <i class="fas fa-download"></i>Télécharger
+              </button>
+              <a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer"
+                 class="px-5 py-2 rounded-xl text-blue-300 text-sm border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-2">
+                <i class="fas fa-external-link-alt"></i>Ouvrir dans un nouvel onglet
+              </a>
+            </div>`;
+        }
       }
-    } else if (textTypes.includes(effectiveExt)) {
+    } else if (textExts.includes(effectiveExt)) {
       if (previewContent) previewContent.classList.remove('hidden');
       const contentEl = document.getElementById('previewTextContent');
       if (contentEl) {
         contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i></div>';
         fetch(fileUrl)
-          .then(response => response.text())
+          .then(r => r.text())
           .then(text => {
             hidePreviewLoading();
-            contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap break-words p-4 max-h-[60vh] overflow-y-auto">${escapeHtml(text.slice(0, 50000))}</pre>`;
+            contentEl.innerHTML = '<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap break-words p-4 max-h-[55vh] overflow-y-auto">' + escapeHtml(text.slice(0, 50000)) + '</pre>';
           })
           .catch(() => {
             hidePreviewLoading();
-            contentEl.innerHTML = '<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-3 block"></i><p>Impossible de charger le contenu</p></div>';
+            contentEl.innerHTML = '<div class="text-center py-8 text-yellow-400"><i class="fas fa-exclamation-triangle text-3xl mb-3 block"></i><p>Impossible de charger le contenu texte.</p></div>';
           });
       }
     } else {
+      // Type non reconnu
       hidePreviewLoading();
       showUnsupportedPreview(doc);
     }
   } catch (err) {
-    console.error('Erreur aperçu:', err);
+    console.error('Erreur apercu:', err);
     hidePreviewLoading();
     showUnsupportedPreview(doc);
   }
-  
-  // Incrémenter le compteur de vues
+
   updateDocViews(docId);
 }
 
