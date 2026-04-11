@@ -2504,16 +2504,37 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
     
     <!-- Barre d'actions supplémentaire -->
     <div class="flex items-center justify-between mt-4 pt-3 border-t border-blue-500/20">
-      <div class="flex gap-2">
+      <div class="flex gap-2 flex-wrap">
         <button onclick="openSignModal()" class="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-sm hover:bg-green-500/20 transition-colors flex items-center gap-2">
           <i class="fas fa-signature"></i>Signer
         </button>
         <button onclick="generatePublicLink(G.currentDocId, 7)" class="px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 text-sm hover:bg-purple-500/20 transition-colors flex items-center gap-2">
           <i class="fas fa-link"></i>Lien public
         </button>
+        <button id="editDocBtn" onclick="editCurrentDocument()" class="px-3 py-1.5 rounded-lg bg-yellow-500/10 text-yellow-400 text-sm hover:bg-yellow-500/20 transition-colors flex items-center gap-2 hidden">
+          <i class="fas fa-edit"></i>Modifier
+        </button>
+        <button onclick="openCollabModal(G.currentDocId)" class="px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-sm hover:bg-blue-500/20 transition-colors flex items-center gap-2">
+          <i class="fas fa-users"></i>Collaborer
+        </button>
       </div>
-      <div class="text-xs text-blue-400/50">
-        <span id="previewPageInfo"></span>
+      <div class="flex items-center gap-3">
+        <!-- Présences temps réel -->
+        <div id="previewPresence" class="flex items-center gap-1"></div>
+        <span id="previewPageInfo" class="text-xs text-blue-400/50"></span>
+      </div>
+    </div>
+
+    <!-- Panneau commentaires (collaboration) -->
+    <div id="commentsPanel" class="hidden mt-3 pt-3 border-t border-blue-500/20">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="text-white text-sm font-semibold flex items-center gap-2"><i class="fas fa-comments text-blue-400"></i>Commentaires <span id="commentsCount" class="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">0</span></h4>
+        <button onclick="toggleCommentsPanel()" class="text-blue-400/50 hover:text-blue-300 text-xs">Fermer</button>
+      </div>
+      <div id="commentsList" class="max-h-40 overflow-y-auto space-y-2 mb-3"></div>
+      <div class="flex gap-2">
+        <input id="newCommentInput" type="text" placeholder="Ajouter un commentaire..." class="flex-1 px-3 py-2 rounded-lg text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" onkeydown="if(event.key==='Enter') addComment()">
+        <button onclick="addComment()" class="btn-primary px-3 py-2 rounded-lg text-white text-sm"><i class="fas fa-paper-plane"></i></button>
       </div>
     </div>
   </div>
@@ -2589,13 +2610,28 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
 
 <!-- ════ COLLABORATION MODAL -->
 <div id="collabModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:480px">
+  <div class="modal-box" style="max-width:520px">
     <div class="flex items-center justify-between mb-5">
-      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-users text-green-400"></i>Inviter à collaborer</h3>
+      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-users text-green-400"></i>Collaboration</h3>
       <button onclick="closeCollabModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
     </div>
-    <div class="space-y-4">
-      <p class="text-blue-300/70 text-sm">Invitez un membre de votre entreprise à collaborer sur <strong id="collabDocInfo">ce document</strong>.</p>
+
+    <!-- Onglets -->
+    <div class="flex gap-1 mb-4 bg-blue-900/20 rounded-xl p-1">
+      <button onclick="switchCollabTab('invite')" id="tabInvite" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all bg-blue-500/30 text-white">
+        <i class="fas fa-user-plus mr-1"></i>Inviter
+      </button>
+      <button onclick="switchCollabTab('members')" id="tabMembers" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all text-blue-300/70 hover:text-white">
+        <i class="fas fa-users mr-1"></i>Membres
+      </button>
+      <button onclick="switchCollabTab('activity')" id="tabActivity" class="flex-1 py-2 rounded-lg text-sm font-medium transition-all text-blue-300/70 hover:text-white">
+        <i class="fas fa-history mr-1"></i>Activité
+      </button>
+    </div>
+
+    <!-- Tab: Inviter -->
+    <div id="collabTabInvite" class="space-y-4">
+      <p class="text-blue-300/70 text-sm">Invitez un membre sur <strong id="collabDocInfo">ce document</strong>.</p>
       <div>
         <label class="text-blue-200 text-xs font-medium block mb-1">Email du collaborateur</label>
         <input id="collabEmail" type="email" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);" placeholder="collaborateur@entreprise.com">
@@ -2605,13 +2641,33 @@ create table if not exists workflows (id uuid primary key default gen_random_uui
         <select id="collabPermission" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
           <option value="view">👁 Lecture seule</option>
           <option value="download">⬇ Téléchargement</option>
-          <option value="edit">✏ Modification</option>
+          <option value="edit">✏ Modification (télécharger + re-uploader)</option>
         </select>
       </div>
       <div class="flex gap-3 pt-2">
         <button onclick="closeCollabModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10 border border-blue-500/30">Annuler</button>
         <button onclick="inviteCollaborator()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-paper-plane mr-2"></i>Inviter</button>
       </div>
+    </div>
+
+    <!-- Tab: Membres -->
+    <div id="collabTabMembers" class="hidden">
+      <div id="collabMembersList" class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="text-center text-blue-400/50 py-8 text-sm"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>Chargement...</div>
+      </div>
+    </div>
+
+    <!-- Tab: Activité -->
+    <div id="collabTabActivity" class="hidden">
+      <div id="collabActivityList" class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="text-center text-blue-400/50 py-8 text-sm"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>Chargement...</div>
+      </div>
+    </div>
+
+    <!-- Présences temps réel -->
+    <div class="mt-4 pt-3 border-t border-blue-500/20">
+      <p class="text-xs text-blue-400/50 mb-2"><i class="fas fa-circle text-green-400 mr-1" style="font-size:8px"></i>En ligne maintenant</p>
+      <div id="collabPresenceList" class="flex flex-wrap gap-2"></div>
     </div>
   </div>
 </div>
