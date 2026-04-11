@@ -79,17 +79,29 @@ window._shared = window._shared || {
   filterStatus: '',
 };
 
-/* ── États globaux manquants (fix v7.6) ─── */
-window._search     = window._search     || { lastQuery: '', lastResults: [] };
-window._sysLogs    = window._sysLogs    || {
-  filter: 'all', searchQuery: '', page: 1, pageSize: 50,
-  autoRefresh: false, autoRefreshTimer: null, allLogs: [],
-};
-window._versioning = window._versioning || {
-  currentDocId: null, history: [], compareA: null, compareB: null,
-};
-window._rbac       = window._rbac       || { editingRole: null };
+/* ── États manquants (FIX v7.6) ─────────────────────── */
+window._search = window._search || { lastQuery: '', lastResults: [] };
 
+window._sysLogs = window._sysLogs || {
+  filter:      'all',
+  searchQuery: '',
+  page:        1,
+  pageSize:    50,
+  autoRefresh: false,
+  autoRefreshTimer: null,
+  allLogs:     [],
+};
+
+window._versioning = window._versioning || {
+  currentDocId: null,
+  history:      [],
+  compareA:     null,
+  compareB:     null,
+};
+
+window._rbac = window._rbac || { editingRole: null };
+
+window._webhooks = window._webhooks || [];
 
 // ─── État global ───
 window.G = {  supabase: null,
@@ -1296,6 +1308,26 @@ async function renderDocuments() {
   console.log(`✅ ${filtered.length} documents affichés`);
 }
 
+function filterDocuments(query) {
+  if (!query || !query.trim()) { renderDocuments(); return; }
+  const q = query.toLowerCase();
+  const filtered = G.documents.filter(d =>
+    !d.is_deleted && (
+      d.name.toLowerCase().includes(q) ||
+      (d.description||'').toLowerCase().includes(q) ||
+      (Array.isArray(d.tags) && d.tags.some(t=>t.toLowerCase().includes(q)))
+    )
+  );
+  const container = document.getElementById('docGrid') || document.getElementById('documentsGrid');
+  if (container) {
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="col-span-full text-center py-12 text-blue-300/40"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat pour \"'+escapeHtml(query)+'\"</p></div>';
+    } else {
+      container.innerHTML = filtered.map(doc => renderDocCard(doc)).join('');
+    }
+  }
+}
+
 function renderDocCard(doc) {
   const isOwner = doc.owner_id === G.currentUser.id;
   const canEdit = isOwner || G.currentUser.role === 'admin' || G.currentUser.role === 'manager';
@@ -1898,97 +1930,125 @@ function setDocScope(scope) {
 
 // ─── Preview et téléchargement ───
 function openPreviewModal(docId) {
-  console.log('Ouverture de l\'apercu pour:', docId);
+  console.log('👁️ Ouverture de l\'aperçu pour:', docId);
   G.currentDocId = docId;
-
+  
   const modal = document.getElementById('previewModal');
   if (modal) modal.classList.remove('hidden');
-
+  
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) {
     showToast('Document introuvable', 'error');
     return;
   }
-
+  
+  // Afficher le chargement
   showPreviewLoading();
-
+  
+  // Mettre à jour le titre
   const titleEl = document.getElementById('previewTitle');
   if (titleEl) titleEl.textContent = doc.name;
-
+  
+  // Mettre à jour les métadonnées
   updatePreviewMetadata(doc);
-
-  const fileUrl  = doc.file_url;
-  const fileType = doc.type || '';
-  const fileName = doc.name || '';
-
-  // Détecter l'extension: utiliser le nom, le storage_path, ou déduire du type
-  const rawExt = fileName.includes('.')
+  
+  const fileUrl = doc.file_url;
+  const fileType = doc.type;
+  const fileName = doc.name;
+  const fileExt = fileName.includes('.') 
     ? fileName.split('.').pop().toLowerCase()
     : (doc.storage_path ? doc.storage_path.split('.').pop().toLowerCase() : '');
-  const typeToExt = { img:'jpg', pdf:'pdf', doc:'docx', xls:'xlsx', ppt:'pptx', txt:'txt', video:'mp4', audio:'mp3', code:'js' };
-  const fileExt   = rawExt || typeToExt[fileType] || '';
-  const isImage   = fileType === 'img' || ['jpg','jpeg','png','gif','webp','svg','bmp'].includes(fileExt);
-
-  // Masquer tous les conteneurs
-  ['previewFrame','previewImage','previewContent','previewOffice','previewUnsupported'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('hidden');
-  });
-
-  const previewFrame       = document.getElementById('previewFrame');
-  const previewImage       = document.getElementById('previewImage');
-  const previewContent     = document.getElementById('previewContent');
-  const previewOffice      = document.getElementById('previewOffice');
+  
+  // Normaliser fileType depuis doc.type ou déduire depuis l'extension
+  const typeToExt = { img: 'jpg', pdf: 'pdf', doc: 'docx', xls: 'xlsx', ppt: 'pptx', txt: 'txt', video: 'mp4', audio: 'mp3', code: 'js' };
+  const effectiveExt = fileExt || typeToExt[fileType] || '';
+  const isImageByType = fileType === 'img' || ['jpg','jpeg','png','gif','webp','svg','bmp'].includes(effectiveExt);
+  
+  // Récupérer les éléments
+  const previewFrame = document.getElementById('previewFrame');
+  const previewImage = document.getElementById('previewImage');
+  const previewContent = document.getElementById('previewContent');
+  const previewOffice = document.getElementById('previewOffice');
   const previewUnsupported = document.getElementById('previewUnsupported');
-
-  const imageExts  = ['jpg','jpeg','png','gif','webp','svg','bmp'];
-  const pdfExts    = ['pdf'];
-  const officeExts = ['doc','docx','xls','xlsx','ppt','pptx'];
-  const textExts   = ['txt','json','xml','html','css','js','md','csv'];
-
+  
+  // Cacher tous les conteneurs
+  if (previewFrame) previewFrame.classList.add('hidden');
+  if (previewImage) previewImage.classList.add('hidden');
+  if (previewContent) previewContent.classList.add('hidden');
+  if (previewOffice) previewOffice.classList.add('hidden');
+  if (previewUnsupported) previewUnsupported.classList.add('hidden');
+  
+  // Types de fichiers supportés
+  const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+  const pdfTypes = ['pdf'];
+  const officeTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+  const textTypes = ['txt', 'json', 'xml', 'html', 'css', 'js', 'md'];
+  
   try {
-    if (isImage || imageExts.includes(fileExt)) {
-      // Images: src direct (URL publique Supabase, pas de fetch+blob)
+    if (isImageByType || imageTypes.includes(effectiveExt)) {
       if (previewImage) {
+        // Chargement direct — URL publique Supabase (pas de fetch+blob)
         previewImage.classList.remove('hidden');
         previewImage.onload  = () => hidePreviewLoading();
         previewImage.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
         previewImage.src = fileUrl;
       }
-    } else if (pdfExts.includes(fileExt)) {
-      // PDF: iframe avec blob URL pour contourner CORS
+    } else if (pdfTypes.includes(effectiveExt)) {
       if (previewFrame) {
         previewFrame.classList.remove('hidden');
         fetch(fileUrl)
-          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+          .then(r => {
+            if (!r.ok) throw new Error('Fetch failed: ' + r.status);
+            return r.blob();
+          })
           .then(blob => {
             const blobUrl = URL.createObjectURL(blob);
             previewFrame.src = blobUrl;
-            previewFrame.onload  = () => { hidePreviewLoading(); setTimeout(() => URL.revokeObjectURL(blobUrl), 8000); };
-            previewFrame.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
+            previewFrame.onload = () => {
+              hidePreviewLoading();
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+            };
           })
-          .catch(() => { hidePreviewLoading(); showUnsupportedPreview(doc); });
+          .catch(() => {
+            hidePreviewLoading();
+            showUnsupportedPreview(doc);
+          });
       }
-    } else if (officeExts.includes(fileExt)) {
-      // Office: Google Docs Viewer (contourne la CSP iframe)
-      if (previewOffice) {
+    } else if (officeTypes.includes(effectiveExt)) {
+      // Google Docs Viewer intégré — nécessite frame-src dans CSP du serveur
+      // En attendant: afficher panneau de téléchargement avec lien Google Docs
+      hidePreviewLoading();
+      const previewUnsupElem = document.getElementById('previewUnsupported');
+      const unsupportedInfo  = document.getElementById('unsupportedFileInfo');
+      if (previewUnsupElem) previewUnsupElem.classList.remove('hidden');
+      if (unsupportedInfo) {
         const encodedUrl = encodeURIComponent(fileUrl);
-        previewOffice.src = 'https://docs.google.com/viewer?url=' + encodedUrl + '&embedded=true';
-        previewOffice.classList.remove('hidden');
-        previewOffice.onload  = () => hidePreviewLoading();
-        previewOffice.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
+        const googleUrl  = 'https://docs.google.com/viewer?url=' + encodedUrl;
+        unsupportedInfo.innerHTML = `
+          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-4 block text-blue-400/50"></i>
+          <p class="text-white font-medium">${escapeHtml(doc.name)}</p>
+          <p class="text-sm text-blue-300/60 mt-1">${formatBytes(doc.size)} · ${(effectiveExt||'office').toUpperCase()}</p>
+          <div class="flex gap-3 mt-4 justify-center flex-wrap">
+            <a href="${googleUrl}" target="_blank" rel="noopener"
+               class="btn-primary px-4 py-2 rounded-xl text-white text-sm flex items-center gap-2">
+              <i class="fas fa-external-link-alt"></i>Ouvrir dans Google Docs
+            </a>
+            <button onclick="downloadDocument('${doc.id}')"
+               class="px-4 py-2 rounded-xl text-sm border border-blue-500/30 text-blue-300 hover:bg-blue-500/10 flex items-center gap-2">
+              <i class="fas fa-download"></i>Télécharger
+            </button>
+          </div>`;
       }
-    } else if (textExts.includes(fileExt)) {
-      // Texte: fetch + affichage pre
+    } else if (textTypes.includes(effectiveExt)) {
       if (previewContent) previewContent.classList.remove('hidden');
       const contentEl = document.getElementById('previewTextContent');
       if (contentEl) {
         contentEl.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-blue-400 text-2xl"></i></div>';
         fetch(fileUrl)
-          .then(r => r.text())
+          .then(response => response.text())
           .then(text => {
             hidePreviewLoading();
-            contentEl.innerHTML = '<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap break-words p-4 max-h-[55vh] overflow-y-auto">' + escapeHtml(text.slice(0, 50000)) + '</pre>';
+            contentEl.innerHTML = `<pre class="text-xs text-blue-300/80 font-mono whitespace-pre-wrap break-words p-4 max-h-[60vh] overflow-y-auto">${escapeHtml(text.slice(0, 50000))}</pre>`;
           })
           .catch(() => {
             hidePreviewLoading();
@@ -1996,16 +2056,16 @@ function openPreviewModal(docId) {
           });
       }
     } else {
-      // Type non supporté
       hidePreviewLoading();
       showUnsupportedPreview(doc);
     }
   } catch (err) {
-    console.error('Erreur apercu:', err);
+    console.error('Erreur aperçu:', err);
     hidePreviewLoading();
     showUnsupportedPreview(doc);
   }
-
+  
+  // Incrémenter le compteur de vues
   updateDocViews(docId);
 }
 
@@ -3821,6 +3881,21 @@ async function renderWorkflows() {
 
   updateBadges();
 }
+
+function closeWfDetailModal() {
+  const modal = document.getElementById('wfDetailModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentWfId = null;
+}
+
+function switchWfView(view) {
+  ['kanban','list'].forEach(v => {
+    const el = document.getElementById(`wfView-${v}`);
+    if (el) el.classList.toggle('hidden', v !== view);
+    const btn = document.querySelector(`[data-wf-view="${v}"]`);
+    if (btn) btn.classList.toggle('active', v === view);
+  });
+}
 function getWfStatusClass(status) {
   const classes = { 
     pending: 'bg-orange-500/20 text-orange-300', 
@@ -3954,7 +4029,7 @@ async function actOnWorkflow(action, comment) {
   };
   
   const { error: actionError } = await G.supabase.from('workflow_actions').insert(actionRecord);
-  if (actionError) console.error('Erreur enregistrement action:', actionError);
+  if (actionError) console.warn('workflow_actions: vérifier les politiques RLS Supabase', actionError.code, actionError.message);
   
   let newStatus = wf.status;
   let newStep = wf.current_step;
@@ -6130,7 +6205,7 @@ async function openWfDetail(wfId) {
   if (metaEl) {
     metaEl.innerHTML = `
       <div class="flex flex-wrap gap-3 text-xs">
-        <span class="px-2 py-1 rounded-full ${getWfStatusBadge(wf.status)}">${wf.status}</span>
+        <span class="px-2 py-1 rounded-full ${getWfStatusClass(wf.status)}">${wf.status}</span>
         <span class="text-blue-300/50"><i class="fas fa-calendar mr-1"></i>${formatDate(wf.created_at)}</span>
         ${wf.due_date ? `<span class="text-orange-400"><i class="fas fa-clock mr-1"></i>Échéance: ${formatDate(wf.due_date)}</span>` : ''}
         ${wf.priority ? `<span class="text-yellow-400"><i class="fas fa-flag mr-1"></i>${wf.priority}</span>` : ''}
@@ -7410,12 +7485,14 @@ function formatDate(dateString) {
 
 function getFileIcon(type) {
   const map = {
-    img:    { icon: 'fa-file-image',   color: 'text-purple-400' },
-    image:  { icon: 'fa-file-image',   color: 'text-purple-400' },
-    video:  { icon: 'fa-file-video',   color: 'text-pink-400' },
-    audio:  { icon: 'fa-file-audio',   color: 'text-green-400' },
-    code:   { icon: 'fa-file-code',    color: 'text-cyan-400' },
-    unknown:{ icon: 'fa-file',         color: 'text-blue-400/60' },
+    img:    { icon: 'fa-file-image',       color: 'text-purple-400' },
+    image:  { icon: 'fa-file-image',       color: 'text-purple-400' },
+    video:  { icon: 'fa-file-video',       color: 'text-pink-400' },
+    audio:  { icon: 'fa-file-audio',       color: 'text-green-400' },
+    code:   { icon: 'fa-file-code',        color: 'text-cyan-400' },
+    zip:    { icon: 'fa-file-archive',     color: 'text-yellow-400' },
+    txt:    { icon: 'fa-file-alt',         color: 'text-gray-400' },
+    unknown:{ icon: 'fa-file',             color: 'text-blue-400/70' },
     pdf: { icon: 'fa-file-pdf', color: 'text-red-400' },
     doc: { icon: 'fa-file-word', color: 'text-blue-400' },
     docx: { icon: 'fa-file-word', color: 'text-blue-400' },
@@ -7635,41 +7712,6 @@ function handleGlobalSearch(query) {
   `).join('');
 }
 
-
-function filterDocuments(query) {
-  if (!query || !query.trim()) { renderDocuments(); return; }
-  const q = query.toLowerCase();
-  const filtered = G.documents.filter(d =>
-    !d.is_deleted && (
-      d.name.toLowerCase().includes(q) ||
-      (d.description||'').toLowerCase().includes(q) ||
-      (Array.isArray(d.tags) && d.tags.some(t => t.toLowerCase().includes(q)))
-    )
-  );
-  const container = document.getElementById('documentGrid') || document.getElementById('docGrid');
-  if (!container) return;
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="col-span-full text-center py-12 text-blue-300/40"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun document pour &quot;' + escapeHtml(query) + '&quot;</p></div>';
-  } else {
-    container.innerHTML = filtered.map(doc => renderDocCard(doc)).join('');
-  }
-}
-
-function closeWfDetailModal() {
-  const modal = document.getElementById('wfDetailModal');
-  if (modal) modal.classList.add('hidden');
-  G.currentWfId = null;
-}
-
-function switchWfView(view) {
-  ['kanban','list'].forEach(v => {
-    const panel = document.getElementById('wfView-' + v);
-    if (panel) panel.classList.toggle('hidden', v !== view);
-    const btn = document.querySelector('[data-wf-view="' + v + '"]');
-    if (btn) btn.classList.toggle('active', v === view);
-  });
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('error', (e) => {
     console.error('❌ Erreur globale:', {
@@ -7805,12 +7847,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.closeRoleModal = closeRoleModal;
   window.saveRole = saveRole;
   window.renderAnalytics = renderAnalytics;
+  window.Analytics = Analytics;
   window.exportAnalytics = exportAnalytics;
+  window.Folders = Folders;
   window.renderFolderTree = renderFolderTree;
   window.deleteFolder = deleteFolder;
+  window.Signatures = Signatures;
   window.loadExistingSignatures = loadExistingSignatures;
+  window.AI = AI;
+  window.Automation = Automation;
   window.deleteRule = deleteRule;
+  window.Backups = Backups;
   window.deleteBackup = deleteBackup;
+  window.Billing = Billing;
+  window.detail = detail;
   window.refreshAnalytics = refreshAnalytics;
   window.renderFolders = renderFolders;
   window.openFolder = openFolder;
