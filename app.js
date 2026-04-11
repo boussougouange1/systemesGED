@@ -1987,7 +1987,7 @@ function openPreviewModal(docId) {
   try {
     if (isImageByType || imageTypes.includes(effectiveExt)) {
       if (previewImage) {
-        // Chargement direct — URL publique Supabase (pas de fetch+blob)
+        // URL publique Supabase: chargement direct (pas de fetch)
         previewImage.classList.remove('hidden');
         previewImage.onload  = () => hidePreviewLoading();
         previewImage.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
@@ -2015,29 +2015,17 @@ function openPreviewModal(docId) {
           });
       }
     } else if (officeTypes.includes(effectiveExt)) {
-      // Google Docs Viewer intégré — nécessite frame-src dans CSP du serveur
-      // En attendant: afficher panneau de téléchargement avec lien Google Docs
-      hidePreviewLoading();
-      const previewUnsupElem = document.getElementById('previewUnsupported');
-      const unsupportedInfo  = document.getElementById('unsupportedFileInfo');
-      if (previewUnsupElem) previewUnsupElem.classList.remove('hidden');
-      if (unsupportedInfo) {
-        const encodedUrl = encodeURIComponent(fileUrl);
-        const googleUrl  = 'https://docs.google.com/viewer?url=' + encodedUrl;
-        unsupportedInfo.innerHTML = `
-          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-5xl mb-4 block text-blue-400/50"></i>
-          <p class="text-white font-medium">${escapeHtml(doc.name)}</p>
-          <p class="text-sm text-blue-300/60 mt-1">${formatBytes(doc.size)} · ${(effectiveExt||'office').toUpperCase()}</p>
-          <div class="flex gap-3 mt-4 justify-center flex-wrap">
-            <a href="${googleUrl}" target="_blank" rel="noopener"
-               class="btn-primary px-4 py-2 rounded-xl text-white text-sm flex items-center gap-2">
-              <i class="fas fa-external-link-alt"></i>Ouvrir dans Google Docs
-            </a>
-            <button onclick="downloadDocument('${doc.id}')"
-               class="px-4 py-2 rounded-xl text-sm border border-blue-500/30 text-blue-300 hover:bg-blue-500/10 flex items-center gap-2">
-              <i class="fas fa-download"></i>Télécharger
-            </button>
-          </div>`;
+      if (previewOffice) {
+        previewOffice.src = 'https://docs.google.com/viewer?url=' + encodeURIComponent(fileUrl) + '&embedded=true';
+        previewOffice.classList.remove('hidden');
+        previewOffice.onload = () => {
+          hidePreviewLoading();
+          console.log('✅ Document Office chargé');
+        };
+        previewOffice.onerror = () => {
+          hidePreviewLoading();
+          showUnsupportedPreview(doc);
+        };
       }
     } else if (textTypes.includes(effectiveExt)) {
       if (previewContent) previewContent.classList.remove('hidden');
@@ -4029,7 +4017,7 @@ async function actOnWorkflow(action, comment) {
   };
   
   const { error: actionError } = await G.supabase.from('workflow_actions').insert(actionRecord);
-  if (actionError) console.warn('workflow_actions: vérifier les politiques RLS Supabase', actionError.code, actionError.message);
+  if (actionError) console.warn('workflow_actions non dispo (RLS):', actionError?.code);
   
   let newStatus = wf.status;
   let newStep = wf.current_step;
