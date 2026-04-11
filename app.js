@@ -7858,29 +7858,189 @@ window.openPreviewModal = async function(docId) {
   loadComments(docId);
 };
 
-// ── Modifier un document Office ──
+// ── Modifier un document Office avec sync automatique ──
+let _watchInterval  = null;
+let _watchFileHandle = null;
+let _watchLastModified = 0;
+let _watchDocId = null;
+
 async function editCurrentDocument() {
   const docId = G.currentDocId;
   const doc   = G.documents.find(d => d.id === docId);
   if (!doc) return;
 
-  // Générer signed URL pour téléchargement
+  // Vérifier support File System Access API
+  if (!window.showOpenFilePicker) {
+    // Fallback: téléchargement simple
+    let fileUrl = doc.file_url;
+    if (G.supabase && doc.storage_path) {
+      const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
+      if (data?.signedUrl) fileUrl = data.signedUrl;
+    }
+    const a = document.createElement('a');
+    a.href = fileUrl; a.download = doc.name; a.click();
+    showToast(`📥 Téléchargé. Modifiez puis ré-importez manuellement via "Importer".`, 'warning', 6000);
+    return;
+  }
+
+  // Étape 1: Télécharger le fichier d'abord
+  showToast('⬇️ Téléchargement du fichier...', 'info', 3000);
   let fileUrl = doc.file_url;
   if (G.supabase && doc.storage_path) {
     const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
     if (data?.signedUrl) fileUrl = data.signedUrl;
   }
-
-  // Télécharger le fichier
   const a = document.createElement('a');
-  a.href     = fileUrl;
-  a.download = doc.name;
-  a.click();
+  a.href = fileUrl; a.download = doc.name; a.click();
 
-  // Toast avec instructions
-  showToast(`📥 "${doc.name}" téléchargé. Modifiez-le, puis ré-importez via "Importer" pour créer une nouvelle version.`, 'info', 6000);
-  await addAuditLog('edit_download', 'document', docId, `Téléchargé pour modification: ${doc.name}`);
+  // Étape 2: Ouvrir le sélecteur de fichier après 1.5s
+  await new Promise(r => setTimeout(r, 1500));
+  showToast('📂 Sélectionnez le fichier téléchargé pour activer la sync automatique', 'info', 6000);
+
+  try {
+    const ext = doc.name.split('.').pop().toLowerCase();
+    const mimeMap = {
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      doc:  'application/msword',
+      xls:  'application/vnd.ms-excel',
+    };
+
+    const [fileHandle] = await window.showOpenFilePicker({
+      types: [{ description: 'Document Office', accept: { [mimeMap[ext] || '*/*']: [`.${ext}`] } }],
+      multiple: false
+    });
+
+    // Arrêter toute surveillance précédente
+    stopFileWatch();
+
+    _watchFileHandle  = fileHandle;
+    _watchDocId       = docId;
+    const initialFile = await fileHandle.getFile();
+    _watchLastModified = initialFile.lastModified;
+
+    // Afficher badge de sync dans le modal
+    showSyncBadge(doc.name, 'watching');
+
+    // Étape 3: Surveiller les modifications toutes les 3 secondes
+    _watchInterval = setInterval(async () => {
+      try {
+        const file = await _watchFileHandle.getFile();
+        if (file.lastModified !== _watchLastModified) {
+          _watchLastModified = file.lastModified;
+          showSyncBadge(doc.name, 'uploading');
+          await autoUploadNewVersion(docId, file);
+          showSyncBadge(doc.name, 'synced');
+          setTimeout(() => showSyncBadge(doc.name, 'watching'), 3000);
+        }
+      } catch(e) {
+        stopFileWatch();
+      }
+    }, 3000);
+
+    showToast(`✅ Sync activée pour "${doc.name}". Sauvegardez dans Office → mis à jour automatiquement !`, 'success', 8000);
+    await addAuditLog('edit_sync_start', 'document', docId, `Sync automatique démarrée: ${doc.name}`);
+
+  } catch(e) {
+    if (e.name !== 'AbortError') showToast('Sync annulée', 'warning');
+  }
 }
+
+function stopFileWatch() {
+  if (_watchInterval) { clearInterval(_watchInterval); _watchInterval = null; }
+  _watchFileHandle  = null;
+  _watchDocId       = null;
+  _watchLastModified = 0;
+  hideSyncBadge();
+}
+
+function showSyncBadge(fileName, state) {
+  let badge = document.getElementById('syncStatusBadge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'syncStatusBadge';
+    badge.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:all 0.3s ease;backdrop-filter:blur(12px);';
+    document.body.appendChild(badge);
+  }
+  const configs = {
+    watching:  { bg: 'rgba(30,58,138,0.95)', border: '1px solid rgba(96,165,250,0.4)', icon: '🔵', text: 'Sync active — en attente de modifications', pulse: true  },
+    uploading: { bg: 'rgba(120,53,15,0.95)',  border: '1px solid rgba(251,191,36,0.4)',  icon: '⬆️', text: 'Mise à jour en cours...', pulse: false },
+    synced:    { bg: 'rgba(6,78,59,0.95)',    border: '1px solid rgba(52,211,153,0.4)',  icon: '✅', text: 'Document synchronisé !', pulse: false },
+    error:     { bg: 'rgba(127,29,29,0.95)',  border: '1px solid rgba(252,165,165,0.4)', icon: '❌', text: 'Erreur de sync', pulse: false },
+  };
+  const c = configs[state] || configs.watching;
+  badge.style.background = c.bg;
+  badge.style.border = c.border;
+  badge.style.color = '#fff';
+  badge.innerHTML = `
+    <span>${c.icon}</span>
+    <div>
+      <div style="font-size:11px;opacity:0.7;margin-bottom:2px">${escapeHtml(fileName)}</div>
+      <div>${c.text}</div>
+    </div>
+    <button onclick="stopFileWatch()" style="margin-left:8px;background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px">Arrêter</button>
+  `;
+}
+
+function hideSyncBadge() {
+  const badge = document.getElementById('syncStatusBadge');
+  if (badge) badge.remove();
+}
+
+async function autoUploadNewVersion(docId, file) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc || !G.supabase) return;
+
+  try {
+    // Uploader le fichier dans Supabase Storage (même chemin = écrase)
+    const { error: uploadError } = await G.supabase.storage
+      .from(CONFIG.storageBucket)
+      .upload(doc.storage_path, file, { upsert: true, contentType: file.type });
+
+    if (uploadError) throw uploadError;
+
+    // Incrémenter la version et mettre à jour les métadonnées
+    const newVersion = (doc.version || 1) + 1;
+    const { error: dbError } = await G.supabase.from('documents').update({
+      version:    newVersion,
+      size:       file.size,
+      updated_at: new Date().toISOString()
+    }).eq('id', docId);
+
+    if (dbError) throw dbError;
+
+    // Mettre à jour localement
+    doc.version    = newVersion;
+    doc.size       = file.size;
+    doc.updated_at = new Date().toISOString();
+
+    // Broadcaster la mise à jour aux autres collaborateurs
+    if (_realtimeChannel) {
+      _realtimeChannel.send({
+        type: 'broadcast',
+        event: 'doc_updated',
+        payload: { docId, version: newVersion, updatedBy: G.currentUser.name || G.currentUser.email }
+      });
+    }
+
+    // Audit
+    await addAuditLog('auto_version', 'document', docId, `Version ${newVersion} sauvegardée automatiquement (${formatBytes(file.size)})`);
+
+    // Rafraîchir l'affichage
+    renderDocuments();
+    updatePreviewMetadata(doc);
+
+    console.log(`✅ Version ${newVersion} uploadée pour "${doc.name}"`);
+  } catch(err) {
+    console.error('autoUpload error:', err);
+    showSyncBadge(doc.name, 'error');
+    showToast('Erreur sync: ' + err.message, 'error');
+  }
+}
+
+// Exposer stopFileWatch globalement
+window.stopFileWatch = stopFileWatch;
 
 // ── Commentaires ──
 function toggleCommentsPanel() {
