@@ -79,6 +79,30 @@ window._shared = window._shared || {
   filterStatus: '',
 };
 
+/* ── États manquants (FIX v7.6) ─────────────────────── */
+window._search = window._search || { lastQuery: '', lastResults: [] };
+
+window._sysLogs = window._sysLogs || {
+  filter:      'all',
+  searchQuery: '',
+  page:        1,
+  pageSize:    50,
+  autoRefresh: false,
+  autoRefreshTimer: null,
+  allLogs:     [],
+};
+
+window._versioning = window._versioning || {
+  currentDocId: null,
+  history:      [],
+  compareA:     null,
+  compareB:     null,
+};
+
+window._rbac = window._rbac || { editingRole: null };
+
+window._webhooks = window._webhooks || [];
+
 // ─── État global ───
 window.G = {  supabase: null,
   currentUser: null,
@@ -1284,6 +1308,26 @@ async function renderDocuments() {
   console.log(`✅ ${filtered.length} documents affichés`);
 }
 
+function filterDocuments(query) {
+  if (!query || !query.trim()) { renderDocuments(); return; }
+  const q = query.toLowerCase();
+  const filtered = G.documents.filter(d =>
+    !d.is_deleted && (
+      d.name.toLowerCase().includes(q) ||
+      (d.description||'').toLowerCase().includes(q) ||
+      (Array.isArray(d.tags) && d.tags.some(t=>t.toLowerCase().includes(q)))
+    )
+  );
+  const container = document.getElementById('docGrid') || document.getElementById('documentsGrid');
+  if (container) {
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="col-span-full text-center py-12 text-blue-300/40"><i class="fas fa-search text-4xl mb-3 block opacity-20"></i><p>Aucun résultat pour \"'+escapeHtml(query)+'\"</p></div>';
+    } else {
+      container.innerHTML = filtered.map(doc => renderDocCard(doc)).join('');
+    }
+  }
+}
+
 function renderDocCard(doc) {
   const isOwner = doc.owner_id === G.currentUser.id;
   const canEdit = isOwner || G.currentUser.role === 'admin' || G.currentUser.role === 'manager';
@@ -1911,7 +1955,14 @@ function openPreviewModal(docId) {
   const fileUrl = doc.file_url;
   const fileType = doc.type;
   const fileName = doc.name;
-  const fileExt = fileName.split('.').pop().toLowerCase();
+  const fileExt = fileName.includes('.') 
+    ? fileName.split('.').pop().toLowerCase()
+    : (doc.storage_path ? doc.storage_path.split('.').pop().toLowerCase() : '');
+  
+  // Normaliser fileType depuis doc.type ou déduire depuis l'extension
+  const typeToExt = { img: 'jpg', pdf: 'pdf', doc: 'docx', xls: 'xlsx', ppt: 'pptx', txt: 'txt', video: 'mp4', audio: 'mp3', code: 'js' };
+  const effectiveExt = fileExt || typeToExt[fileType] || '';
+  const isImageByType = fileType === 'img' || ['jpg','jpeg','png','gif','webp','svg','bmp'].includes(effectiveExt);
   
   // Récupérer les éléments
   const previewFrame = document.getElementById('previewFrame');
@@ -1934,7 +1985,7 @@ function openPreviewModal(docId) {
   const textTypes = ['txt', 'json', 'xml', 'html', 'css', 'js', 'md'];
   
   try {
-    if (imageTypes.includes(fileExt)) {
+    if (isImageByType || imageTypes.includes(effectiveExt)) {
       if (previewImage) {
         fetch(fileUrl)
           .then(r => {
@@ -1959,7 +2010,7 @@ function openPreviewModal(docId) {
             showUnsupportedPreview(doc);
           });
       }
-    } else if (pdfTypes.includes(fileExt)) {
+    } else if (pdfTypes.includes(effectiveExt)) {
       if (previewFrame) {
         previewFrame.classList.remove('hidden');
         fetch(fileUrl)
@@ -1980,7 +2031,7 @@ function openPreviewModal(docId) {
             showUnsupportedPreview(doc);
           });
       }
-    } else if (officeTypes.includes(fileExt)) {
+    } else if (officeTypes.includes(effectiveExt)) {
       if (previewOffice) {
         previewOffice.src = fileUrl;
         previewOffice.classList.remove('hidden');
@@ -1993,7 +2044,7 @@ function openPreviewModal(docId) {
           showUnsupportedPreview(doc);
         };
       }
-    } else if (textTypes.includes(fileExt)) {
+    } else if (textTypes.includes(effectiveExt)) {
       if (previewContent) previewContent.classList.remove('hidden');
       const contentEl = document.getElementById('previewTextContent');
       if (contentEl) {
@@ -3835,6 +3886,21 @@ async function renderWorkflows() {
 
   updateBadges();
 }
+
+function closeWfDetailModal() {
+  const modal = document.getElementById('wfDetailModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentWfId = null;
+}
+
+function switchWfView(view) {
+  ['kanban','list'].forEach(v => {
+    const el = document.getElementById(`wfView-${v}`);
+    if (el) el.classList.toggle('hidden', v !== view);
+    const btn = document.querySelector(`[data-wf-view="${v}"]`);
+    if (btn) btn.classList.toggle('active', v === view);
+  });
+}
 function getWfStatusClass(status) {
   const classes = { 
     pending: 'bg-orange-500/20 text-orange-300', 
@@ -3865,21 +3931,22 @@ function getWfStatusColor(status) {
   return colors[status] || 'text-gray-400';
 }
 
+function closeWorkflowModal() {
+const modal = document.getElementById('workflowModal');
+if (modal) modal.classList.add('hidden');
+const fields = ['wfTitle', 'wfDesc', 'wfSteps'];
+fields.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.value = '';
+});
+}
+
 function openCreateWorkflowModal() {
   const docSelect = document.getElementById('wfDocId');
   if (docSelect) {
     docSelect.innerHTML = '<option value="">-- Aucun --</option>' + 
       G.documents.filter(d => !d.is_deleted).map(doc => `<option value="${doc.id}">${escapeHtml(doc.name)}</option>`).join('');
   }
-  function closeWorkflowModal() {
-  const modal = document.getElementById('workflowModal');
-  if (modal) modal.classList.add('hidden');
-  const fields = ['wfTitle', 'wfDesc', 'wfSteps'];
-  fields.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-}
   const assigneeSelect = document.getElementById('wfAssignee');
   if (assigneeSelect) {
     assigneeSelect.innerHTML = '<option value="">-- Non assigné --</option>' + 
@@ -4016,95 +4083,6 @@ async function actOnWorkflow(action, comment) {
   await addAuditLog(`workflow_${action}`, 'workflow', G.currentWfId, `Commentaire: ${commentText || 'Aucun'}`);
 }
 
-async function openWfDetail(wfId) {
-  G.currentWfId = wfId;
-  const modal = document.getElementById('wfDetailModal');
-  if (modal) modal.classList.remove('hidden');
-  
-  const wf = G.workflows.find(w => w.id === wfId);
-  if (!wf) return;
-  
-  // Titre
-  const titleEl = document.getElementById('wfDetailTitle');
-  if (titleEl) titleEl.textContent = wf.title;
-  
-  // Métadonnées
-  const metaEl = document.getElementById('wfDetailMeta');
-  if (metaEl) {
-    const assigneeName = wf.assignee_id ? (G.users.find(u => u.id === wf.assignee_id)?.name || 'Inconnu') : 'Non assigné';
-    metaEl.innerHTML = `
-      <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
-      <span class="text-xs text-blue-300/60">Priorité: ${wf.priority}</span>
-      <span class="text-xs text-blue-300/60">Créé le ${formatDate(wf.created_at)}</span>
-      <span class="text-xs text-blue-300/60">Assigné: ${assigneeName}</span>
-    `;
-  }
-  
-  // Étapes
-  const stepsContainer = document.getElementById('wfDetailSteps');
-  if (stepsContainer) {
-    if (wf.steps && Array.isArray(wf.steps) && wf.steps.length > 0) {
-      stepsContainer.innerHTML = wf.steps.map((step, idx) => `
-        <div class="flex items-center gap-3 p-2 rounded-lg ${idx <= wf.current_step ? 'bg-green-500/10 border border-green-500/30' : 'bg-slate-800/50'}">
-          <div class="w-6 h-6 rounded-full flex items-center justify-center ${idx < wf.current_step ? 'bg-green-500 text-white' : idx === wf.current_step ? 'bg-blue-500 text-white' : 'bg-slate-600 text-gray-400'}">
-            ${idx + 1}
-          </div>
-          <div class="flex-1">
-            <p class="text-white text-sm">${escapeHtml(step)}</p>
-            ${idx === wf.current_step && wf.status === 'pending' ? '<p class="text-xs text-blue-400">En attente de validation</p>' : ''}
-          </div>
-          ${idx < wf.current_step ? '<i class="fas fa-check-circle text-green-400"></i>' : ''}
-        </div>
-      `).join('');
-      
-      const progress = wf.steps.length > 0 ? ((wf.current_step + 1) / wf.steps.length) * 100 : 0;
-      const progressBar = document.getElementById('wfDetailProgressBar');
-      const progressText = document.getElementById('wfDetailProgress');
-      if (progressBar) progressBar.style.width = `${progress}%`;
-      if (progressText) progressText.textContent = `${Math.round(progress)}%`;
-    } else {
-      stepsContainer.innerHTML = '<p class="text-blue-300/50 text-sm">Aucune étape définie</p>';
-    }
-  }
-  
-  // Document lié
-  const docContainer = document.getElementById('wfDetailDoc');
-  if (wf.document_id) {
-    const doc = G.documents.find(d => d.id === wf.document_id);
-    if (doc && docContainer) {
-      docContainer.classList.remove('hidden');
-      docContainer.innerHTML = `
-        <p class="text-xs text-blue-300/60 mb-1">Document lié</p>
-        <div class="flex items-center gap-2 cursor-pointer hover:bg-blue-500/10 p-2 rounded-lg transition-colors" onclick="openPreviewModal('${doc.id}')">
-          <i class="fas ${getFileIcon(doc.type).split(' ')[0]} text-blue-400"></i>
-          <span class="text-white text-sm truncate">${escapeHtml(doc.name)}</span>
-          <i class="fas fa-external-link-alt text-blue-400/50 text-xs ml-auto"></i>
-        </div>
-      `;
-    } else if (docContainer) {
-      docContainer.classList.add('hidden');
-    }
-  } else if (docContainer) {
-    docContainer.classList.add('hidden');
-  }
-  
-  // Actions (boutons approuver/rejeter)
-  const actionsContainer = document.getElementById('wfDetailActions');
-  if (actionsContainer) {
-    const isAssignee = wf.assignee_id === G.currentUser.id;
-    const isCreator = wf.created_by === G.currentUser.id;
-    const isAdmin = G.currentUser.role === 'admin';
-    
-    if ((isAssignee || isCreator || isAdmin) && ['pending', 'in_review'].includes(wf.status)) {
-      actionsContainer.classList.remove('hidden');
-    } else {
-      actionsContainer.classList.add('hidden');
-    }
-  }
-  
-  // Charger l'historique
-  await loadWorkflowHistory(wfId);
-}
 async function loadWorkflowHistory(wfId) {
   const { data: actions, error } = await G.supabase
     .from('workflow_actions')
@@ -4640,10 +4618,6 @@ async function confirmEditTag(tagId) {
   } catch(err) { showToast('Erreur: '+err.message,'error'); }
 }
 
-function filterByTag(tagName) { G.currentTagFilter=tagName; renderDocuments(); showToast(`Filtre: #${tagName}`,'info'); }
-function clearTagFilter() { G.currentTagFilter=null; renderDocuments(); showToast('Filtre tag retir\xe9','info'); }
-
-// ═══════════════════════════════════════════════════════════════════════
 // 4. CONFIGURATION (SETTINGS)
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -6268,194 +6242,12 @@ async function openWfDetail(wfId) {
   }
 }
 
-async function loadWorkflowHistory(wfId) {
-  const { data: actions, error } = await G.supabase
-    .from('workflow_actions')
-    .select('*, profiles!user_id(name)')
-    .eq('workflow_id', wfId)
-    .order('created_at', { ascending: false });
-  
-  const historyContainer = document.getElementById('wfDetailHistory');
-  if (historyContainer) {
-    if (!actions || actions.length === 0) {
-      historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucune activité</p>';
-    } else {
-      historyContainer.innerHTML = actions.map(a => `
-        <div class="p-2 border-b border-blue-500/10">
-          <div class="flex items-center justify-between">
-            <p class="text-white text-xs font-medium">${a.profiles?.name || 'Utilisateur'}</p>
-            <span class="text-blue-300/50 text-[10px]">${formatDate(a.created_at)}</span>
-          </div>
-          <p class="text-blue-300/70 text-xs mt-0.5">${getWfActionLabel(a.action)}</p>
-          ${a.comment ? `<p class="text-xs text-blue-300/50 mt-1 italic">"${escapeHtml(a.comment)}"</p>` : ''}
-        </div>
-      `).join('');
-    }
-  }
-}
-async function addWfComment() {
-  const comment = document.getElementById('wfCommentInput')?.value.trim();
-  if (!comment || !G.currentWfId) {
-    showToast('Veuillez écrire un commentaire', 'warning');
-    return;
-  }
-  
-  const actionRecord = {
-    id: generateId(),
-    workflow_id: G.currentWfId,
-    user_id: G.currentUser.id,
-    action: 'comment',
-    comment: comment,
-    created_at: new Date().toISOString()
-  };
-  
-  const { error } = await G.supabase.from('workflow_actions').insert(actionRecord);
-  if (error) {
-    showToast('Erreur ajout commentaire', 'error');
-    return;
-  }
-  
-  const input = document.getElementById('wfCommentInput');
-  if (input) input.value = '';
-  await loadWorkflowHistory(G.currentWfId);
-  showToast('Commentaire ajouté', 'success');
-}
 
-function getWfActionLabel(action) {
-  const labels = { approve: 'approuvé', reject: 'rejeté', request_changes: 'demandé des modifications', comment: 'commenté' };
-  return labels[action] || action;
-}
 
-function closeWfDetail() {
-  const modal = document.getElementById('wfDetailModal');
-  if (modal) modal.classList.add('hidden');
-  G.currentWfId = null;
-}
 
-function filterWorkflows(status) {
-  // Toggle: si on reclique sur le même filtre, l'effacer
-  G.wfFilter = G.wfFilter === status ? '' : status;
 
-  document.querySelectorAll('.wf-filter-btn').forEach(btn => {
-    const active = btn.dataset.wf === G.wfFilter;
-    btn.classList.toggle('bg-blue-500/20', active);
-    btn.classList.toggle('text-blue-300', active);
-    btn.classList.toggle('border-blue-500/30', active);
-    btn.classList.toggle('text-gray-400', !active);
-    btn.classList.toggle('border-blue-500/10', !active);
-  });
 
-  if (G.wfView === 'kanban') renderWorkflows();
-  else renderWorkflowsList();
-}
 
-function searchWorkflows(query) {
-  if (!query || query.length < 2) {
-    if (G.wfView === 'kanban') renderWorkflows();
-    else renderWorkflowsList();
-    return;
-  }
-  
-  const filtered = G.workflows.filter(w => w.title.toLowerCase().includes(query.toLowerCase()) || 
-    (w.description && w.description.toLowerCase().includes(query.toLowerCase())));
-  
-  const container = document.getElementById('wfKanban');
-  const listContainer = document.getElementById('wfListView');
-  
-  if (G.wfView === 'kanban' && container) {
-    if (filtered.length === 0) {
-      container.innerHTML = '<div class="col-span-full text-center py-12 text-blue-300/50">Aucun résultat</div>';
-    } else {
-      container.innerHTML = filtered.map(wf => `
-        <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
-          <p class="text-white font-medium">${escapeHtml(wf.title)}</p>
-          <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
-        </div>
-      `).join('');
-    }
-  } else if (listContainer) {
-    if (filtered.length === 0) {
-      listContainer.innerHTML = '<div class="text-center py-12 text-blue-300/50">Aucun résultat</div>';
-    } else {
-      listContainer.innerHTML = filtered.map(wf => `
-        <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer" onclick="openWfDetail('${wf.id}')">
-          <div class="flex justify-between"><span class="text-white font-medium">${escapeHtml(wf.title)}</span><span class="text-xs px-2 py-1 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span></div>
-        </div>
-      `).join('');
-    }
-  }
-}
-
-function setWfView(view) {
-  G.wfView = view;
-  const kanban = document.getElementById('wfKanban');
-  const listView = document.getElementById('wfListView');
-  const btnKanban = document.getElementById('wfViewKanban');
-  const btnList = document.getElementById('wfViewList');
-  
-  if (view === 'kanban') {
-    if (kanban) kanban.classList.remove('hidden');
-    if (listView) listView.classList.add('hidden');
-    if (btnKanban) btnKanban.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    if (btnList) btnList.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    renderWorkflows();
-  } else {
-    if (kanban) kanban.classList.add('hidden');
-    if (listView) listView.classList.remove('hidden');
-    if (btnList) btnList.classList.add('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    if (btnKanban) btnKanban.classList.remove('bg-blue-500/20', 'text-blue-300', 'border-blue-500/20');
-    renderWorkflowsList();
-  }
-}
-
-async function renderWorkflowsList() {
-  const container = document.getElementById('wfListView');
-  if (!container) return;
-
-  // Recharger depuis Supabase si pas déjà fait par renderWorkflows
-  if (G.supabase && G.currentUser?.companyId && G.wfView === 'list') {
-    try {
-      const { data, error } = await G.supabase
-        .from('workflows')
-        .select('*')
-        .eq('company_id', G.currentUser.companyId)
-        .order('created_at', { ascending: false });
-      if (!error && data) G.workflows = data;
-    } catch (err) {
-      console.warn('renderWorkflowsList: erreur Supabase', err);
-    }
-  }
-
-  let filtered = G.workflows;
-  if (G.wfFilter) filtered = filtered.filter(w => w.status === G.wfFilter);
-
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="text-center py-12 text-blue-300/50"><i class="fas fa-tasks text-4xl mb-2 opacity-20"></i><p>Aucun workflow trouvé</p></div>';
-    return;
-  }
-
-  container.innerHTML = filtered.map(wf => {
-    const assignee = wf.assignee_id ? G.users.find(u => u.id === wf.assignee_id) : null;
-    const doc      = wf.document_id ? G.documents.find(d => d.id === wf.document_id) : null;
-    return `
-    <div class="glass-card rounded-xl p-4 border border-blue-500/20 cursor-pointer hover:border-blue-400/40 transition-all group" onclick="openWfDetail('${wf.id}')">
-      <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="flex-1 min-w-0">
-          <p class="text-white font-medium truncate">${escapeHtml(wf.title)}</p>
-          <div class="flex items-center gap-2 mt-1 flex-wrap">
-            <span class="text-xs px-2 py-0.5 rounded-full ${getWfStatusClass(wf.status)}">${getWfStatusLabel(wf.status)}</span>
-            <span class="text-xs text-blue-300/60">Priorité : ${wf.priority || 'medium'}</span>
-            <span class="text-xs text-blue-300/60">${formatDate(wf.created_at)}</span>
-          </div>
-          ${assignee ? `<p class="text-xs text-green-400/60 mt-1"><i class="fas fa-user mr-1"></i>${escapeHtml(assignee.name)}</p>` : ''}
-          ${doc       ? `<p class="text-xs text-blue-300/50 mt-1 truncate"><i class="fas fa-file mr-1"></i>${escapeHtml(doc.name)}</p>` : ''}
-          ${wf.due_date ? `<p class="text-xs text-orange-400/70 mt-1"><i class="fas fa-calendar mr-1"></i>Échéance : ${formatDate(wf.due_date)}</p>` : ''}
-        </div>
-        <i class="fas fa-chevron-right text-blue-400/50 group-hover:text-blue-300 transition-colors"></i>
-      </div>
-    </div>`;
-  }).join('');
-}
 
 // ─── Users ───
 // ═══════════════════════════════════════════════════════════════════════
@@ -7698,6 +7490,14 @@ function formatDate(dateString) {
 
 function getFileIcon(type) {
   const map = {
+    img:    { icon: 'fa-file-image',       color: 'text-purple-400' },
+    image:  { icon: 'fa-file-image',       color: 'text-purple-400' },
+    video:  { icon: 'fa-file-video',       color: 'text-pink-400' },
+    audio:  { icon: 'fa-file-audio',       color: 'text-green-400' },
+    code:   { icon: 'fa-file-code',        color: 'text-cyan-400' },
+    zip:    { icon: 'fa-file-archive',     color: 'text-yellow-400' },
+    txt:    { icon: 'fa-file-alt',         color: 'text-gray-400' },
+    unknown:{ icon: 'fa-file',             color: 'text-blue-400/70' },
     pdf: { icon: 'fa-file-pdf', color: 'text-red-400' },
     doc: { icon: 'fa-file-word', color: 'text-blue-400' },
     docx: { icon: 'fa-file-word', color: 'text-blue-400' },
@@ -7990,6 +7790,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.renderDashboard = renderDashboard;
   window.renderShared = renderShared;
   window.renderDocuments = renderDocuments;
+  window.filterDocuments = filterDocuments;
+  window.closeWfDetailModal = closeWfDetailModal;
+  window.switchWfView = switchWfView;
   window.switchDocsTab = switchDocsTab;
   window.toggleViewMode = toggleViewMode;
   window.applyFilters = applyFilters;
