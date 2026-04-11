@@ -1987,7 +1987,7 @@ function openPreviewModal(docId) {
   try {
     if (isImageByType || imageTypes.includes(effectiveExt)) {
       if (previewImage) {
-        // URL publique Supabase: chargement direct (pas de fetch)
+        // Supabase public URL — direct load, no fetch needed
         previewImage.classList.remove('hidden');
         previewImage.onload  = () => hidePreviewLoading();
         previewImage.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
@@ -4017,7 +4017,7 @@ async function actOnWorkflow(action, comment) {
   };
   
   const { error: actionError } = await G.supabase.from('workflow_actions').insert(actionRecord);
-  if (actionError) console.warn('workflow_actions non dispo (RLS):', actionError?.code);
+  if (actionError) console.warn('workflow_actions RLS:', actionError?.code);
   
   let newStatus = wf.status;
   let newStep = wf.current_step;
@@ -7835,20 +7835,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.closeRoleModal = closeRoleModal;
   window.saveRole = saveRole;
   window.renderAnalytics = renderAnalytics;
-  window.Analytics = Analytics;
   window.exportAnalytics = exportAnalytics;
-  window.Folders = Folders;
   window.renderFolderTree = renderFolderTree;
   window.deleteFolder = deleteFolder;
-  window.Signatures = Signatures;
   window.loadExistingSignatures = loadExistingSignatures;
-  window.AI = AI;
-  window.Automation = Automation;
   window.deleteRule = deleteRule;
-  window.Backups = Backups;
   window.deleteBackup = deleteBackup;
-  window.Billing = Billing;
-  window.detail = detail;
   window.refreshAnalytics = refreshAnalytics;
   window.renderFolders = renderFolders;
   window.openFolder = openFolder;
