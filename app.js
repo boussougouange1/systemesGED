@@ -2030,21 +2030,40 @@ function openPreviewModal(docId) {
             loadPdf(fileUrl);
           });
       }
-    } else if (officeExts.includes(effectiveExt)) {
-      // Office via Microsoft Office Online Viewer
+   } else if (officeExts.includes(effectiveExt)) {
+      // Office via Microsoft Office Online Viewer (avec Signed URL si privé)
       if (previewFrame) {
         previewFrame.classList.remove('hidden');
-        const encodedUrl = encodeURIComponent(fileUrl);
-        const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`;
-        previewFrame.src = viewerUrl;
-        previewFrame.onload  = () => hidePreviewLoading();
-        previewFrame.onerror = () => {
-          hidePreviewLoading();
-          const gdocsUrl = `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`;
-          previewFrame.src = gdocsUrl;
+
+        const loadOffice = (url) => {
+          const encodedUrl = encodeURIComponent(url);
+          const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`;
+          previewFrame.src = viewerUrl;
+          previewFrame.onload  = () => hidePreviewLoading();
           previewFrame.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
         };
-      }    } else if (textExts.includes(effectiveExt)) {
+
+        fetch(fileUrl, { method: 'HEAD' })
+          .then(r => {
+            if (r.ok) {
+              loadOffice(fileUrl);
+            } else if (G.supabase && doc.storage_path) {
+              G.supabase.storage.from(CONFIG.storageBucket)
+                .createSignedUrl(doc.storage_path, 3600)
+                .then(({ data, error }) => {
+                  if (!error && data?.signedUrl) loadOffice(data.signedUrl);
+                  else { hidePreviewLoading(); showUnsupportedPreview(doc); }
+                });
+            } else {
+              hidePreviewLoading();
+              showUnsupportedPreview(doc);
+            }
+          })
+          .catch(() => {
+            loadOffice(fileUrl);
+          });
+      }    
+	} else if (textExts.includes(effectiveExt)) {
       if (previewContent) previewContent.classList.remove('hidden');
       const contentEl = document.getElementById('previewTextContent');
       if (contentEl) {
