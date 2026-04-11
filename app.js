@@ -7766,6 +7766,308 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mainApp     = document.getElementById('mainApp');
     if (loginScreen) loginScreen.style.display = 'block';
     if (mainApp)     mainApp.style.display      = 'none';
+
+// ══════════════════════════════════════════════
+// COLLABORATION TEMPS RÉEL + COMMENTAIRES + EDIT
+// ══════════════════════════════════════════════
+
+let _realtimeChannel = null;
+let _presenceUsers   = {};
+let _commentsCache   = {};
+
+// ── Présence temps réel ──
+function subscribePresence(docId) {
+  if (_realtimeChannel) {
+    G.supabase.removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+  }
+  if (!docId || !G.supabase) return;
+
+  _realtimeChannel = G.supabase.channel(`doc-presence:${docId}`, {
+    config: { presence: { key: G.currentUser.id } }
+  });
+
+  _realtimeChannel
+    .on('presence', { event: 'sync' }, () => {
+      const state = _realtimeChannel.presenceState();
+      _presenceUsers = {};
+      Object.values(state).flat().forEach(u => { _presenceUsers[u.userId] = u; });
+      renderPresenceBadges();
+    })
+    .on('broadcast', { event: 'comment' }, ({ payload }) => {
+      if (payload.docId === docId) appendComment(payload);
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await _realtimeChannel.track({
+          userId:    G.currentUser.id,
+          userName:  G.currentUser.name || G.currentUser.email,
+          userEmail: G.currentUser.email,
+          joinedAt:  new Date().toISOString()
+        });
+      }
+    });
+}
+
+function unsubscribePresence() {
+  if (_realtimeChannel) {
+    G.supabase.removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+  }
+  _presenceUsers = {};
+  renderPresenceBadges();
+}
+
+function renderPresenceBadges() {
+  const container = document.getElementById('previewPresence');
+  if (!container) return;
+  const users = Object.values(_presenceUsers).filter(u => u.userId !== G.currentUser.id);
+  if (!users.length) { container.innerHTML = ''; return; }
+  container.innerHTML = users.slice(0, 5).map(u => {
+    const initials = (u.userName || u.userEmail || '?').slice(0, 2).toUpperCase();
+    const colors   = ['bg-green-500','bg-blue-500','bg-purple-500','bg-yellow-500','bg-red-500'];
+    const color    = colors[u.userId?.charCodeAt(0) % colors.length] || 'bg-blue-500';
+    return `<div class="w-7 h-7 rounded-full ${color} flex items-center justify-center text-white text-xs font-bold cursor-default" title="${escapeHtml(u.userName || u.userEmail)}">${initials}</div>`;
+  }).join('') + (users.length > 5 ? `<span class="text-xs text-blue-400/60">+${users.length - 5}</span>` : '');
+}
+
+// Hooker closePreviewModal pour unsubscribe
+const _origClosePreview = closePreviewModal;
+window.closePreviewModal = function() {
+  unsubscribePresence();
+  const panel = document.getElementById('commentsPanel');
+  if (panel) panel.classList.add('hidden');
+  _origClosePreview();
+};
+
+// Hooker openPreviewModal pour subscribe + bouton Modifier
+const _origOpenPreview = openPreviewModal;
+window.openPreviewModal = async function(docId) {
+  await _origOpenPreview(docId);
+  subscribePresence(docId);
+  // Afficher bouton Modifier si office
+  const doc = G.documents.find(d => d.id === docId);
+  const editBtn = document.getElementById('editDocBtn');
+  if (editBtn && doc) {
+    const officeExts = ['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'];
+    const ext = (doc.name?.split('.').pop() || '').toLowerCase();
+    if (officeExts.includes(ext)) editBtn.classList.remove('hidden');
+    else editBtn.classList.add('hidden');
+  }
+  // Charger commentaires
+  loadComments(docId);
+};
+
+// ── Modifier un document Office ──
+async function editCurrentDocument() {
+  const docId = G.currentDocId;
+  const doc   = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+
+  // Générer signed URL pour téléchargement
+  let fileUrl = doc.file_url;
+  if (G.supabase && doc.storage_path) {
+    const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
+    if (data?.signedUrl) fileUrl = data.signedUrl;
+  }
+
+  // Télécharger le fichier
+  const a = document.createElement('a');
+  a.href     = fileUrl;
+  a.download = doc.name;
+  a.click();
+
+  // Toast avec instructions
+  showToast(`📥 "${doc.name}" téléchargé. Modifiez-le, puis ré-importez via "Importer" pour créer une nouvelle version.`, 'info', 6000);
+  await addAuditLog('edit_download', 'document', docId, `Téléchargé pour modification: ${doc.name}`);
+}
+
+// ── Commentaires ──
+function toggleCommentsPanel() {
+  const panel = document.getElementById('commentsPanel');
+  if (panel) panel.classList.toggle('hidden');
+}
+
+async function loadComments(docId) {
+  if (!docId || !G.supabase) return;
+  try {
+    const { data } = await G.supabase.from('document_comments')
+      .select('*').eq('document_id', docId).order('created_at', { ascending: true }).limit(100);
+    _commentsCache[docId] = data || [];
+    renderComments(docId);
+  } catch(e) { /* table peut ne pas exister */ }
+}
+
+function renderComments(docId) {
+  const list  = document.getElementById('commentsList');
+  const count = document.getElementById('commentsCount');
+  if (!list) return;
+  const comments = _commentsCache[docId] || [];
+  if (count) count.textContent = comments.length;
+  if (!comments.length) {
+    list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-4">Aucun commentaire. Soyez le premier !</p>';
+    return;
+  }
+  list.innerHTML = comments.map(c => `
+    <div class="flex gap-2">
+      <div class="w-6 h-6 rounded-full bg-blue-500/30 flex items-center justify-center text-xs text-blue-300 flex-shrink-0">
+        ${(c.user_name || c.user_email || '?').slice(0,1).toUpperCase()}
+      </div>
+      <div class="flex-1 bg-blue-900/30 rounded-lg px-3 py-2">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-blue-300 text-xs font-medium">${escapeHtml(c.user_name || c.user_email || 'Anonyme')}</span>
+          <span class="text-blue-400/40 text-xs">${formatDate(c.created_at)}</span>
+        </div>
+        <p class="text-white/80 text-xs">${escapeHtml(c.content)}</p>
+      </div>
+    </div>`).join('');
+  list.scrollTop = list.scrollHeight;
+}
+
+function appendComment(payload) {
+  const docId = G.currentDocId;
+  if (!docId) return;
+  if (!_commentsCache[docId]) _commentsCache[docId] = [];
+  if (!_commentsCache[docId].find(c => c.id === payload.id)) {
+    _commentsCache[docId].push(payload);
+    renderComments(docId);
+    const panel = document.getElementById('commentsPanel');
+    if (panel?.classList.contains('hidden')) {
+      showToast(`💬 Nouveau commentaire de ${payload.user_name || payload.user_email}`, 'info');
+    }
+  }
+}
+
+async function addComment() {
+  const input = document.getElementById('newCommentInput');
+  const text  = input?.value.trim();
+  const docId = G.currentDocId;
+  if (!text || !docId) return;
+
+  const comment = {
+    id:          generateId(),
+    document_id: docId,
+    user_id:     G.currentUser.id,
+    user_name:   G.currentUser.name || G.currentUser.email,
+    user_email:  G.currentUser.email,
+    content:     text,
+    created_at:  new Date().toISOString()
+  };
+
+  // Sauvegarder en base (si la table existe)
+  try {
+    await G.supabase.from('document_comments').insert(comment);
+  } catch(e) { /* table optionnelle */ }
+
+  // Broadcaster aux autres via Realtime
+  if (_realtimeChannel) {
+    _realtimeChannel.send({ type: 'broadcast', event: 'comment', payload: { ...comment, docId } });
+  }
+
+  // Afficher localement
+  appendComment(comment);
+  input.value = '';
+
+  // Ouvrir le panneau si fermé
+  const panel = document.getElementById('commentsPanel');
+  if (panel?.classList.contains('hidden')) panel.classList.remove('hidden');
+}
+
+// ── Onglets collaboration modal ──
+function switchCollabTab(tab) {
+  ['invite','members','activity'].forEach(t => {
+    document.getElementById(`collabTab${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.add('hidden');
+    const btn = document.getElementById(`tab${t.charAt(0).toUpperCase()+t.slice(1)}`);
+    if (btn) { btn.classList.remove('bg-blue-500/30','text-white'); btn.classList.add('text-blue-300/70'); }
+  });
+  document.getElementById(`collabTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`)?.classList.remove('hidden');
+  const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`);
+  if (activeBtn) { activeBtn.classList.add('bg-blue-500/30','text-white'); activeBtn.classList.remove('text-blue-300/70'); }
+
+  if (tab === 'members') loadCollabMembers();
+  if (tab === 'activity') loadCollabActivity();
+  updateCollabPresence();
+}
+
+async function loadCollabMembers() {
+  const docId = G.collabModalDocId;
+  const list  = document.getElementById('collabMembersList');
+  if (!list || !docId) return;
+  const shares = G.shares.filter(s => s.document_id === docId);
+  if (!shares.length) {
+    list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucun collaborateur invité.</p>';
+    return;
+  }
+  list.innerHTML = shares.map(s => `
+    <div class="flex items-center justify-between p-3 bg-blue-900/20 rounded-xl">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-sm">
+          ${(s.recipient_email || '?').slice(0,1).toUpperCase()}
+        </div>
+        <div>
+          <p class="text-white text-sm">${escapeHtml(s.recipient_email || 'Inconnu')}</p>
+          <p class="text-blue-400/50 text-xs">${s.permission === 'view' ? '👁 Lecture' : s.permission === 'download' ? '⬇ Téléchargement' : '✏ Modification'} • ${formatDate(s.created_at)}</p>
+        </div>
+      </div>
+      <button onclick="revokeShare('${s.id}')" class="text-red-400/60 hover:text-red-400 text-xs p-1 rounded" title="Révoquer l'accès">
+        <i class="fas fa-user-minus"></i>
+      </button>
+    </div>`).join('');
+}
+
+async function loadCollabActivity() {
+  const docId = G.collabModalDocId;
+  const list  = document.getElementById('collabActivityList');
+  if (!list || !docId || !G.supabase) return;
+  try {
+    const { data } = await G.supabase.from('audit_logs')
+      .select('*').eq('resource_id', docId).order('created_at', { ascending: false }).limit(20);
+    if (!data?.length) {
+      list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucune activité enregistrée.</p>';
+      return;
+    }
+    list.innerHTML = data.map(log => `
+      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-blue-900/20">
+        <i class="fas fa-circle text-blue-400/40 mt-1.5" style="font-size:6px"></i>
+        <div>
+          <p class="text-white/80 text-xs">${escapeHtml(log.details || log.action || '')}</p>
+          <p class="text-blue-400/40 text-xs">${formatDate(log.created_at)}</p>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Activité non disponible.</p>';
+  }
+}
+
+function updateCollabPresence() {
+  const container = document.getElementById('collabPresenceList');
+  if (!container) return;
+  const users = Object.values(_presenceUsers);
+  if (!users.length) {
+    container.innerHTML = '<span class="text-blue-400/40 text-xs">Personne d\'autre en ligne</span>';
+    return;
+  }
+  container.innerHTML = users.map(u => `
+    <div class="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-full">
+      <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+      <span class="text-green-300 text-xs">${escapeHtml(u.userName || u.userEmail)}</span>
+    </div>`).join('');
+}
+
+async function revokeShare(shareId) {
+  if (!confirm('Révoquer cet accès ?')) return;
+  const { error } = await G.supabase.from('shares').delete().eq('id', shareId);
+  if (error) { showToast('Erreur: ' + error.message, 'error'); return; }
+  G.shares = G.shares.filter(s => s.id !== shareId);
+  showToast('Accès révoqué', 'success');
+  loadCollabMembers();
+}
+
+// Exposer les nouvelles fonctions
+Object.assign(window, {
+  editCurrentDocument, toggleCommentsPanel, addComment,
+  switchCollabTab, revokeShare, loadCollabMembers, loadCollabActivity
+});
   }
   
   // Exposer toutes les fonctions globalement
