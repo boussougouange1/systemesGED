@@ -2031,31 +2031,20 @@ function openPreviewModal(docId) {
           });
       }
     } else if (officeExts.includes(effectiveExt)) {
-      // Office: pas d'iframe (CSP bloque Vercel + Google Viewer)
-      // → Proposer téléchargement direct
-      hidePreviewLoading();
-      const previewUnsupported = document.getElementById('previewUnsupported');
-      if (previewUnsupported) {
-        previewUnsupported.classList.remove('hidden');
-        const info = document.getElementById('unsupportedFileInfo');
-        if (info) {
-          info.innerHTML = `
-            <i class="fas fa-file-word text-5xl mb-4 block text-blue-400/60"></i>
-            <p class="text-white font-semibold">${escapeHtml(doc.name)}</p>
-            <p class="text-sm text-blue-300/50 mt-1">${formatBytes(doc.size || 0)} &bull; ${effectiveExt.toUpperCase()}</p>
-            <p class="text-xs text-blue-400/40 mt-3 mb-4">L'aperçu en ligne n'est pas disponible pour ce type de fichier.</p>
-            <div class="flex gap-3 justify-center flex-wrap">
-              <button onclick="downloadDocument('${doc.id}')" class="btn-primary px-5 py-2 rounded-xl text-white text-sm flex items-center gap-2">
-                <i class="fas fa-download"></i>Télécharger
-              </button>
-              <a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer"
-                 class="px-5 py-2 rounded-xl text-blue-300 text-sm border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-2">
-                <i class="fas fa-external-link-alt"></i>Ouvrir dans un nouvel onglet
-              </a>
-            </div>`;
-        }
-      }
-    } else if (textExts.includes(effectiveExt)) {
+      // Office via Microsoft Office Online Viewer
+      if (previewFrame) {
+        previewFrame.classList.remove('hidden');
+        const encodedUrl = encodeURIComponent(fileUrl);
+        const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`;
+        previewFrame.src = viewerUrl;
+        previewFrame.onload  = () => hidePreviewLoading();
+        previewFrame.onerror = () => {
+          hidePreviewLoading();
+          const gdocsUrl = `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`;
+          previewFrame.src = gdocsUrl;
+          previewFrame.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
+        };
+      }    } else if (textExts.includes(effectiveExt)) {
       if (previewContent) previewContent.classList.remove('hidden');
       const contentEl = document.getElementById('previewTextContent');
       if (contentEl) {
