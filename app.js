@@ -415,15 +415,34 @@ function updateUserDisplay() {
 }
 
 function updateMenuVisibility() {
-  const isAdmin = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
+  const isAdmin   = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
   const isManager = G.currentUser?.role === 'manager' || isAdmin;
-  
+
+  // Menus visibles uniquement pour l'administrateur
   document.querySelectorAll('[data-role="admin-only"]').forEach(el => {
     el.style.display = isAdmin ? 'flex' : 'none';
   });
+
+  // Menus visibles pour manager ET admin
   document.querySelectorAll('[data-role="manager-only"]').forEach(el => {
     el.style.display = isManager ? 'flex' : 'none';
   });
+
+  // Masquer explicitement les 5 menus réservés admin
+  // si l'utilisateur n'est pas admin (sécurité côté UI)
+  const adminOnlyViews = ['users', 'pending-users', 'security', 'logs', 'rbac',
+                          'rbacv7', 'auditv6', 'integrations', 'apikeys', 'billing', 'settings'];
+  if (!isAdmin) {
+    adminOnlyViews.forEach(viewName => {
+      document.querySelectorAll(`[data-view="${viewName}"]`).forEach(el => {
+        el.style.display = 'none';
+      });
+    });
+    // Rediriger si l'utilisateur est sur une vue admin
+    if (adminOnlyViews.includes(G.currentView)) {
+      switchView('dashboard');
+    }
+  }
 }
 
 function updateBadges() {
@@ -1245,15 +1264,27 @@ async function renderDocuments() {
     filtered = filtered.filter(d => Array.isArray(d.tags) && d.tags.includes(G.currentTagFilter));
   }
 
+  const isAdmin   = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
+  const isManager = G.currentUser?.role === 'manager' || isAdmin;
+
   // Filtrer selon l'onglet
   if (G.docsTab === 'company') {
     filtered = filtered.filter(d => d.scope === 'company');
   } else if (G.docsTab === 'personal') {
-    filtered = filtered.filter(d => d.scope === 'personal' && d.owner_id === G.currentUser.id);
+    // Admin & manager voient les personnels de TOUS les utilisateurs
+    if (isManager) {
+      filtered = filtered.filter(d => d.scope === 'personal');
+    } else {
+      filtered = filtered.filter(d => d.scope === 'personal' && d.owner_id === G.currentUser.id);
+    }
   } else if (G.docsTab === 'mine') {
     filtered = filtered.filter(d => d.owner_id === G.currentUser.id);
+  } else if (G.docsTab === 'all') {
+    // Onglet "Tous" : admin & manager uniquement — aucun filtre scope
+    if (!isManager) filtered = filtered.filter(d =>
+      d.scope === 'company' || d.owner_id === G.currentUser.id
+    );
   } else if (G.docsTab === 'shared') {
-    // Utiliser les partages déjà chargés (reçus pour l'utilisateur courant)
     const sharedIds = new Set(
       G.shares
         .filter(s => s.recipient_email === G.currentUser.email && s.status === 'active')
@@ -1261,7 +1292,6 @@ async function renderDocuments() {
     );
     filtered = filtered.filter(d => sharedIds.has(d.id));
   }
-
   // Filtre par type
   const typeFilter = document.getElementById('filterType')?.value;
   if (typeFilter) filtered = filtered.filter(d => d.type === typeFilter);
@@ -1306,6 +1336,72 @@ async function renderDocuments() {
   ).join('');
 
   console.log(`✅ ${filtered.length} documents affichés`);
+}
+
+// ── Badge scope cliquable (personnel ↔ entreprise) ──────
+function buildScopeBadge(doc) {
+  const isOwner   = doc.owner_id === G.currentUser.id;
+  const isAdmin   = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
+  const isManager = G.currentUser?.role === 'manager' || isAdmin;
+  const canChange = isOwner || isManager;
+  if (doc.scope === 'company') {
+    return canChange
+      ? `<button onclick="event.stopPropagation(); changeDocScope('${doc.id}', 'personal')"
+                 class="collab-badge text-[10px] hover:bg-blue-600/40 transition-colors cursor-pointer"
+                 title="Passer en Personnel">
+           <i class="fas fa-building mr-1"></i>Entreprise
+           <i class="fas fa-exchange-alt ml-1 opacity-50"></i>
+         </button>`
+      : `<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Entreprise</span>`;
+  } else {
+    return canChange
+      ? `<button onclick="event.stopPropagation(); changeDocScope('${doc.id}', 'company')"
+                 class="text-[10px] text-purple-400/80 hover:text-purple-300 hover:bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20 transition-colors cursor-pointer"
+                 title="Partager avec l'entreprise">
+           <i class="fas fa-user mr-1"></i>Personnel
+           <i class="fas fa-exchange-alt ml-1 opacity-50"></i>
+         </button>`
+      : `<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>`;
+  }
+}
+
+// ── Changer la portée d'un document ─────────────────────
+async function changeDocScope(docId, newScope) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  const isOwner   = doc.owner_id === G.currentUser.id;
+  const isAdmin   = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin;
+  const isManager = G.currentUser?.role === 'manager' || isAdmin;
+  if (!isOwner && !isManager) {
+    showToast('Permission refusée', 'error');
+    return;
+  }
+  const label = newScope === 'company' ? 'Entreprise' : 'Personnel';
+  const icon  = newScope === 'company' ? 'fa-building' : 'fa-user';
+  if (!confirm(`Passer "${doc.name}" en mode ${label} ?\n\n${
+    newScope === 'company'
+      ? 'Ce document sera visible par tous les membres de l\'entreprise.'
+      : 'Ce document ne sera plus visible que par vous (et les administrateurs).'
+  }`)) return;
+  try {
+    const { error } = await G.supabase
+      .from('documents')
+      .update({ scope: newScope, updated_at: new Date().toISOString() })
+      .eq('id', docId);
+    if (error) throw error;
+    doc.scope = newScope;
+    await addAuditLog(
+      'scope_change', 'document', docId,
+      `Portée modifiée → ${label} par ${G.currentUser.email}`
+    );
+    showToast(
+      `<i class="fas ${icon} mr-2"></i>"${doc.name}" → ${label}`,
+      'success'
+    );
+    renderDocuments();
+  } catch (err) {
+    showToast('Erreur : ' + err.message, 'error');
+  }
 }
 
 function filterDocuments(query) {
@@ -1390,9 +1486,7 @@ function renderDocCard(doc) {
   ${(doc.tags || []).slice(0, 2).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
   ${(doc.tags || []).length > 2 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length - 2}</span>` : ''}
 </div>
-        ${doc.scope === 'company' ? 
-          '<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>' : 
-          '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
+        ${buildScopeBadge(doc)}
       </div>
       
       <!-- Métadonnées supplémentaires -->
@@ -1434,9 +1528,7 @@ function renderDocListItem(doc) {
           <p class="text-blue-300/60 text-xs">${formatBytes(doc.size)}</p>
           <span class="text-blue-400/40">•</span>
           <p class="text-blue-300/60 text-xs">${formatDate(doc.created_at)}</p>
-          ${doc.scope === 'company' ? 
-            `<span class="collab-badge text-[10px]"><i class="fas fa-building mr-1"></i>Équipe</span>` : 
-            '<span class="text-[10px] text-purple-400/60"><i class="fas fa-user mr-1"></i>Personnel</span>'}
+          ${buildScopeBadge(doc)}
         </div>
         <div class="flex gap-2 mt-1">
   ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
@@ -1521,7 +1613,15 @@ async function switchDocsTab(tab) {
       if (tab === 'company') {
         query = query.eq('scope', 'company');
       } else if (tab === 'personal') {
-        query = query.eq('scope', 'personal').eq('owner_id', G.currentUser.id);
+        // Admin/manager voient tous les personnels, les autres seulement les leurs
+        const isManager = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin || G.currentUser?.role === 'manager';
+        if (isManager) {
+          query = query.eq('scope', 'personal');
+        } else {
+          query = query.eq('scope', 'personal').eq('owner_id', G.currentUser.id);
+        }
+      } else if (tab === 'all') {
+        // Aucun filtre supplémentaire — tous les docs de l'entreprise
       } else if (tab === 'mine') {
         query = query.eq('owner_id', G.currentUser.id);
       } else if (tab === 'shared') {
