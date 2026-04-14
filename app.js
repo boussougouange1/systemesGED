@@ -856,28 +856,131 @@ function togglePwdInput(id, btn) {
   if (icon) icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 
-function demoLogin() {
-  console.log('🔑 Tentative de connexion démo');
-  
-  const loginEmail = document.getElementById('loginEmail');
-  const loginPassword = document.getElementById('loginPassword');
-  
-  if (loginEmail) loginEmail.value = 'demo@systemesged.fr';
-  if (loginPassword) loginPassword.value = 'Demo123!';
-  
-  // Créer un événement submit et l'appeler
-  const event = new Event('submit', { bubbles: true, cancelable: true });
-  const form = document.getElementById('loginForm');
-  
-  if (form) {
-    console.log('📝 Formulaire trouvé, déclenchement du submit');
-    form.dispatchEvent(event);
-  } else {
-    console.log('⚠️ Formulaire non trouvé, appel direct de handleLogin');
-    handleLogin(event);
-  }
-}
+async function demoLogin() {
+  console.log('🚀 Activation du mode démo');
 
+  const btn = document.getElementById('loginBtn');
+  const btnText = document.getElementById('loginBtnText');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+  if (btnText) btnText.innerHTML = '<span class="spinner mr-2"></span>Chargement démo...';
+
+  // ── Utilisateur démo ─────────────────────────────────
+  const DEMO_COMPANY_ID = 'demo_company_001';
+  const DEMO_USER_ID    = 'demo_user_001';
+
+  G.currentUser = {
+    id:            DEMO_USER_ID,
+    email:         'demo@systemesged.fr',
+    name:          'Sophie Martin',
+    role:          'admin',
+    companyId:     DEMO_COMPANY_ID,
+    companyName:   'Entreprise Démo',
+    plan:          'professional',
+    status:        'active',
+    isSystemAdmin: false,
+    isDemo:        true
+  };
+  G.currentCompany = { id: DEMO_COMPANY_ID, name: 'Entreprise Démo', plan: 'professional' };
+
+  // ── Données simulées ─────────────────────────────────
+  const now   = new Date();
+  const day   = (n) => new Date(now - n * 86400000).toISOString();
+
+  G.documents = [
+    { id:'ddoc1', name:'Rapport annuel 2024.pdf',       type:'pdf',   size:2457600,  scope:'company',  owner_id:DEMO_USER_ID, company_id:DEMO_COMPANY_ID, created_at:day(2),  updated_at:day(2),  views:24, downloads:8,  version:2, tags:['rapport','finance'], is_deleted:false },
+    { id:'ddoc2', name:'Contrat fournisseur ABC.docx',  type:'word',  size:186000,   scope:'company',  owner_id:DEMO_USER_ID, company_id:DEMO_COMPANY_ID, created_at:day(5),  updated_at:day(3),  views:12, downloads:3,  version:1, tags:['contrat','juridique'], is_deleted:false },
+    { id:'ddoc3', name:'Budget Q1 2025.xlsx',           type:'excel', size:524000,   scope:'company',  owner_id:'demo_user_002', company_id:DEMO_COMPANY_ID, created_at:day(7),  updated_at:day(7),  views:31, downloads:15, version:3, tags:['budget','finance'], is_deleted:false },
+    { id:'ddoc4', name:'Présentation client.pptx',      type:'pptx',  size:3800000,  scope:'company',  owner_id:DEMO_USER_ID, company_id:DEMO_COMPANY_ID, created_at:day(10), updated_at:day(10), views:9,  downloads:2,  version:1, tags:['client','commercial'], is_deleted:false },
+    { id:'ddoc5', name:'Notes de réunion RH.docx',      type:'word',  size:95000,    scope:'personal', owner_id:DEMO_USER_ID, company_id:DEMO_COMPANY_ID, created_at:day(1),  updated_at:day(1),  views:3,  downloads:1,  version:1, tags:['RH','réunion'], is_deleted:false },
+    { id:'ddoc6', name:'Politique de confidentialité.pdf', type:'pdf', size:780000,  scope:'company',  owner_id:'demo_user_002', company_id:DEMO_COMPANY_ID, created_at:day(15), updated_at:day(15), views:44, downloads:20, version:1, tags:['juridique','RGPD'], is_deleted:false },
+    { id:'ddoc7', name:'Plan de formation 2025.pdf',    type:'pdf',   size:1240000,  scope:'company',  owner_id:DEMO_USER_ID, company_id:DEMO_COMPANY_ID, created_at:day(3),  updated_at:day(3),  views:18, downloads:6,  version:1, tags:['RH','formation'], is_deleted:false },
+    { id:'ddoc8', name:'Facture prestataire 03-2025.pdf', type:'pdf', size:312000,   scope:'personal', owner_id:DEMO_USER_ID, company_id:DEMO_COMPANY_ID, created_at:day(4),  updated_at:day(4),  views:2,  downloads:1,  version:1, tags:['facture','comptabilité'], is_deleted:false },
+    { id:'ddoc9', name:'Logo entreprise.png',           type:'image', size:512000,   scope:'company',  owner_id:'demo_user_003', company_id:DEMO_COMPANY_ID, created_at:day(20), updated_at:day(20), views:55, downloads:30, version:1, tags:['design','brand'], is_deleted:false },
+    { id:'ddoc10',name:'Procédure onboarding.docx',     type:'word',  size:228000,   scope:'company',  owner_id:DEMO_USER_ID, company_id:DEMO_COMPANY_ID, created_at:day(8),  updated_at:day(6),  views:22, downloads:11, version:4, tags:['RH','procédure'], is_deleted:false },
+  ];
+
+  G.workflows = [
+    { id:'dwf1', title:'Validation rapport annuel',  status:'pending',  priority:'high',   document_id:'ddoc1', assignee_id:'demo_user_002', company_id:DEMO_COMPANY_ID, created_at:day(2),  due_date:day(-3), description:'Approbation direction requise' },
+    { id:'dwf2', title:'Révision contrat fournisseur', status:'in_review', priority:'medium', document_id:'ddoc2', assignee_id:DEMO_USER_ID,    company_id:DEMO_COMPANY_ID, created_at:day(4),  due_date:day(-7), description:'Vérification clauses juridiques' },
+    { id:'dwf3', title:'Approbation budget Q1',      status:'approved',  priority:'high',   document_id:'ddoc3', assignee_id:DEMO_USER_ID,    company_id:DEMO_COMPANY_ID, created_at:day(8),  due_date:day(-10), description:'Budget validé par la direction' },
+    { id:'dwf4', title:'Mise à jour politique RGPD', status:'pending',   priority:'low',    document_id:'ddoc6', assignee_id:'demo_user_003', company_id:DEMO_COMPANY_ID, created_at:day(1),  due_date:day(-5), description:'Révision annuelle obligatoire' },
+    { id:'dwf5', title:'Validation plan formation',  status:'rejected',  priority:'medium', document_id:'ddoc7', assignee_id:'demo_user_002', company_id:DEMO_COMPANY_ID, created_at:day(5),  due_date:day(-8), description:'Budget insuffisant — à revoir' },
+  ];
+
+  G.users = [
+    { id:DEMO_USER_ID,    email:'demo@systemesged.fr',  name:'Sophie Martin',   role:'admin',   status:'active',            company_id:DEMO_COMPANY_ID, created_at:day(90) },
+    { id:'demo_user_002', email:'jean.dupont@demo.fr',  name:'Jean Dupont',     role:'manager', status:'active',            company_id:DEMO_COMPANY_ID, created_at:day(60) },
+    { id:'demo_user_003', email:'marie.curie@demo.fr',  name:'Marie Curie',     role:'editor',  status:'active',            company_id:DEMO_COMPANY_ID, created_at:day(45) },
+    { id:'demo_user_004', email:'paul.blanc@demo.fr',   name:'Paul Blanc',      role:'viewer',  status:'active',            company_id:DEMO_COMPANY_ID, created_at:day(30) },
+    { id:'demo_user_005', email:'lea.martin@demo.fr',   name:'Léa Martin',      role:'editor',  status:'pending_validation',company_id:DEMO_COMPANY_ID, created_at:day(2)  },
+  ];
+
+  G.tags = [
+    { id:'dtag1', name:'finance',      color:'#3b82f6', count:3, company_id:DEMO_COMPANY_ID },
+    { id:'dtag2', name:'juridique',    color:'#8b5cf6', count:2, company_id:DEMO_COMPANY_ID },
+    { id:'dtag3', name:'RH',           color:'#10b981', count:3, company_id:DEMO_COMPANY_ID },
+    { id:'dtag4', name:'contrat',      color:'#f59e0b', count:1, company_id:DEMO_COMPANY_ID },
+    { id:'dtag5', name:'rapport',      color:'#6366f1', count:1, company_id:DEMO_COMPANY_ID },
+    { id:'dtag6', name:'client',       color:'#ec4899', count:1, company_id:DEMO_COMPANY_ID },
+    { id:'dtag7', name:'budget',       color:'#14b8a6', count:1, company_id:DEMO_COMPANY_ID },
+    { id:'dtag8', name:'RGPD',         color:'#f43f5e', count:1, company_id:DEMO_COMPANY_ID },
+  ];
+
+  G.folders = [
+    { id:'dfold1', name:'Finance',      parent_id:null,     company_id:DEMO_COMPANY_ID, created_at:day(90) },
+    { id:'dfold2', name:'Juridique',    parent_id:null,     company_id:DEMO_COMPANY_ID, created_at:day(90) },
+    { id:'dfold3', name:'Ressources Humaines', parent_id:null, company_id:DEMO_COMPANY_ID, created_at:day(90) },
+    { id:'dfold4', name:'Commercial',   parent_id:null,     company_id:DEMO_COMPANY_ID, created_at:day(90) },
+    { id:'dfold5', name:'2024',         parent_id:'dfold1', company_id:DEMO_COMPANY_ID, created_at:day(60) },
+    { id:'dfold6', name:'2025',         parent_id:'dfold1', company_id:DEMO_COMPANY_ID, created_at:day(30) },
+  ];
+
+  G.shares = [
+    { id:'dsh1', document_id:'ddoc1', sender_id:DEMO_USER_ID, recipient_email:'jean.dupont@demo.fr', recipient_id:'demo_user_002', permission:'view',     status:'active', created_at:day(2),  expires_at:null },
+    { id:'dsh2', document_id:'ddoc3', sender_id:'demo_user_002', recipient_email:'demo@systemesged.fr', recipient_id:DEMO_USER_ID, permission:'edit',  status:'active', created_at:day(6),  expires_at:day(-30) },
+    { id:'dsh3', document_id:'ddoc9', sender_id:'demo_user_003', recipient_email:'demo@systemesged.fr', recipient_id:DEMO_USER_ID, permission:'view',  status:'active', created_at:day(10), expires_at:null },
+    { id:'dsh4', document_id:'ddoc4', sender_id:DEMO_USER_ID, recipient_email:'marie.curie@demo.fr',  recipient_id:'demo_user_003', permission:'view', status:'active', created_at:day(8),  expires_at:day(-15) },
+  ];
+
+  G.signatures     = [];
+  G.automationRules= [
+    { id:'drule1', name:'Archiver PDF > 30 jours', trigger:'age', condition:'type=pdf,days=30', action:'archive', active:true,  company_id:DEMO_COMPANY_ID, created_at:day(30) },
+    { id:'drule2', name:'Notifier à l\'upload',    trigger:'upload', condition:'scope=company',  action:'notify',  active:true,  company_id:DEMO_COMPANY_ID, created_at:day(20) },
+    { id:'drule3', name:'Tag auto contrat',        trigger:'upload', condition:'name=contrat',   action:'tag',     active:false, company_id:DEMO_COMPANY_ID, created_at:day(15) },
+  ];
+  G.apiKeys  = [];
+  G.backups  = [
+    { id:'dbk1', name:'Sauvegarde auto 14/04/2025', type:'auto', status:'completed', size:15728640, company_id:DEMO_COMPANY_ID, created_at:day(0) },
+    { id:'dbk2', name:'Sauvegarde auto 07/04/2025', type:'auto', status:'completed', size:14680064, company_id:DEMO_COMPANY_ID, created_at:day(7) },
+    { id:'dbk3', name:'Sauvegarde manuelle',        type:'manual',status:'completed', size:16777216, company_id:DEMO_COMPANY_ID, created_at:day(14) },
+  ];
+  G.auditLogs = [
+    { id:'dal1', action:'login',        user_id:DEMO_USER_ID, user_email:'demo@systemesged.fr', resource_type:'session',  resource_id:'',      details:'Connexion réussie',              severity:'info',    created_at:day(0),  company_id:DEMO_COMPANY_ID },
+    { id:'dal2', action:'upload',       user_id:DEMO_USER_ID, user_email:'demo@systemesged.fr', resource_type:'document', resource_id:'ddoc1', details:'Import: Rapport annuel 2024.pdf', severity:'info',    created_at:day(2),  company_id:DEMO_COMPANY_ID },
+    { id:'dal3', action:'share_doc',    user_id:DEMO_USER_ID, user_email:'demo@systemesged.fr', resource_type:'document', resource_id:'ddoc1', details:'Partagé avec jean.dupont@demo.fr',severity:'info',    created_at:day(2),  company_id:DEMO_COMPANY_ID },
+    { id:'dal4', action:'scope_change', user_id:'demo_user_002', user_email:'jean.dupont@demo.fr', resource_type:'document', resource_id:'ddoc3', details:'Portée modifiée → Entreprise',  severity:'warning', created_at:day(6),  company_id:DEMO_COMPANY_ID },
+    { id:'dal5', action:'delete',       user_id:'demo_user_003', user_email:'marie.curie@demo.fr', resource_type:'document', resource_id:'ddoc8', details:'Suppression document',           severity:'warning', created_at:day(9),  company_id:DEMO_COMPANY_ID },
+  ];
+  G.systemLogs = [];
+
+  if (typeof _shared !== 'undefined') {
+    _shared.publicLinks = [];
+  }
+
+  // ── Bloquer les écritures Supabase en mode démo ──────
+  G._isDemo = true;
+
+  // ── Démarrer l'application ───────────────────────────
+  G.currentFolderId = null;
+  G.currentView     = 'dashboard';
+
+  if (btn)     { btn.disabled = false; btn.style.opacity = '1'; }
+  if (btnText) btnText.innerHTML = '<i class="fas fa-rocket mr-2"></i>Accès démo';
+
+  updateUI();
+  switchToMainApp();
+  showToast('🎉 Mode démo activé — explorez librement !', 'success');
+}
 async function oauthLogin(provider) {
   try {
     const { error } = await G.supabase.auth.signInWithOAuth({
@@ -1862,6 +1965,7 @@ function removeUploadTag(idx) {
 }
 
 async function uploadDocument() {
+  if (G._isDemo) { showToast('Mode démo : import désactivé — rechargez la page pour créer un vrai compte', 'warning'); return; }
   if (G.selectedFiles.length === 0) {
     showToast('Aucun fichier sélectionné', 'warning');
     return;
@@ -2329,6 +2433,7 @@ function shareCurrentDocument() {
 }
 
 async function deleteDocument(docId) {
+if (G._isDemo) { showToast('Mode démo : suppression désactivée', 'warning'); return; }
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
 
@@ -7546,7 +7651,7 @@ function handleNewVersionFile(input, docId) {
 
 // ─── Utilitaires ───
 async function addAuditLog(action, targetType, targetId, details = '') {
-  if (!G.currentUser || !G.supabase) return;
+ if (G._isDemo) return; // Mode démo : pas d'écriture Supabase
   try {
     const log = {
       id: generateId(),
