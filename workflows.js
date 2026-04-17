@@ -91,33 +91,43 @@ function switchSharedTab(tab) {
   _shared.currentTab = tab;
   _shared.bulkSelected.clear();
   _updateBulkBar();
-  document.querySelectorAll('.shared-panel').forEach(p => p.classList.add('hidden'));
+
+  // Mise à jour des onglets
   document.querySelectorAll('.shared-tab').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`sharedTab-${tab}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  // Panels
+  document.querySelectorAll('.shared-panel').forEach(p => p.classList.add('hidden'));
   const panel = document.getElementById(`shared-panel-${tab}`);
-  const tabBtn = document.getElementById(`sharedTab-${tab}`);
   if (panel) panel.classList.remove('hidden');
-  if (tabBtn) tabBtn.classList.add('active');
+
   if (tab === 'links') _populatePublicLinkDocSelector();
-  G.sharedTab = tab === 'received' ? 'received' : 'sent';
+
   renderShared();
 }
 
 async function renderShared() {
+  if (!G.currentUser) return;
+
   try {
-    if (G.supabase && G.currentUser) {
-      const [sentRes, receivedRes, linksRes] = await Promise.all([
-        G.supabase.from('shares').select('*').eq('sender_id', G.currentUser.id),
-        G.supabase.from('shares').select('*').eq('recipient_email', G.currentUser.email),
-        G.supabase.from('public_shares').select('*').eq('created_by', G.currentUser.id)
-      ]);
-      const merged = new Map();
-      [...(sentRes.data || []), ...(receivedRes.data || [])].forEach(s => merged.set(s.id, s));
-      G.shares = Array.from(merged.values());
-      if (!linksRes.error) _shared.publicLinks = linksRes.data || [];
-    }
+    const [sentRes, receivedRes, linksRes] = await Promise.all([
+      G.supabase.from('shares').select('*').eq('sender_id', G.currentUser.id),
+      G.supabase.from('shares').select('*').eq('recipient_email', G.currentUser.email),
+      G.supabase.from('public_shares').select('*').eq('created_by', G.currentUser.id)
+    ]);
+
+    const allShares = new Map();
+    (sentRes.data || []).forEach(s => allShares.set(s.id, s));
+    (receivedRes.data || []).forEach(s => allShares.set(s.id, s));
+    G.shares = Array.from(allShares.values());
+
+    if (!linksRes.error) _shared.publicLinks = linksRes.data || [];
   } catch (err) {
-    console.warn('renderShared: rechargement partiel échoué', err);
+    console.warn('renderShared: erreur', err);
+    showToast('Erreur chargement des partages', 'error');
   }
+
   _updateKPIs();
   switch (_shared.currentTab) {
     case 'received': _renderReceived(); break;
@@ -125,28 +135,25 @@ async function renderShared() {
     case 'links':    _renderLinks();    break;
     case 'expired':  _renderExpired();  break;
   }
-  _renderActivityChart(30);
 }
 
 function _updateKPIs() {
   if (!G.currentUser) return;
-  const email  = G.currentUser.email;
+  const email = G.currentUser.email;
   const userId = G.currentUser.id;
+
   const received = G.shares.filter(s => s.recipient_email === email && s.status === 'active' && !_isExpired(s)).length;
   const sent = G.shares.filter(s => s.sender_id === userId && s.status === 'active' && !_isExpired(s)).length;
   const links = (_shared.publicLinks || []).filter(l => l.created_by === userId && l.status === 'active' && !_isExpired(l)).length;
   const expired = G.shares.filter(s => s.sender_id === userId && (s.status === 'revoked' || _isExpired(s))).length;
+
   _setText('kpiReceivedCount', received);
   _setText('kpiSentCount', sent);
   _setText('kpiLinksCount', links);
   _setText('kpiExpiredCount', expired);
+
   _setBadge('receivedCountBadge', received);
   _setBadge('sentCountBadge', sent);
-  const totalViews = G.shares.reduce((acc, s) => acc + (s.views || 0), 0);
-  const totalDownloads = G.shares.reduce((acc, s) => acc + (s.downloads || 0), 0);
-  _setText('statTotalShares', G.shares.filter(s => s.sender_id === userId).length);
-  _setText('statTotalViews', totalViews);
-  _setText('statTotalDownloads', totalDownloads);
 }
 
 function filterSharedView() {
@@ -170,7 +177,7 @@ function clearSharedFilters() {
 function _applyFilters(list) {
   const { filterQuery: q, filterPerm: p, filterStatus: s } = _shared;
   return list.filter(share => {
-    const doc     = G.documents.find(d => d.id === share.document_id);
+    const doc = G.documents.find(d => d.id === share.document_id);
     const docName = (doc?.name || '').toLowerCase();
     const email   = (share.recipient_email || '').toLowerCase();
     const matchQ  = !q || docName.includes(q) || email.includes(q);
@@ -183,7 +190,7 @@ function _applyFilters(list) {
 
 function _shareStatus(share) {
   if (share.status === 'revoked') return 'revoked';
-  if (_isExpired(share))          return 'expired';
+  if (_isExpired(share)) return 'expired';
   return 'active';
 }
 
@@ -193,26 +200,36 @@ function _isExpired(share) {
 }
 
 function _renderReceived() {
-  const list  = document.getElementById('sharedReceivedList');
+  const container = document.getElementById('sharedReceivedList');
   const empty = document.getElementById('sharedReceivedEmpty');
-  if (!list || !empty) return;
+  if (!container || !empty) return;
+
   const email = G.currentUser?.email;
-  let received = G.shares.filter(s => s.recipient_email === email && s.status !== 'revoked' && !_isExpired(s));
+  let received = G.shares.filter(s =>
+    s.recipient_email === email &&
+    s.status !== 'revoked' &&
+    !_isExpired(s)
+  );
   received = _applyFilters(received);
+
   _setText('sharedResultCount', `${received.length} partage${received.length > 1 ? 's' : ''}`);
+
   if (received.length === 0) {
     empty.classList.remove('hidden');
-    list.classList.add('hidden');
+    container.classList.add('hidden');
     return;
   }
+
   empty.classList.add('hidden');
-  list.classList.remove('hidden');
-  list.innerHTML = received.map(share => {
-    const doc     = G.documents.find(d => d.id === share.document_id);
+  container.classList.remove('hidden');
+
+  container.innerHTML = received.map(share => {
+    const doc = G.documents.find(d => d.id === share.document_id);
     const docName = doc?.name || 'Document inconnu';
-    const sender  = G.users.find(u => u.id === share.sender_id);
+    const sender = G.users.find(u => u.id === share.sender_id);
     const senderLabel = sender?.name || share.sender_id?.substring(0, 8) || 'Inconnu';
     const expireLabel = share.expires_at ? `Expire le ${formatDate(share.expires_at)}` : 'Accès illimité';
+
     return `
     <div class="share-card glass-card rounded-xl border border-purple-500/20 p-4 hover:border-purple-400/40 group" data-share-id="${share.id}">
       <div class="flex items-start gap-3">
@@ -243,28 +260,36 @@ function _renderReceived() {
 }
 
 function _renderSent() {
-  const list  = document.getElementById('sharedSentList');
+  const container = document.getElementById('sharedSentList');
   const empty = document.getElementById('sharedSentEmpty');
-  if (!list || !empty) return;
+  if (!container || !empty) return;
+
   let sent = G.shares.filter(s => s.sender_id === G.currentUser?.id);
   sent = _applyFilters(sent);
+
   _setText('sharedResultCount', `${sent.length} partage${sent.length > 1 ? 's' : ''}`);
+
   if (sent.length === 0) {
     empty.classList.remove('hidden');
-    list.classList.add('hidden');
+    container.classList.add('hidden');
     return;
   }
+
   empty.classList.add('hidden');
-  list.classList.remove('hidden');
-  list.innerHTML = sent.map(share => {
-    const doc     = G.documents.find(d => d.id === share.document_id);
+  container.classList.remove('hidden');
+
+  container.innerHTML = sent.map(share => {
+    const doc = G.documents.find(d => d.id === share.document_id);
     const docName = doc?.name || 'Document inconnu';
-    const status  = _shareStatus(share);
+    const status = _shareStatus(share);
     const isSelected = _shared.bulkSelected.has(share.id);
+
     return `
     <div class="share-card glass-card rounded-xl border ${_cardBorderClass(status)} p-4 group ${isSelected ? 'selected' : ''}" data-share-id="${share.id}">
       <div class="flex items-start gap-3">
-        <div class="share-checkbox flex-shrink-0 mt-0.5"><input type="checkbox" class="rounded" ${isSelected ? 'checked' : ''} onchange="toggleBulkSelect('${share.id}', this.checked)" onclick="event.stopPropagation()"></div>
+        <div class="share-checkbox flex-shrink-0 mt-0.5">
+          <input type="checkbox" class="rounded" ${isSelected ? 'checked' : ''} onchange="toggleBulkSelect('${share.id}', this.checked)" onclick="event.stopPropagation()">
+        </div>
         <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500/15 to-purple-500/15 flex items-center justify-center text-lg flex-shrink-0">
           <i class="fas ${getFileIcon(doc?.type).split(' ')[0]} ${getFileIcon(doc?.type).split(' ')[1] || 'text-blue-400'}"></i>
         </div>
@@ -284,7 +309,12 @@ function _renderSent() {
         </div>
         <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <button onclick="openShareDetailModal('${share.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-all" title="Détails & activité"><i class="fas fa-chart-line text-sm"></i></button>
-          ${status === 'active' ? `<button onclick="extendShare('${share.id}', 7)" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-all" title="Prolonger 7 jours"><i class="fas fa-calendar-plus text-sm"></i></button><button onclick="revokeShare('${share.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Révoquer"><i class="fas fa-ban text-sm"></i></button>` : `<button onclick="renewShare('${share.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-all" title="Renouveler"><i class="fas fa-rotate text-sm"></i></button>`}
+          ${status === 'active' ? `
+            <button onclick="extendShare('${share.id}', 7)" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-all" title="Prolonger 7 jours"><i class="fas fa-calendar-plus text-sm"></i></button>
+            <button onclick="revokeShare('${share.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Révoquer"><i class="fas fa-ban text-sm"></i></button>
+          ` : `
+            <button onclick="renewShare('${share.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-all" title="Renouveler"><i class="fas fa-rotate text-sm"></i></button>
+          `}
           <button onclick="deleteShareRecord('${share.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400/50 hover:text-red-400 transition-all" title="Supprimer de l'historique"><i class="fas fa-trash text-sm"></i></button>
         </div>
       </div>
@@ -315,10 +345,10 @@ function _renderLinks() {
   empty.classList.add('hidden');
   list.classList.remove('hidden');
   list.innerHTML = links.map(link => {
-    const doc     = G.documents.find(d => d.id === link.document_id);
+    const doc = G.documents.find(d => d.id === link.document_id);
     const docName = doc?.name || 'Document';
     const expired = _isExpired(link);
-    const url     = `${window.location.origin}/public/${link.token}`;
+    const url = `${window.location.origin}/public/${link.token}`;
     return `
     <div class="share-card glass-card rounded-xl border ${expired ? 'border-orange-500/20' : 'border-green-500/20'} p-4 group">
       <div class="flex items-start gap-3">
@@ -340,7 +370,10 @@ function _renderLinks() {
         </div>
         <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <button onclick="_copyText('${url}')" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-all" title="Copier le lien"><i class="fas fa-copy text-sm"></i></button>
-          ${!expired ? `<button onclick="extendPublicLink('${link.id}', 7)" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-all" title="Prolonger"><i class="fas fa-calendar-plus text-sm"></i></button><button onclick="revokePublicLink('${link.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Révoquer"><i class="fas fa-ban text-sm"></i></button>` : ''}
+          ${!expired ? `
+            <button onclick="extendPublicLink('${link.id}', 7)" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-all" title="Prolonger"><i class="fas fa-calendar-plus text-sm"></i></button>
+            <button onclick="revokePublicLink('${link.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Révoquer"><i class="fas fa-ban text-sm"></i></button>
+          ` : ''}
           <button onclick="deletePublicLink('${link.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400/50 hover:text-red-400 transition-all" title="Supprimer"><i class="fas fa-trash text-sm"></i></button>
         </div>
       </div>
@@ -362,9 +395,9 @@ function _renderExpired() {
   empty.classList.add('hidden');
   list.classList.remove('hidden');
   list.innerHTML = expired.map(share => {
-    const doc     = G.documents.find(d => d.id === share.document_id);
+    const doc = G.documents.find(d => d.id === share.document_id);
     const docName = doc?.name || 'Document inconnu';
-    const status  = _shareStatus(share);
+    const status = _shareStatus(share);
     return `
     <div class="share-card glass-card rounded-xl border border-orange-500/15 p-4 group opacity-75 hover:opacity-100">
       <div class="flex items-start gap-3">
@@ -396,9 +429,9 @@ function _renderActivityChart(days) {
   if (!container) return;
   const bars = [];
   for (let i = days - 1; i >= 0; i--) {
-    const date  = new Date();
+    const date = new Date();
     date.setDate(date.getDate() - i);
-    const ds    = date.toDateString();
+    const ds = date.toDateString();
     const count = G.shares.filter(s => new Date(s.created_at).toDateString() === ds).length;
     bars.push({ count, label: date.toLocaleDateString('fr-FR', { month:'short', day:'numeric' }) });
   }
@@ -432,7 +465,7 @@ async function revokeReceivedShare(shareId) {
 async function extendShare(shareId, days) {
   const share = G.shares.find(s => s.id === shareId);
   if (!share) return;
-  const base    = share.expires_at ? new Date(share.expires_at) : new Date();
+  const base = share.expires_at ? new Date(share.expires_at) : new Date();
   const newDate = new Date(base);
   newDate.setDate(newDate.getDate() + days);
   try {
@@ -483,14 +516,14 @@ async function purgeExpiredShares() {
 
 function toggleBulkSelect(shareId, checked) {
   if (checked) _shared.bulkSelected.add(shareId);
-  else         _shared.bulkSelected.delete(shareId);
+  else _shared.bulkSelected.delete(shareId);
   _updateBulkBar();
 }
 
 function _updateBulkBar() {
-  const bar   = document.getElementById('sharedBulkBar');
+  const bar = document.getElementById('sharedBulkBar');
   const count = document.getElementById('sharedBulkCount');
-  const n     = _shared.bulkSelected.size;
+  const n = _shared.bulkSelected.size;
   if (bar) bar.classList.toggle('hidden', n === 0);
   if (count) count.textContent = `${n} sélectionné(s)`;
 }
@@ -548,7 +581,7 @@ async function createPublicLink() {
 }
 
 async function _doCreatePublicLink(docId, expDays, perm, password, maxViews) {
-  const token   = generateId();
+  const token = generateId();
   const expires = expDays > 0 ? new Date(Date.now() + expDays * 86400000).toISOString() : null;
   const record = {
     id: generateId(), document_id: docId, token, permission: perm, expires_at: expires,
@@ -585,7 +618,7 @@ async function deletePublicLink(linkId) {
 async function extendPublicLink(linkId, days) {
   const link = _shared.publicLinks.find(l => l.id === linkId);
   if (!link) return;
-  const base    = link.expires_at ? new Date(link.expires_at) : new Date();
+  const base = link.expires_at ? new Date(link.expires_at) : new Date();
   const newDate = new Date(base);
   newDate.setDate(newDate.getDate() + days);
   try { await G.supabase.from('public_shares').update({ expires_at: newDate.toISOString() }).eq('id', linkId); } catch (_) {}
@@ -857,24 +890,27 @@ async function shareDocument() {
   if (!email) { showToast('Veuillez entrer un email', 'warning'); return; }
   const docId = G.currentDocId;
   if (!docId) { showToast('Aucun document sélectionné', 'error'); return; }
-  // Vérifier que l'utilisateur existe dans la même entreprise
-  const { data: targetUser, error: userError } = await G.supabase
-    .from('profiles').select('id').eq('email', email).eq('company_id', G.currentUser.companyId).single();
-  if (userError || !targetUser) {
-    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
-    return;
-  }
-  const perm    = document.getElementById('sharePermission')?.value || 'view';
-  const expDays = parseInt(document.getElementById('shareExpiration')?.value || '0');
-  const expires = expDays > 0 ? new Date(Date.now() + expDays * 86400000).toISOString() : null;
-  const share = { id: generateId(), document_id: docId, sender_id: G.currentUser.id, recipient_email: email, recipient_id: targetUser.id, permission: perm, expires_at: expires, status: 'active', views: 0, downloads: 0, created_at: new Date().toISOString() };
-  const { error } = await G.supabase.from('shares').insert(share);
-  if (error) { showToast('Erreur partage : ' + error.message, 'error'); return; }
-  G.shares.push(share);
-  showToast(`Document partagé avec ${email}`, 'success');
-  closeShareModal();
-  updateBadges();
-  await addAuditLog('share', 'document', docId, `Partagé avec ${email} (${perm})`);
+  try {
+    const { data: targetUser } = await G.supabase.from('profiles').select('id').eq('email', email).eq('company_id', G.currentUser.companyId).single();
+    if (!targetUser) { showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error'); return; }
+    const existing = G.shares.find(s => s.document_id === docId && s.recipient_email === email && s.status === 'active');
+    if (existing) { showToast('Ce document est déjà partagé avec cet utilisateur', 'warning'); return; }
+    const perm    = document.getElementById('sharePermission')?.value || 'view';
+    const expDays = parseInt(document.getElementById('shareExpiration')?.value || '0');
+    const expires = expDays > 0 ? new Date(Date.now() + expDays * 86400000).toISOString() : null;
+    const share = {
+      id: generateId(), document_id: docId, sender_id: G.currentUser.id, recipient_email: email,
+      recipient_id: targetUser.id, permission: perm, expires_at: expires, status: 'active', views: 0, downloads: 0, created_at: new Date().toISOString()
+    };
+    const { error } = await G.supabase.from('shares').insert(share);
+    if (error) throw error;
+    G.shares.push(share);
+    showToast(`Document partagé avec ${email}`, 'success');
+    closeShareModal();
+    updateBadges();
+    await addAuditLog('share', 'document', docId, `Partagé avec ${email} (${perm})`);
+    if (G.currentView === 'shared') renderShared();
+  } catch (err) { showToast('Erreur partage : ' + err.message, 'error'); }
 }
 
 async function generatePublicLink(docId, expiresInDays = 7) {
