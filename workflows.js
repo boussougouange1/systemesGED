@@ -857,27 +857,24 @@ async function shareDocument() {
   if (!email) { showToast('Veuillez entrer un email', 'warning'); return; }
   const docId = G.currentDocId;
   if (!docId) { showToast('Aucun document sélectionné', 'error'); return; }
-  try {
-    const { data: targetUser } = await G.supabase.from('profiles').select('id').eq('email', email).eq('company_id', G.currentUser.companyId).single();
-    if (!targetUser) { showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error'); return; }
-    const existing = G.shares.find(s => s.document_id === docId && s.recipient_email === email && s.status === 'active');
-    if (existing) { showToast('Ce document est déjà partagé avec cet utilisateur', 'warning'); return; }
-    const perm    = document.getElementById('sharePermission')?.value || 'view';
-    const expDays = parseInt(document.getElementById('shareExpiration')?.value || '0');
-    const expires = expDays > 0 ? new Date(Date.now() + expDays * 86400000).toISOString() : null;
-    const share = {
-      id: generateId(), document_id: docId, sender_id: G.currentUser.id, recipient_email: email,
-      recipient_id: targetUser.id, permission: perm, expires_at: expires, status: 'active', views: 0, downloads: 0, created_at: new Date().toISOString()
-    };
-    const { error } = await G.supabase.from('shares').insert(share);
-    if (error) throw error;
-    G.shares.push(share);
-    showToast(`Document partagé avec ${email}`, 'success');
-    closeShareModal();
-    updateBadges();
-    await addAuditLog('share', 'document', docId, `Partagé avec ${email} (${perm})`);
-    if (G.currentView === 'shared') renderShared();
-  } catch (err) { showToast('Erreur partage : ' + err.message, 'error'); }
+  // Vérifier que l'utilisateur existe dans la même entreprise
+  const { data: targetUser, error: userError } = await G.supabase
+    .from('profiles').select('id').eq('email', email).eq('company_id', G.currentUser.companyId).single();
+  if (userError || !targetUser) {
+    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
+    return;
+  }
+  const perm    = document.getElementById('sharePermission')?.value || 'view';
+  const expDays = parseInt(document.getElementById('shareExpiration')?.value || '0');
+  const expires = expDays > 0 ? new Date(Date.now() + expDays * 86400000).toISOString() : null;
+  const share = { id: generateId(), document_id: docId, sender_id: G.currentUser.id, recipient_email: email, recipient_id: targetUser.id, permission: perm, expires_at: expires, status: 'active', views: 0, downloads: 0, created_at: new Date().toISOString() };
+  const { error } = await G.supabase.from('shares').insert(share);
+  if (error) { showToast('Erreur partage : ' + error.message, 'error'); return; }
+  G.shares.push(share);
+  showToast(`Document partagé avec ${email}`, 'success');
+  closeShareModal();
+  updateBadges();
+  await addAuditLog('share', 'document', docId, `Partagé avec ${email} (${perm})`);
 }
 
 async function generatePublicLink(docId, expiresInDays = 7) {
