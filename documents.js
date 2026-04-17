@@ -1,28 +1,27 @@
 // ============================================
-// SystemesGED v7.2 — MODULE : documents.js
-// Responsabilités :
-//   - Rendu des documents (renderDocuments, renderDocCard, renderDocListItem)
-//   - Filtres et onglets (switchDocsTab, filterDocuments, filterByTag, filterByType)
-//   - Upload (openUploadModal, uploadDocument, handleDrop, renderSelectedFiles)
-//   - Prévisualisation et téléchargement (openPreviewModal, downloadDocument)
-//   - Suppression / restauration / corbeille (deleteDocument, restoreDocument, loadDeletedDocs)
-//   - Déplacement de documents (openMoveModal, confirmMoveDocument)
-//   - Collaboration / invitation (openCollabModal, inviteCollaborator)
-//   - Partage direct depuis document (openShareModal, shareDocument, loadShareHistory)
-//   - Scan sécurité, export CSV/JSON
+// SystemesGED v7.2 — MODULE : documents.js (CORRIGÉ)
+// Responsabilités : rendu des documents, filtres, upload, prévisualisation, suppression, déplacement, collaboration, partage
 // ============================================
 
-// Dépendances : auth.js (G, CONFIG), ui.js (showToast, formatBytes, formatDate, getFileIcon, escapeHtml, addAuditLog)
+// Dépendances : auth.js (G, CONFIG), ui.js (showToast, formatBytes, formatDate, getFileIcon, escapeHtml, addAuditLog, generateId, renderDocCard, renderDocListItem)
+
+// Sécurisation de l'éditeur riche : polyfill DOMPurify minimal
+if (typeof DOMPurify === 'undefined') {
+  window.DOMPurify = { sanitize: (dirty) => dirty.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 1. RENDU DES DOCUMENTS
+// ═══════════════════════════════════════════════════════════════════════
 
 async function renderDocuments() {
   const grid = document.getElementById('documentGrid');
   if (!grid) { console.warn('documentGrid non trouvé'); return; }
-
   console.log('🔄 Rendu des documents, tab:', G.docsTab);
 
-  // Recharger les documents depuis Supabase si disponible
-  if (G.supabase && G.currentUser?.companyId) {
-    try {
+  // Recharger depuis Supabase avec try/catch
+  try {
+    if (G.supabase && G.currentUser?.companyId) {
       const { data, error } = await G.supabase
         .from('documents')
         .select('*')
@@ -30,9 +29,9 @@ async function renderDocuments() {
         .eq('is_deleted', false)
         .order('created_at', { ascending: false });
       if (!error && data) G.documents = data;
-    } catch (err) {
-      console.warn('renderDocuments: rechargement échoué', err);
     }
+  } catch (err) {
+    console.warn('renderDocuments: rechargement échoué', err);
   }
 
   let filtered = G.documents.filter(d => !d.is_deleted);
@@ -48,7 +47,6 @@ async function renderDocuments() {
   if (G.docsTab === 'company') {
     filtered = filtered.filter(d => d.scope === 'company');
   } else if (G.docsTab === 'personal') {
-    // Admin & manager voient les personnels de TOUS les utilisateurs
     if (isManager) {
       filtered = filtered.filter(d => d.scope === 'personal');
     } else {
@@ -57,10 +55,7 @@ async function renderDocuments() {
   } else if (G.docsTab === 'mine') {
     filtered = filtered.filter(d => d.owner_id === G.currentUser.id);
   } else if (G.docsTab === 'all') {
-    // Onglet "Tous" : admin & manager uniquement — aucun filtre scope
-    if (!isManager) filtered = filtered.filter(d =>
-      d.scope === 'company' || d.owner_id === G.currentUser.id
-    );
+    if (!isManager) filtered = filtered.filter(d => d.scope === 'company' || d.owner_id === G.currentUser.id);
   } else if (G.docsTab === 'shared') {
     const sharedIds = new Set(
       G.shares
@@ -69,6 +64,7 @@ async function renderDocuments() {
     );
     filtered = filtered.filter(d => sharedIds.has(d.id));
   }
+
   // Filtre par type
   const typeFilter = document.getElementById('filterType')?.value;
   if (typeFilter) filtered = filtered.filter(d => d.type === typeFilter);
@@ -171,10 +167,7 @@ async function changeDocScope(docId, newScope) {
       'scope_change', 'document', docId,
       `Portée modifiée → ${label} par ${G.currentUser.email}`
     );
-    showToast(
-      `<i class="fas ${icon} mr-2"></i>"${doc.name}" → ${label}`,
-      'success'
-    );
+    showToast(`<i class="fas ${icon} mr-2"></i>"${doc.name}" → ${label}`, 'success');
     renderDocuments();
   } catch (err) {
     showToast('Erreur : ' + err.message, 'error');
@@ -260,9 +253,9 @@ function renderDocCard(doc) {
       <!-- Tags et scope -->
       <div class="flex items-center justify-between">
         <div class="flex gap-1 flex-wrap">
-  ${(doc.tags || []).slice(0, 2).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
-  ${(doc.tags || []).length > 2 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length - 2}</span>` : ''}
-</div>
+          ${(doc.tags || []).slice(0, 2).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
+          ${(doc.tags || []).length > 2 ? `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">+${doc.tags.length - 2}</span>` : ''}
+        </div>
         ${buildScopeBadge(doc)}
       </div>
       
@@ -308,7 +301,7 @@ function renderDocListItem(doc) {
           ${buildScopeBadge(doc)}
         </div>
         <div class="flex gap-2 mt-1">
-  ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
+          ${(doc.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 cursor-pointer hover:bg-blue-400/30" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('')}
         </div>
       </div>
       
@@ -380,8 +373,8 @@ async function switchDocsTab(tab) {
   }
 
   // Recharger depuis Supabase selon l'onglet
-  if (G.supabase && G.currentUser?.companyId) {
-    try {
+  try {
+    if (G.supabase && G.currentUser?.companyId) {
       let query = G.supabase.from('documents').select('*')
         .eq('is_deleted', false)
         .eq('company_id', G.currentUser.companyId)
@@ -390,7 +383,6 @@ async function switchDocsTab(tab) {
       if (tab === 'company') {
         query = query.eq('scope', 'company');
       } else if (tab === 'personal') {
-        // Admin/manager voient tous les personnels, les autres seulement les leurs
         const isManager = G.currentUser?.role === 'admin' || G.currentUser?.isSystemAdmin || G.currentUser?.role === 'manager';
         if (isManager) {
           query = query.eq('scope', 'personal');
@@ -402,7 +394,6 @@ async function switchDocsTab(tab) {
       } else if (tab === 'mine') {
         query = query.eq('owner_id', G.currentUser.id);
       } else if (tab === 'shared') {
-        // Charger les partages reçus puis filtrer les documents correspondants
         const { data: receivedShares } = await G.supabase
           .from('shares')
           .select('document_id')
@@ -419,16 +410,15 @@ async function switchDocsTab(tab) {
 
       const { data, error } = await query;
       if (!error && data) {
-        // Fusionner avec G.documents (ne pas perdre les autres onglets)
         const newIds = new Set(data.map(d => d.id));
         G.documents = [
           ...data,
           ...G.documents.filter(d => !newIds.has(d.id))
         ];
       }
-    } catch (err) {
-      console.warn('switchDocsTab: erreur Supabase', err);
     }
+  } catch (err) {
+    console.warn('switchDocsTab: erreur Supabase', err);
   }
 
   renderDocuments();
@@ -450,7 +440,7 @@ function clearFilters() {
   const filterDate = document.getElementById('filterDate');
   if (filterType) filterType.value = '';
   if (filterDate) filterDate.value = '';
-  G.currentTagFilter = null;   // Ajout
+  G.currentTagFilter = null;
   renderDocuments();
 }
 
@@ -465,13 +455,17 @@ function filterByTag(tagName) {
   renderDocuments();
   showToast(`Filtre appliqué : ${tagName}`, 'info');
 }
+
 function clearTagFilter() {
   G.currentTagFilter = null;
   renderDocuments();
   showToast('Filtre tag réinitialisé', 'info');
 }
 
-// ─── Upload ───
+// ═══════════════════════════════════════════════════════════════════════
+// 2. UPLOAD (avec validation stricte des extensions)
+// ═══════════════════════════════════════════════════════════════════════
+
 function openUploadModal() {
   const modal = document.getElementById('uploadModal');
   if (modal) modal.classList.remove('hidden');
@@ -512,41 +506,17 @@ function handleDocDrop(e) {
   const dropZone = document.getElementById('docDropZone');
   if (dropZone) {
     dropZone.classList.remove('drag-over');
-    // Ajouter un effet visuel temporaire
     dropZone.style.backgroundColor = 'rgba(59,130,246,0.05)';
-    setTimeout(() => {
-      dropZone.style.backgroundColor = '';
-    }, 300);
+    setTimeout(() => { dropZone.style.backgroundColor = ''; }, 300);
   }
-  
   const files = Array.from(e.dataTransfer.files);
-  
-  if (files.length === 0) {
-    showToast('Aucun fichier détecté', 'warning');
-    return;
-  }
-  
-  // Filtrer les fichiers trop volumineux
+  if (files.length === 0) { showToast('Aucun fichier détecté', 'warning'); return; }
   const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
   const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
-  
-  if (invalidFiles.length > 0) {
-    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
-  }
-  
-  if (validFiles.length === 0) {
-    showToast('Aucun fichier valide à importer', 'warning');
-    return;
-  }
-  
+  if (invalidFiles.length > 0) showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
+  if (validFiles.length === 0) { showToast('Aucun fichier valide à importer', 'warning'); return; }
   addFilesToSelection(validFiles);
-  
-  // Auto-upload après ajout
-  setTimeout(() => {
-    if (G.selectedFiles.length > 0) {
-      uploadDocument();
-    }
-  }, 100);
+  setTimeout(() => { if (G.selectedFiles.length > 0) uploadDocument(); }, 100);
 }
 
 function handleFileSelect(e) {
@@ -556,44 +526,20 @@ function handleFileSelect(e) {
 
 function handleFilePickerSelect(e) {
   const files = Array.from(e.target.files);
-  
   if (files.length === 0) return;
-  
-  // Filtrer les fichiers trop volumineux
   const validFiles = files.filter(f => f.size <= CONFIG.maxFileSize);
   const invalidFiles = files.filter(f => f.size > CONFIG.maxFileSize);
-  
-  if (invalidFiles.length > 0) {
-    showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
-  }
-  
-  if (validFiles.length === 0) {
-    showToast('Aucun fichier valide à importer', 'warning');
-    return;
-  }
-  
+  if (invalidFiles.length > 0) showToast(`${invalidFiles.length} fichier(s) ignoré(s) (taille > ${formatBytes(CONFIG.maxFileSize)})`, 'warning');
+  if (validFiles.length === 0) { showToast('Aucun fichier valide à importer', 'warning'); return; }
   addFilesToSelection(validFiles);
-  
-  // Auto-upload après sélection
-  setTimeout(() => {
-    if (G.selectedFiles.length > 0) {
-      uploadDocument();
-    }
-  }, 100);
-  
-  // Réinitialiser l'input pour permettre de sélectionner à nouveau les mêmes fichiers
+  setTimeout(() => { if (G.selectedFiles.length > 0) uploadDocument(); }, 100);
   e.target.value = '';
 }
 
 function renderSelectedFiles() {
   const list = document.getElementById('selectedFilesList');
   if (!list) return;
-  
-  if (G.selectedFiles.length === 0) {
-    list.innerHTML = '';
-    return;
-  }
-  
+  if (G.selectedFiles.length === 0) { list.innerHTML = ''; return; }
   list.innerHTML = G.selectedFiles.map((file, idx) => `
     <div class="flex items-center justify-between p-2 rounded-lg bg-blue-900/30 border border-blue-500/20">
       <div class="flex items-center gap-2 min-w-0">
@@ -624,7 +570,6 @@ function addUploadTag() {
 function renderUploadTags() {
   const container = document.getElementById('uploadTagsContainer');
   if (!container) return;
-  
   container.innerHTML = G.uploadTags.map((t, i) => `
     <span class="tag">
       ${t}
@@ -638,88 +583,63 @@ function removeUploadTag(idx) {
   renderUploadTags();
 }
 
+// Upload avec vérification des extensions
 async function uploadDocument() {
   if (G._isDemo) { showToast('Mode démo : import désactivé — rechargez la page pour créer un vrai compte', 'warning'); return; }
-  if (G.selectedFiles.length === 0) {
-    showToast('Aucun fichier sélectionné', 'warning');
-    return;
-  }
+  if (G.selectedFiles.length === 0) { showToast('Aucun fichier sélectionné', 'warning'); return; }
 
-  // Calculer l'espace utilisé
+  // Vérifier l'espace
   const used = G.documents.reduce((sum, d) => sum + (d.size || 0), 0);
   const limit = CONFIG.plans[G.currentUser.plan].storage;
   const newTotalSize = G.selectedFiles.reduce((sum, f) => sum + f.size, 0);
-
   if (used + newTotalSize > limit) {
     showToast(`Espace insuffisant. Libre : ${formatBytes(limit - used)}`, 'error');
     return;
   }
-  
-  // Vérifier la connexion Supabase
-  if (!G.supabase) {
-    showToast('Erreur de connexion à la base de données', 'error');
-    return;
-  }
-  
-  // Vérifier le dossier courant
+
+  if (!G.supabase) { showToast('Erreur de connexion à la base de données', 'error'); return; }
   if (!G.currentFolderId) {
     await setRootFolder();
-    if (!G.currentFolderId) {
-      showToast('Erreur: dossier racine non trouvé', 'error');
-      return;
-    }
+    if (!G.currentFolderId) { showToast('Erreur: dossier racine non trouvé', 'error'); return; }
   }
-  
+
   const folderId = G.currentFolderId;
-  let successCount = 0;
-  let errorCount = 0;
-  
-  // Afficher une barre de progression
+  let successCount = 0, errorCount = 0;
+
+  // Extensions autorisées (sécurité)
+  const allowedExt = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'txt'];
+
   const progressContainer = document.getElementById('uploadProgress');
   const progressBar = document.getElementById('uploadProgressBar');
   const progressPercent = document.getElementById('uploadPercent');
   const statusText = document.getElementById('uploadStatusText');
-  
-  if (progressContainer) {
-    progressContainer.classList.remove('hidden');
-  }
-  
+  if (progressContainer) progressContainer.classList.remove('hidden');
+
   for (let i = 0; i < G.selectedFiles.length; i++) {
     const file = G.selectedFiles[i];
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!allowedExt.includes(ext)) {
+      showToast(`Type de fichier non autorisé : .${ext}`, 'error');
+      errorCount++;
+      continue;
+    }
+
     const docId = generateId();
-    const fileExt = file.name.split('.').pop().toLowerCase();
-    const storagePath = `${G.currentUser.companyId}/${docId}.${fileExt}`;
-    
-    // Mettre à jour la progression
+    const storagePath = `${G.currentUser.companyId}/${docId}.${ext}`;
     const percent = Math.round(((i + 1) / G.selectedFiles.length) * 100);
     if (progressBar) progressBar.style.width = `${percent}%`;
     if (progressPercent) progressPercent.textContent = `${percent}%`;
     if (statusText) statusText.textContent = `Import de ${file.name}... (${i + 1}/${G.selectedFiles.length})`;
-    
+
     try {
-      // 1. Upload vers Supabase Storage
       const { error: uploadErr } = await G.supabase.storage
         .from(CONFIG.storageBucket)
-        .upload(storagePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-      
-      if (uploadErr) {
-        console.error('Upload storage error:', uploadErr);
-        throw new Error(`Upload storage: ${uploadErr.message}`);
-      }
-      
-      // 2. Récupérer l'URL publique
-      const { data: publicUrlData } = G.supabase.storage
-  .from(CONFIG.storageBucket)
-  .getPublicUrl(storagePath);
+        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+      if (uploadErr) throw new Error(`Upload storage: ${uploadErr.message}`);
 
-if (!publicUrlData?.publicUrl) {
-  throw new Error("Impossible de récupérer l'URL publique");
-}
-      
-      // 3. Créer l'entrée en base de données
+      const { data: publicUrlData } = G.supabase.storage.from(CONFIG.storageBucket).getPublicUrl(storagePath);
+      if (!publicUrlData?.publicUrl) throw new Error("Impossible de récupérer l'URL publique");
+
       const doc = {
         id: docId,
         name: document.getElementById('docNameInput')?.value.trim() || file.name,
@@ -741,42 +661,25 @@ if (!publicUrlData?.publicUrl) {
         storage_path: storagePath,
         file_url: publicUrlData.publicUrl
       };
-      
+
       const { error: dbErr } = await G.supabase.from('documents').insert(doc);
       if (dbErr) {
         await G.supabase.storage.from(CONFIG.storageBucket).remove([storagePath]);
-  	throw new Error(`Base de données: ${dbErr.message}`);
+        throw new Error(`Base de données: ${dbErr.message}`);
       }
-      
-      // Ajouter à l'état local
+
       G.documents.unshift(doc);
       successCount++;
-      
-      // Log d'audit
       await addAuditLog('upload', 'document', doc.id, `Fichier: ${file.name}, Taille: ${formatBytes(file.size)}`);
-      
     } catch (err) {
       console.error(`Erreur upload ${file.name}:`, err);
       errorCount++;
       showToast(`Erreur: ${file.name} - ${err.message}`, 'error');
     }
   }
-  
-  // Masquer la barre de progression
-  if (progressContainer) {
-    setTimeout(() => {
-      progressContainer.classList.add('hidden');
-      if (progressBar) progressBar.style.width = '0%';
-      if (progressPercent) progressPercent.textContent = '0%';
-    }, 1000);
-  }
-  
-  // Afficher le résumé
-  if (successCount > 0) {
-    showToast(`${successCount} fichier(s) importé(s) avec succès${errorCount > 0 ? `, ${errorCount} erreur(s)` : ''}`, successCount > 0 ? 'success' : 'warning');
-  }
-  
-  // Réinitialiser et rafraîchir
+
+  if (progressContainer) setTimeout(() => progressContainer.classList.add('hidden'), 1000);
+  if (successCount > 0) showToast(`${successCount} fichier(s) importé(s) avec succès${errorCount > 0 ? `, ${errorCount} erreur(s)` : ''}`, successCount > 0 ? 'success' : 'warning');
   G.selectedFiles = [];
   G.uploadTags = [];
   renderUploadTags();
@@ -791,7 +694,6 @@ function setDocScope(scope) {
   G._uploadScope = scope;
   const scopeCompany = document.getElementById('scopeCompany');
   const scopePersonal = document.getElementById('scopePersonal');
-  
   if (scopeCompany && scopePersonal) {
     if (scope === 'company') {
       scopeCompany.classList.add('bg-blue-500/15', 'border-blue-500/40', 'text-blue-300');
@@ -805,7 +707,10 @@ function setDocScope(scope) {
   }
 }
 
-// ─── Preview et téléchargement ───
+// ═══════════════════════════════════════════════════════════════════════
+// 3. PRÉVISUALISATION ET TÉLÉCHARGEMENT
+// ═══════════════════════════════════════════════════════════════════════
+
 function openPreviewModal(docId) {
   G.currentDocId = docId;
   const modal = document.getElementById('previewModal');
@@ -823,16 +728,13 @@ function openPreviewModal(docId) {
   const fileUrl = doc.file_url;
   if (!fileUrl) { hidePreviewLoading(); showUnsupportedPreview(doc); updateDocViews(docId); return; }
 
-  // Détecter l'extension: nom > storage_path > type
   const nameExt  = doc.name && doc.name.includes('.') ? doc.name.split('.').pop().toLowerCase() : '';
   const pathExt  = doc.storage_path ? doc.storage_path.split('.').pop().toLowerCase() : '';
   const fileExt  = nameExt || pathExt;
   const fileType = doc.type || '';
-  const typeToExt = { img:'jpg', pdf:'pdf', doc:'docx', xls:'xlsx', ppt:'pptx', txt:'txt', video:'mp4', audio:'mp3', code:'js' };
-  const effectiveExt = fileExt || typeToExt[fileType] || '';
+  const effectiveExt = fileExt;
   const isImage = fileType === 'img' || ['jpg','jpeg','png','gif','webp','svg','bmp'].includes(effectiveExt);
 
-  // Masquer tous les panneaux
   ['previewFrame','previewImage','previewContent','previewOffice','previewUnsupported'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
@@ -841,7 +743,6 @@ function openPreviewModal(docId) {
   const previewFrame       = document.getElementById('previewFrame');
   const previewImage       = document.getElementById('previewImage');
   const previewContent     = document.getElementById('previewContent');
-  const previewOffice      = document.getElementById('previewOffice');
 
   const imageExts  = ['jpg','jpeg','png','gif','webp','svg','bmp'];
   const pdfExts    = ['pdf'];
@@ -850,33 +751,23 @@ function openPreviewModal(docId) {
 
   try {
     if (isImage || imageExts.includes(effectiveExt)) {
-      // Images: essayer img.src direct, fallback sur Signed URL si 400/403
       if (previewImage) {
         previewImage.classList.remove('hidden');
         previewImage.onload  = () => hidePreviewLoading();
         previewImage.onerror = () => {
-          // Fallback: générer une Signed URL (bucket privé)
           if (G.supabase && doc.storage_path) {
             G.supabase.storage.from(CONFIG.storageBucket)
               .createSignedUrl(doc.storage_path, 3600)
               .then(({ data, error }) => {
-                if (!error && data?.signedUrl) {
-                  previewImage.src = data.signedUrl;
-                } else {
-                  hidePreviewLoading();
-                  showUnsupportedPreview(doc);
-                }
+                if (!error && data?.signedUrl) previewImage.src = data.signedUrl;
+                else { hidePreviewLoading(); showUnsupportedPreview(doc); }
               })
               .catch(() => { hidePreviewLoading(); showUnsupportedPreview(doc); });
-          } else {
-            hidePreviewLoading();
-            showUnsupportedPreview(doc);
-          }
+          } else { hidePreviewLoading(); showUnsupportedPreview(doc); }
         };
         previewImage.src = fileUrl;
       }
     } else if (pdfExts.includes(effectiveExt)) {
-      // PDF: essayer iframe direct, fallback signed URL si échec
       if (previewFrame) {
         previewFrame.classList.remove('hidden');
         const loadPdf = (url) => {
@@ -884,34 +775,23 @@ function openPreviewModal(docId) {
           previewFrame.onload  = () => hidePreviewLoading();
           previewFrame.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
         };
-        // Essayer l'URL publique directement d'abord
         fetch(fileUrl, { method: 'HEAD' })
           .then(r => {
-            if (r.ok) {
-              loadPdf(fileUrl);
-            } else if (G.supabase && doc.storage_path) {
-              // URL privée → Signed URL
+            if (r.ok) loadPdf(fileUrl);
+            else if (G.supabase && doc.storage_path) {
               G.supabase.storage.from(CONFIG.storageBucket)
                 .createSignedUrl(doc.storage_path, 3600)
                 .then(({ data, error }) => {
                   if (!error && data?.signedUrl) loadPdf(data.signedUrl);
                   else { hidePreviewLoading(); showUnsupportedPreview(doc); }
                 });
-            } else {
-              hidePreviewLoading();
-              showUnsupportedPreview(doc);
-            }
+            } else { hidePreviewLoading(); showUnsupportedPreview(doc); }
           })
-          .catch(() => {
-            // fetch HEAD bloqué par CORS → essayer directement
-            loadPdf(fileUrl);
-          });
+          .catch(() => loadPdf(fileUrl));
       }
-   } else if (officeExts.includes(effectiveExt)) {
-      // Office via Microsoft Office Online Viewer (avec Signed URL si privé)
+    } else if (officeExts.includes(effectiveExt)) {
       if (previewFrame) {
         previewFrame.classList.remove('hidden');
-
         const loadOffice = (url) => {
           const encodedUrl = encodeURIComponent(url);
           const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodedUrl}`;
@@ -919,28 +799,21 @@ function openPreviewModal(docId) {
           previewFrame.onload  = () => hidePreviewLoading();
           previewFrame.onerror = () => { hidePreviewLoading(); showUnsupportedPreview(doc); };
         };
-
         fetch(fileUrl, { method: 'HEAD' })
           .then(r => {
-            if (r.ok) {
-              loadOffice(fileUrl);
-            } else if (G.supabase && doc.storage_path) {
+            if (r.ok) loadOffice(fileUrl);
+            else if (G.supabase && doc.storage_path) {
               G.supabase.storage.from(CONFIG.storageBucket)
                 .createSignedUrl(doc.storage_path, 3600)
                 .then(({ data, error }) => {
                   if (!error && data?.signedUrl) loadOffice(data.signedUrl);
                   else { hidePreviewLoading(); showUnsupportedPreview(doc); }
                 });
-            } else {
-              hidePreviewLoading();
-              showUnsupportedPreview(doc);
-            }
+            } else { hidePreviewLoading(); showUnsupportedPreview(doc); }
           })
-          .catch(() => {
-            loadOffice(fileUrl);
-          });
-      }    
-	} else if (textExts.includes(effectiveExt)) {
+          .catch(() => loadOffice(fileUrl));
+      }
+    } else if (textExts.includes(effectiveExt)) {
       if (previewContent) previewContent.classList.remove('hidden');
       const contentEl = document.getElementById('previewTextContent');
       if (contentEl) {
@@ -957,12 +830,11 @@ function openPreviewModal(docId) {
           });
       }
     } else {
-      // Type non reconnu
       hidePreviewLoading();
       showUnsupportedPreview(doc);
     }
   } catch (err) {
-    console.error('Erreur apercu:', err);
+    console.error('Erreur aperçu:', err);
     hidePreviewLoading();
     showUnsupportedPreview(doc);
   }
@@ -1051,16 +923,11 @@ function closePreviewModal() {
 async function downloadDocument(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
-  
   try {
-    // Télécharger le fichier depuis Supabase Storage
     const { data, error } = await G.supabase.storage
       .from(CONFIG.storageBucket)
       .download(doc.storage_path);
-    
     if (error) {
-      console.error('Erreur téléchargement:', error);
-      // Fallback: utiliser l'URL publique
       const link = document.createElement('a');
       link.href = doc.file_url;
       link.download = doc.name;
@@ -1068,7 +935,6 @@ async function downloadDocument(docId) {
       link.click();
       document.body.removeChild(link);
     } else {
-      // Créer un blob et télécharger
       const url = URL.createObjectURL(data);
       const link = document.createElement('a');
       link.href = url;
@@ -1078,19 +944,10 @@ async function downloadDocument(docId) {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     }
-    
-    // Mettre à jour le compteur de téléchargements
-    await G.supabase
-      .from('documents')
-      .update({ downloads: (doc.downloads || 0) + 1 })
-      .eq('id', docId);
+    await G.supabase.from('documents').update({ downloads: (doc.downloads || 0) + 1 }).eq('id', docId);
     doc.downloads = (doc.downloads || 0) + 1;
-    
     showToast(`Téléchargement: ${escapeHtml(doc.name)}`, 'success');
-    
-    // Log d'audit
     await addAuditLog('download', 'document', docId);
-    
   } catch (err) {
     console.error('Erreur téléchargement:', err);
     showToast(`Erreur de téléchargement: ${err.message}`, 'error');
@@ -1106,43 +963,39 @@ function shareCurrentDocument() {
 }
 
 async function deleteDocument(docId) {
-if (G._isDemo) { showToast('Mode démo : suppression désactivée', 'warning'); return; }
+  if (G._isDemo) { showToast('Mode démo : suppression désactivée', 'warning'); return; }
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
-
   if (doc.owner_id !== G.currentUser.id && G.currentUser.role !== 'admin' && G.currentUser.role !== 'manager') {
     showToast('Permission refusée', 'error');
     return;
   }
-
   if (!confirm(`Déplacer "${escapeHtml(doc.name)}" vers la corbeille ?`)) return;
-  
-  const { error } = await G.supabase
-    .from('documents')
-    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-    .eq('id', docId);
-  
-  if (error) {
+  try {
+    const { error } = await G.supabase
+      .from('documents')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .eq('id', docId);
+    if (error) throw error;
+    doc.is_deleted = true;
+    doc.deleted_at = new Date().toISOString();
+    renderDocuments();
+    updateBadges();
+    showToast('Document déplacé vers la corbeille', 'success');
+    await addAuditLog('delete', 'document', docId);
+  } catch (err) {
     showToast('Erreur suppression', 'error');
-    return;
   }
-  
-  doc.is_deleted = true;
-  doc.deleted_at = new Date().toISOString();
-  renderDocuments();
-  updateBadges();
-  showToast('Document déplacé vers la corbeille', 'success');
-  
-  // Log d'audit
-  await addAuditLog('delete', 'document', docId);
 }
 
-// ─── Déplacement de documents ───
+// ═══════════════════════════════════════════════════════════════════════
+// 4. DÉPLACEMENT DE DOCUMENTS
+// ═══════════════════════════════════════════════════════════════════════
+
 function openMoveModal(docId) {
   G.moveModalDocId = docId;
   const modal = document.getElementById('moveModal');
   if (modal) modal.classList.remove('hidden');
-  
   const folderSelect = document.getElementById('moveFolderSelect');
   if (folderSelect) {
     let options = '<option value="__root__">📁 Racine (dossier principal)</option>';
@@ -1172,51 +1025,38 @@ function getFolderPath(folderId, path = '') {
 
 async function confirmMoveDocument() {
   let folderId = document.getElementById('moveFolderSelect')?.value;
-  if (!folderId) {
-    showToast('Veuillez sélectionner un dossier', 'warning');
-    return;
-  }
-  
-  // Gestion du dossier racine
+  if (!folderId) { showToast('Veuillez sélectionner un dossier', 'warning'); return; }
   if (folderId === '__root__') {
     const rootFolder = G.folders.find(f => f.name === 'Racine' && f.parent_id === null);
     if (rootFolder) folderId = rootFolder.id;
-    else {
-      showToast('Dossier racine introuvable', 'error');
-      return;
-    }
+    else { showToast('Dossier racine introuvable', 'error'); return; }
   }
-  
   if (!G.moveModalDocId) return;
-  
-  const { error } = await G.supabase
-    .from('documents')
-    .update({ folder_id: folderId, updated_at: new Date().toISOString() })
-    .eq('id', G.moveModalDocId);
-  
-  if (error) {
-    showToast('Erreur déplacement: ' + error.message, 'error');
-    return;
+  try {
+    const { error } = await G.supabase
+      .from('documents')
+      .update({ folder_id: folderId, updated_at: new Date().toISOString() })
+      .eq('id', G.moveModalDocId);
+    if (error) throw error;
+    const doc = G.documents.find(d => d.id === G.moveModalDocId);
+    if (doc) { doc.folder_id = folderId; doc.updated_at = new Date().toISOString(); }
+    showToast('Document déplacé avec succès', 'success');
+    closeMoveModal();
+    renderDocuments();
+    if (G.currentView === 'folders') renderFolderContents();
+  } catch (err) {
+    showToast('Erreur déplacement: ' + err.message, 'error');
   }
-  
-  const doc = G.documents.find(d => d.id === G.moveModalDocId);
-  if (doc) {
-    doc.folder_id = folderId;
-    doc.updated_at = new Date().toISOString();
-  }
-  
-  showToast('Document déplacé avec succès', 'success');
-  closeMoveModal();
-  renderDocuments();
-  if (G.currentView === 'folders') renderFolderContents();
 }
 
-// ─── Collaboration (invitation) ───
+// ═══════════════════════════════════════════════════════════════════════
+// 5. COLLABORATION (invitation)
+// ═══════════════════════════════════════════════════════════════════════
+
 function openCollabModal(docId) {
   G.collabModalDocId = docId;
   const modal = document.getElementById('collabModal');
   if (modal) modal.classList.remove('hidden');
-  
   const doc = G.documents.find(d => d.id === docId);
   const docInfo = document.getElementById('collabDocInfo');
   if (docInfo && doc) docInfo.textContent = doc.name;
@@ -1231,60 +1071,184 @@ function closeCollabModal() {
 async function inviteCollaborator() {
   const email = document.getElementById('collabEmail')?.value.trim();
   const permission = document.getElementById('collabPermission')?.value;
-  
-  if (!email) {
-    showToast('Veuillez entrer un email', 'warning');
-    return;
-  }
-  
+  if (!email) { showToast('Veuillez entrer un email', 'warning'); return; }
   if (!G.collabModalDocId) return;
-  
-  // Vérifier si l'utilisateur existe dans la même entreprise
-  const { data: targetUser, error: userError } = await G.supabase
-    .from('profiles')
-    .select('id, email, name')
-    .eq('email', email)
-    .eq('company_id', G.currentUser.companyId)
-    .single();
-  
-  if (userError || !targetUser) {
-    showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
-    return;
+  try {
+    const { data: targetUser, error: userError } = await G.supabase
+      .from('profiles')
+      .select('id, email, name')
+      .eq('email', email)
+      .eq('company_id', G.currentUser.companyId)
+      .single();
+    if (userError || !targetUser) {
+      showToast('Cet utilisateur n\'appartient pas à votre entreprise', 'error');
+      return;
+    }
+    const share = {
+      id: generateId(),
+      document_id: G.collabModalDocId,
+      sender_id: G.currentUser.id,
+      recipient_email: email,
+      recipient_id: targetUser.id,
+      permission: permission,
+      expires_at: null,
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+    const { error } = await G.supabase.from('shares').insert(share);
+    if (error) throw error;
+    G.shares.push(share);
+    showToast(`Invitation envoyée à ${email}`, 'success');
+    await addAuditLog('share_collab', 'document', G.collabModalDocId, `Invité: ${email} avec permission ${permission}`);
+    closeCollabModal();
+    document.getElementById('collabEmail').value = '';
+  } catch (err) {
+    showToast('Erreur invitation: ' + err.message, 'error');
   }
-  
-  // Créer le partage
-  const share = {
-    id: generateId(),
-    document_id: G.collabModalDocId,
-    sender_id: G.currentUser.id,
-    recipient_email: email,
-    recipient_id: targetUser.id,
-    permission: permission,
-    expires_at: null,
-    status: 'active',
-    created_at: new Date().toISOString()
-  };
-  
-  const { error } = await G.supabase.from('shares').insert(share);
-  if (error) {
-    showToast('Erreur invitation: ' + error.message, 'error');
-    return;
-  }
-  
-  G.shares.push(share);
-  showToast(`Invitation envoyée à ${email}`, 'success');
-  
-  // Envoyer une notification (simulée)
-  await addAuditLog('share_collab', 'document', G.collabModalDocId, `Invité: ${email} avec permission ${permission}`);
-  
-  closeCollabModal();
-  document.getElementById('collabEmail').value = '';
 }
 
-// ─── Partages ───
+// ═══════════════════════════════════════════════════════════════════════
+// 6. PARTAGES (fonctions de base)
+// ═══════════════════════════════════════════════════════════════════════
 
+function openShareModal(docId) {
+  G.currentDocId = docId;
+  const modal = document.getElementById('shareModal');
+  if (modal) modal.classList.remove('hidden');
+  const doc = G.documents.find(d => d.id === docId);
+  const docInfo = document.getElementById('shareDocInfo');
+  if (docInfo && doc) docInfo.textContent = doc.name;
+}
 
-// ─── Exposition globale — documents.js ───
+function closeShareModal() {
+  const modal = document.getElementById('shareModal');
+  if (modal) modal.classList.add('hidden');
+  G.currentDocId = null;
+}
+
+function switchShareTab(tab) {
+  const sendPanel = document.getElementById('sharePanel-send');
+  const historyPanel = document.getElementById('sharePanel-history');
+  const sendTab = document.getElementById('shareTab-send');
+  const historyTab = document.getElementById('shareTab-history');
+  if (tab === 'send') {
+    if (sendPanel) sendPanel.classList.remove('hidden');
+    if (historyPanel) historyPanel.classList.add('hidden');
+    if (sendTab) sendTab.classList.add('border-blue-400', 'text-blue-400');
+    if (historyTab) historyTab.classList.remove('border-blue-400', 'text-blue-400');
+  } else {
+    if (sendPanel) sendPanel.classList.add('hidden');
+    if (historyPanel) historyPanel.classList.remove('hidden');
+    if (historyTab) historyTab.classList.add('border-blue-400', 'text-blue-400');
+    if (sendTab) sendTab.classList.remove('border-blue-400', 'text-blue-400');
+    loadShareHistory();
+  }
+}
+
+async function loadShareHistory(docId = null) {
+  const targetDocId = docId || G.currentDocId;
+  if (!targetDocId) {
+    const historyContainer = document.getElementById('shareHistoryList');
+    if (historyContainer) historyContainer.innerHTML = '<div class="text-center py-8 text-blue-300/40"><p>Sélectionnez un document pour voir son historique</p></div>';
+    return;
+  }
+  try {
+    const { data: shares, error } = await G.supabase
+      .from('shares')
+      .select('*, documents!document_id(name)')
+      .eq('document_id', targetDocId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    const historyContainer = document.getElementById('shareHistoryList');
+    if (historyContainer) {
+      if (!shares || shares.length === 0) {
+        historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucun historique de partage pour ce document</p>';
+      } else {
+        historyContainer.innerHTML = shares.map(s => `
+          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-blue-500/20">
+            <div>
+              <p class="text-white text-sm">Partagé avec : ${escapeHtml(s.recipient_email)}</p>
+              <p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>
+              ${s.expires_at ? `<p class="text-xs text-yellow-400/70">Expire le ${formatDate(s.expires_at)}</p>` : ''}
+            </div>
+            ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30">Révoquer</button>` : ''}
+          </div>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    console.error('loadShareHistory error:', err);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 7. ÉDITEUR RICHE SÉCURISÉ (avec DOMPurify)
+// ═══════════════════════════════════════════════════════════════════════
+
+function openRichEditor(docId) {
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  const modal = document.getElementById('richEditorModal');
+  if (!modal) return;
+  const textarea = document.getElementById('richEditorTextarea');
+  if (textarea) textarea.value = doc.content || '';
+  modal.classList.remove('hidden');
+  showToast('Éditeur sécurisé (mode texte)', 'info');
+}
+
+function closeRichEditor() {
+  const modal = document.getElementById('richEditorModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function _onRichEditorInput() {}
+
+function _saveRichContent() {
+  const textarea = document.getElementById('richEditorTextarea');
+  if (!textarea) return;
+  const raw = textarea.value;
+  const sanitized = DOMPurify.sanitize(raw);
+  const docId = G.currentDocId;
+  if (docId && G.supabase) {
+    G.supabase.from('documents').update({ content: sanitized, updated_at: new Date().toISOString() }).eq('id', docId)
+      .then(() => showToast('Document enregistré', 'success'))
+      .catch(err => showToast('Erreur sauvegarde', 'error'));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 8. FONCTIONS UTILITAIRES
+// ═══════════════════════════════════════════════════════════════════════
+
+function handleDocDragStart(e, docId) {
+  e.dataTransfer.setData('text/plain', docId);
+}
+
+function showDocContextMenu(e, docId) {
+  e.preventDefault();
+  e.stopPropagation();
+  deleteDocument(docId);
+}
+
+function _fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('Copié', 'success');
+  } catch (_) {
+    showToast('Impossible de copier', 'error');
+  }
+  document.body.removeChild(ta);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// EXPOSITIONS GLOBALES
+// ═══════════════════════════════════════════════════════════════════════
+
 window.openUploadModal          = openUploadModal;
 window.closeUploadModal         = closeUploadModal;
 window.handleDragOver           = handleDragOver;
@@ -1336,3 +1300,7 @@ window.inviteCollaborator       = inviteCollaborator;
 window.handleDocDragStart       = handleDocDragStart;
 window.showDocContextMenu       = showDocContextMenu;
 window.changeDocScope           = changeDocScope;
+window.openRichEditor           = openRichEditor;
+window.closeRichEditor          = closeRichEditor;
+window._onRichEditorInput       = _onRichEditorInput;
+window._saveRichContent         = _saveRichContent;
