@@ -1,5 +1,5 @@
 // ============================================
-// SystemesGED v7.2 — MODULE : ui.js
+// SystemesGED v7.2 — MODULE : ui.js (CORRIGÉ)
 // Responsabilités :
 //   - Navigation (switchView, sidebar mobile)
 //   - Tableau de bord (renderDashboard, renderActivityList)
@@ -58,7 +58,10 @@ function switchView(viewName) {
     'pending-users': renderPendingUsers
   };
   
-  if (views[viewName]) { const r = views[viewName](); if (r instanceof Promise) r.catch(e => console.error('switchView error:', e)); }
+  if (views[viewName]) {
+    const r = views[viewName]();
+    if (r instanceof Promise) r.catch(e => console.error('switchView error:', e));
+  }
 }
 
 function openMobileSidebar() {
@@ -80,8 +83,8 @@ async function renderDashboard() {
   console.log('🔄 Rendu du tableau de bord...');
 
   // ── Recharger les données fraîches depuis Supabase ──────────────
-  if (G.supabase && G.currentUser?.companyId) {
-    try {
+  try {
+    if (G.supabase && G.currentUser?.companyId) {
       const [docsRes, wfsRes, sharesRes, usersRes, auditRes] = await Promise.all([
         G.supabase.from('documents').select('*').eq('company_id', G.currentUser.companyId).order('created_at', { ascending: false }),
         G.supabase.from('workflows').select('*').eq('company_id', G.currentUser.companyId),
@@ -94,9 +97,9 @@ async function renderDashboard() {
       if (!sharesRes.error) G.shares    = sharesRes.data || [];
       if (!usersRes.error) G.users      = usersRes.data  || [];
       if (!auditRes.error) G.auditLogs  = auditRes.data  || [];
-    } catch (err) {
-      console.warn('renderDashboard: rechargement partiel échoué', err);
     }
+  } catch (err) {
+    console.warn('renderDashboard: rechargement partiel échoué', err);
   }
 
   const totalDocs        = G.documents.filter(d => !d.is_deleted).length;
@@ -358,12 +361,9 @@ function renderMyWorkflows() {
   `).join('');
 }
 
-// ─── Documents ───
-
-
 // ─── Utilitaires ───
 async function addAuditLog(action, targetType, targetId, details = '') {
- if (G._isDemo) return; // Mode démo : pas d'écriture Supabase
+  if (G._isDemo) return; // Mode démo : pas d'écriture Supabase
   try {
     const log = {
       id: generateId(),
@@ -388,9 +388,15 @@ async function addAuditLog(action, targetType, targetId, details = '') {
   }
 }
 
-// ─── Rich Editor ───
+// ─── Rich Editor (sécurisé) ───
 function openRichEditor(docId) {
-  showToast('Éditeur riche en développement', 'info');
+  const doc = G.documents.find(d => d.id === docId);
+  if (!doc) return;
+  const modal = document.getElementById('richEditorModal');
+  if (modal) modal.classList.remove('hidden');
+  const textarea = document.getElementById('richEditorTextarea');
+  if (textarea) textarea.value = doc.content || '';
+  showToast('Éditeur sécurisé (mode texte)', 'info');
 }
 
 function closeRichEditor() {
@@ -488,9 +494,12 @@ function getFileType(filename) {
   return types[ext] || 'unknown';
 }
 
+// Correction : durée plus longue pour les erreurs
 function showToast(message, type = 'info', duration = 4000) {
   const container = document.getElementById('toastContainer');
   if (!container) return;
+
+  if (type === 'error') duration = 8000;
 
   const styles = {
     success: { bg: 'rgba(16,185,129,0.95)', icon: 'fa-check-circle',       border: 'rgba(16,185,129,0.4)' },
@@ -519,7 +528,6 @@ function handleDocDragStart(e, docId) {
 function showDocContextMenu(e, docId) {
   e.preventDefault();
   e.stopPropagation();
-  // Use the standard delete flow which includes its own confirm
   deleteDocument(docId);
 }
 
@@ -541,10 +549,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-// ─── Initialisation ───
-
-
-
 // ─── Helpers manquants ───
 
 function getRoleBadgeClass(role) {
@@ -557,21 +561,21 @@ function getRoleBadgeClass(role) {
   return classes[role] || 'bg-gray-500/20 text-gray-400';
 }
 
-  function renderFolderTreeRecursive(folderId, level = 0) {
-    const folder = G.folders.find(f => f.id === folderId);
-    if (!folder) return '';
-    const children = G.folders.filter(f => f.parent_id === folderId);
-    const indent = level * 12;
-    return `
-      <div style="margin-left: ${indent}px" class="cursor-pointer hover:bg-blue-500/10 rounded-lg">
-        <div class="flex items-center gap-2 px-2 py-1 text-blue-300/70 text-xs" onclick="openFolder('${folder.id}', '${folder.name}')">
-          <i class="fas fa-folder text-yellow-400 text-xs"></i>
-          <span>${folder.name}</span>
-        </div>
-        ${children.map(c => renderFolderTreeRecursive(c.id, level + 1)).join('')}
+function renderFolderTreeRecursive(folderId, level = 0) {
+  const folder = G.folders.find(f => f.id === folderId);
+  if (!folder) return '';
+  const children = G.folders.filter(f => f.parent_id === folderId);
+  const indent = level * 12;
+  return `
+    <div style="margin-left: ${indent}px" class="cursor-pointer hover:bg-blue-500/10 rounded-lg">
+      <div class="flex items-center gap-2 px-2 py-1 text-blue-300/70 text-xs" onclick="openFolder('${folder.id}', '${folder.name}')">
+        <i class="fas fa-folder text-yellow-400 text-xs"></i>
+        <span>${folder.name}</span>
       </div>
-    `;
-  }
+      ${children.map(c => renderFolderTreeRecursive(c.id, level + 1)).join('')}
+    </div>
+  `;
+}
 
 function updateFolderBreadcrumb() {
   const breadcrumb = document.getElementById('folderBreadcrumb');
@@ -585,49 +589,58 @@ function updateFolderBreadcrumb() {
   `).join('');
 }
 
-  function getCoordinates(e) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    let clientX, clientY;
-    if (e.touches) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-    return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
+function getCoordinates(e) {
+  const canvas = document.getElementById('signatureCanvas');
+  if (!canvas) return { x: 0, y: 0 };
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  
+  let clientX, clientY;
+  if (e.touches) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
   }
+  
+  const x = (clientX - rect.left) * scaleX;
+  const y = (clientY - rect.top) * scaleY;
+  return { x: Math.max(0, Math.min(canvas.width, x)), y: Math.max(0, Math.min(canvas.height, y)) };
+}
 
-  function startDrawing(e) {
-    e.preventDefault();
-    isDrawing = true;
-    const { x, y } = getCoordinates(e);
-    lastX = x;
-    lastY = y;
-    signatureCtx.beginPath();
-    signatureCtx.moveTo(x, y);
-  }
+function startDrawing(e) {
+  e.preventDefault();
+  const canvas = document.getElementById('signatureCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  isDrawing = true;
+  const { x, y } = getCoordinates(e);
+  lastX = x;
+  lastY = y;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+}
 
-  function draw(e) {
-    e.preventDefault();
-    if (!isDrawing) return;
-    const { x, y } = getCoordinates(e);
-    signatureCtx.lineTo(x, y);
-    signatureCtx.stroke();
-    lastX = x;
-    lastY = y;
-  }
+function draw(e) {
+  e.preventDefault();
+  if (!isDrawing) return;
+  const canvas = document.getElementById('signatureCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const { x, y } = getCoordinates(e);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  lastX = x;
+  lastY = y;
+}
 
-  function stopDrawing() {
-    isDrawing = false;
-    signatureCtx.beginPath();
-  }
+function stopDrawing() {
+  isDrawing = false;
+  const canvas = document.getElementById('signatureCanvas');
+  if (canvas) canvas.getContext('2d').beginPath();
+}
 
 function handleGlobalSearch(query) {
   const dropdown = document.getElementById('searchDropdown');
@@ -653,6 +666,7 @@ function handleGlobalSearch(query) {
   `).join('');
 }
 
+// ─── Initialisation ───
 document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('error', (e) => {
     console.error('❌ Erreur globale:', {
@@ -676,7 +690,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const hasSession = await initSupabase();
 
   if (hasSession) {
-    // loadUserFromSupabase already called inside initSupabase
     switchToMainApp();
   } else {
     const loginScreen = document.getElementById('loginScreen');
@@ -684,467 +697,446 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (loginScreen) loginScreen.style.display = 'block';
     if (mainApp)     mainApp.style.display      = 'none';
 
-// ══════════════════════════════════════════════
-// COLLABORATION TEMPS RÉEL + COMMENTAIRES + EDIT
-// ══════════════════════════════════════════════
+    // ══════════════════════════════════════════════
+    // COLLABORATION TEMPS RÉEL + COMMENTAIRES + EDIT
+    // ══════════════════════════════════════════════
 
-let _realtimeChannel = null;
-let _presenceUsers   = {};
-let _commentsCache   = {};
+    let _realtimeChannel = null;
+    let _presenceUsers   = {};
+    let _commentsCache   = {};
 
-// ── Présence temps réel ──
-function subscribePresence(docId) {
-  if (_realtimeChannel) {
-    G.supabase.removeChannel(_realtimeChannel);
-    _realtimeChannel = null;
-  }
-  if (!docId || !G.supabase) return;
-
-  _realtimeChannel = G.supabase.channel(`doc-presence:${docId}`, {
-    config: { presence: { key: G.currentUser.id } }
-  });
-
-  _realtimeChannel
-    .on('presence', { event: 'sync' }, () => {
-      const state = _realtimeChannel.presenceState();
-      _presenceUsers = {};
-      Object.values(state).flat().forEach(u => { _presenceUsers[u.userId] = u; });
-      renderPresenceBadges();
-    })
-    .on('broadcast', { event: 'comment' }, ({ payload }) => {
-      if (payload.docId === docId) appendComment(payload);
-    })
-    .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await _realtimeChannel.track({
-          userId:    G.currentUser.id,
-          userName:  G.currentUser.name || G.currentUser.email,
-          userEmail: G.currentUser.email,
-          joinedAt:  new Date().toISOString()
-        });
+    // ── Présence temps réel ──
+    function subscribePresence(docId) {
+      if (_realtimeChannel) {
+        G.supabase.removeChannel(_realtimeChannel);
+        _realtimeChannel = null;
       }
-    });
-}
+      if (!docId || !G.supabase) return;
 
-function unsubscribePresence() {
-  if (_realtimeChannel) {
-    G.supabase.removeChannel(_realtimeChannel);
-    _realtimeChannel = null;
-  }
-  _presenceUsers = {};
-  renderPresenceBadges();
-}
+      _realtimeChannel = G.supabase.channel(`doc-presence:${docId}`, {
+        config: { presence: { key: G.currentUser.id } }
+      });
 
-function renderPresenceBadges() {
-  const container = document.getElementById('previewPresence');
-  if (!container) return;
-  const users = Object.values(_presenceUsers).filter(u => u.userId !== G.currentUser.id);
-  if (!users.length) { container.innerHTML = ''; return; }
-  container.innerHTML = users.slice(0, 5).map(u => {
-    const initials = (u.userName || u.userEmail || '?').slice(0, 2).toUpperCase();
-    const colors   = ['bg-green-500','bg-blue-500','bg-purple-500','bg-yellow-500','bg-red-500'];
-    const color    = colors[u.userId?.charCodeAt(0) % colors.length] || 'bg-blue-500';
-    return `<div class="w-7 h-7 rounded-full ${color} flex items-center justify-center text-white text-xs font-bold cursor-default" title="${escapeHtml(u.userName || u.userEmail)}">${initials}</div>`;
-  }).join('') + (users.length > 5 ? `<span class="text-xs text-blue-400/60">+${users.length - 5}</span>` : '');
-}
-
-// Hooker closePreviewModal pour unsubscribe
-const _origClosePreview = closePreviewModal;
-window.closePreviewModal = function() {
-  unsubscribePresence();
-  const panel = document.getElementById('commentsPanel');
-  if (panel) panel.classList.add('hidden');
-  _origClosePreview();
-};
-
-// Hooker openPreviewModal pour subscribe + bouton Modifier
-const _origOpenPreview = openPreviewModal;
-window.openPreviewModal = async function(docId) {
-  await _origOpenPreview(docId);
-  subscribePresence(docId);
-  // Afficher bouton Modifier si office
-  const doc = G.documents.find(d => d.id === docId);
-  const editBtn = document.getElementById('editDocBtn');
-  if (editBtn && doc) {
-    const officeExts = ['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'];
-    const ext = (doc.name?.split('.').pop() || '').toLowerCase();
-    if (officeExts.includes(ext)) editBtn.classList.remove('hidden');
-    else editBtn.classList.add('hidden');
-  }
-  // Charger commentaires
-  loadComments(docId);
-};
-
-// ── Modifier un document Office avec sync automatique ──
-let _watchInterval  = null;
-let _watchFileHandle = null;
-let _watchLastModified = 0;
-let _watchDocId = null;
-
-async function editCurrentDocument() {
-  const docId = G.currentDocId;
-  const doc   = G.documents.find(d => d.id === docId);
-  if (!doc) return;
-
-  // Vérifier support File System Access API
-  if (!window.showOpenFilePicker) {
-    // Fallback: téléchargement simple
-    let fileUrl = doc.file_url;
-    if (G.supabase && doc.storage_path) {
-      const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
-      if (data?.signedUrl) fileUrl = data.signedUrl;
+      _realtimeChannel
+        .on('presence', { event: 'sync' }, () => {
+          const state = _realtimeChannel.presenceState();
+          _presenceUsers = {};
+          Object.values(state).flat().forEach(u => { _presenceUsers[u.userId] = u; });
+          renderPresenceBadges();
+        })
+        .on('broadcast', { event: 'comment' }, ({ payload }) => {
+          if (payload.docId === docId) appendComment(payload);
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await _realtimeChannel.track({
+              userId:    G.currentUser.id,
+              userName:  G.currentUser.name || G.currentUser.email,
+              userEmail: G.currentUser.email,
+              joinedAt:  new Date().toISOString()
+            });
+          }
+        });
     }
-    const a = document.createElement('a');
-    a.href = fileUrl; a.download = doc.name; a.click();
-    showToast(`📥 Téléchargé. Modifiez puis ré-importez manuellement via "Importer".`, 'warning', 6000);
-    return;
-  }
 
-  // Étape 1: Télécharger le fichier d'abord
-  showToast('⬇️ Téléchargement du fichier...', 'info', 3000);
-  let fileUrl = doc.file_url;
-  if (G.supabase && doc.storage_path) {
-    const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
-    if (data?.signedUrl) fileUrl = data.signedUrl;
-  }
-  const a = document.createElement('a');
-  a.href = fileUrl; a.download = doc.name; a.click();
+    function unsubscribePresence() {
+      if (_realtimeChannel) {
+        G.supabase.removeChannel(_realtimeChannel);
+        _realtimeChannel = null;
+      }
+      _presenceUsers = {};
+      renderPresenceBadges();
+    }
 
-  // Étape 2: Ouvrir le sélecteur de fichier après 1.5s
-  await new Promise(r => setTimeout(r, 1500));
-  showToast('📂 Sélectionnez le fichier téléchargé pour activer la sync automatique', 'info', 6000);
+    function renderPresenceBadges() {
+      const container = document.getElementById('previewPresence');
+      if (!container) return;
+      const users = Object.values(_presenceUsers).filter(u => u.userId !== G.currentUser.id);
+      if (!users.length) { container.innerHTML = ''; return; }
+      container.innerHTML = users.slice(0, 5).map(u => {
+        const initials = (u.userName || u.userEmail || '?').slice(0, 2).toUpperCase();
+        const colors   = ['bg-green-500','bg-blue-500','bg-purple-500','bg-yellow-500','bg-red-500'];
+        const color    = colors[u.userId?.charCodeAt(0) % colors.length] || 'bg-blue-500';
+        return `<div class="w-7 h-7 rounded-full ${color} flex items-center justify-center text-white text-xs font-bold cursor-default" title="${escapeHtml(u.userName || u.userEmail)}">${initials}</div>`;
+      }).join('') + (users.length > 5 ? `<span class="text-xs text-blue-400/60">+${users.length - 5}</span>` : '');
+    }
 
-  try {
-    const ext = doc.name.split('.').pop().toLowerCase();
-    const mimeMap = {
-      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      doc:  'application/msword',
-      xls:  'application/vnd.ms-excel',
+    // Hooker closePreviewModal pour unsubscribe
+    const _origClosePreview = closePreviewModal;
+    window.closePreviewModal = function() {
+      unsubscribePresence();
+      const panel = document.getElementById('commentsPanel');
+      if (panel) panel.classList.add('hidden');
+      _origClosePreview();
     };
 
-    const [fileHandle] = await window.showOpenFilePicker({
-      types: [{ description: 'Document Office', accept: { [mimeMap[ext] || '*/*']: [`.${ext}`] } }],
-      multiple: false
-    });
-
-    // Arrêter toute surveillance précédente
-    stopFileWatch();
-
-    _watchFileHandle  = fileHandle;
-    _watchDocId       = docId;
-    const initialFile = await fileHandle.getFile();
-    _watchLastModified = initialFile.lastModified;
-
-    // Afficher badge de sync dans le modal
-    showSyncBadge(doc.name, 'watching');
-
-    // Étape 3: Surveiller les modifications toutes les 3 secondes
-    _watchInterval = setInterval(async () => {
-      try {
-        const file = await _watchFileHandle.getFile();
-        if (file.lastModified !== _watchLastModified) {
-          _watchLastModified = file.lastModified;
-          showSyncBadge(doc.name, 'uploading');
-          await autoUploadNewVersion(docId, file);
-          showSyncBadge(doc.name, 'synced');
-          setTimeout(() => showSyncBadge(doc.name, 'watching'), 3000);
-        }
-      } catch(e) {
-        stopFileWatch();
+    // Hooker openPreviewModal pour subscribe + bouton Modifier
+    const _origOpenPreview = openPreviewModal;
+    window.openPreviewModal = async function(docId) {
+      await _origOpenPreview(docId);
+      subscribePresence(docId);
+      const doc = G.documents.find(d => d.id === docId);
+      const editBtn = document.getElementById('editDocBtn');
+      if (editBtn && doc) {
+        const officeExts = ['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'];
+        const ext = (doc.name?.split('.').pop() || '').toLowerCase();
+        if (officeExts.includes(ext)) editBtn.classList.remove('hidden');
+        else editBtn.classList.add('hidden');
       }
-    }, 3000);
+      loadComments(docId);
+    };
 
-    showToast(`✅ Sync activée pour "${doc.name}". Sauvegardez dans Office → mis à jour automatiquement !`, 'success', 8000);
-    await addAuditLog('edit_sync_start', 'document', docId, `Sync automatique démarrée: ${doc.name}`);
+    // ── Modifier un document Office avec sync automatique ──
+    let _watchInterval  = null;
+    let _watchFileHandle = null;
+    let _watchLastModified = 0;
+    let _watchDocId = null;
 
-  } catch(e) {
-    if (e.name !== 'AbortError') showToast('Sync annulée', 'warning');
-  }
-}
+    async function editCurrentDocument() {
+      const docId = G.currentDocId;
+      const doc   = G.documents.find(d => d.id === docId);
+      if (!doc) return;
 
-function stopFileWatch() {
-  if (_watchInterval) { clearInterval(_watchInterval); _watchInterval = null; }
-  _watchFileHandle  = null;
-  _watchDocId       = null;
-  _watchLastModified = 0;
-  hideSyncBadge();
-}
+      if (!window.showOpenFilePicker) {
+        let fileUrl = doc.file_url;
+        if (G.supabase && doc.storage_path) {
+          const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
+          if (data?.signedUrl) fileUrl = data.signedUrl;
+        }
+        const a = document.createElement('a');
+        a.href = fileUrl; a.download = doc.name; a.click();
+        showToast(`📥 Téléchargé. Modifiez puis ré-importez manuellement via "Importer".`, 'warning', 6000);
+        return;
+      }
 
-function showSyncBadge(fileName, state) {
-  let badge = document.getElementById('syncStatusBadge');
-  if (!badge) {
-    badge = document.createElement('div');
-    badge.id = 'syncStatusBadge';
-    badge.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:all 0.3s ease;backdrop-filter:blur(12px);';
-    document.body.appendChild(badge);
-  }
-  const configs = {
-    watching:  { bg: 'rgba(30,58,138,0.95)', border: '1px solid rgba(96,165,250,0.4)', icon: '🔵', text: 'Sync active — en attente de modifications', pulse: true  },
-    uploading: { bg: 'rgba(120,53,15,0.95)',  border: '1px solid rgba(251,191,36,0.4)',  icon: '⬆️', text: 'Mise à jour en cours...', pulse: false },
-    synced:    { bg: 'rgba(6,78,59,0.95)',    border: '1px solid rgba(52,211,153,0.4)',  icon: '✅', text: 'Document synchronisé !', pulse: false },
-    error:     { bg: 'rgba(127,29,29,0.95)',  border: '1px solid rgba(252,165,165,0.4)', icon: '❌', text: 'Erreur de sync', pulse: false },
-  };
-  const c = configs[state] || configs.watching;
-  badge.style.background = c.bg;
-  badge.style.border = c.border;
-  badge.style.color = '#fff';
-  badge.innerHTML = `
-    <span>${c.icon}</span>
-    <div>
-      <div style="font-size:11px;opacity:0.7;margin-bottom:2px">${escapeHtml(fileName)}</div>
-      <div>${c.text}</div>
-    </div>
-    <button onclick="stopFileWatch()" style="margin-left:8px;background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px">Arrêter</button>
-  `;
-}
+      showToast('⬇️ Téléchargement du fichier...', 'info', 3000);
+      let fileUrl = doc.file_url;
+      if (G.supabase && doc.storage_path) {
+        const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
+        if (data?.signedUrl) fileUrl = data.signedUrl;
+      }
+      const a = document.createElement('a');
+      a.href = fileUrl; a.download = doc.name; a.click();
 
-function hideSyncBadge() {
-  const badge = document.getElementById('syncStatusBadge');
-  if (badge) badge.remove();
-}
+      await new Promise(r => setTimeout(r, 1500));
+      showToast('📂 Sélectionnez le fichier téléchargé pour activer la sync automatique', 'info', 6000);
 
-async function autoUploadNewVersion(docId, file) {
-  const doc = G.documents.find(d => d.id === docId);
-  if (!doc || !G.supabase) return;
+      try {
+        const ext = doc.name.split('.').pop().toLowerCase();
+        const mimeMap = {
+          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          doc:  'application/msword',
+          xls:  'application/vnd.ms-excel',
+        };
 
-  try {
-    // Uploader le fichier dans Supabase Storage (même chemin = écrase)
-    const { error: uploadError } = await G.supabase.storage
-      .from(CONFIG.storageBucket)
-      .upload(doc.storage_path, file, { upsert: true, contentType: file.type });
+        const [fileHandle] = await window.showOpenFilePicker({
+          types: [{ description: 'Document Office', accept: { [mimeMap[ext] || '*/*']: [`.${ext}`] } }],
+          multiple: false
+        });
 
-    if (uploadError) throw uploadError;
+        stopFileWatch();
 
-    // Incrémenter la version et mettre à jour les métadonnées
-    const newVersion = (doc.version || 1) + 1;
-    const { error: dbError } = await G.supabase.from('documents').update({
-      version:    newVersion,
-      size:       file.size,
-      updated_at: new Date().toISOString()
-    }).eq('id', docId);
+        _watchFileHandle  = fileHandle;
+        _watchDocId       = docId;
+        const initialFile = await fileHandle.getFile();
+        _watchLastModified = initialFile.lastModified;
 
-    if (dbError) throw dbError;
+        showSyncBadge(doc.name, 'watching');
 
-    // Mettre à jour localement
-    doc.version    = newVersion;
-    doc.size       = file.size;
-    doc.updated_at = new Date().toISOString();
+        _watchInterval = setInterval(async () => {
+          try {
+            const file = await _watchFileHandle.getFile();
+            if (file.lastModified !== _watchLastModified) {
+              _watchLastModified = file.lastModified;
+              showSyncBadge(doc.name, 'uploading');
+              await autoUploadNewVersion(docId, file);
+              showSyncBadge(doc.name, 'synced');
+              setTimeout(() => showSyncBadge(doc.name, 'watching'), 3000);
+            }
+          } catch(e) {
+            stopFileWatch();
+          }
+        }, 3000);
 
-    // Broadcaster la mise à jour aux autres collaborateurs
-    if (_realtimeChannel) {
-      _realtimeChannel.send({
-        type: 'broadcast',
-        event: 'doc_updated',
-        payload: { docId, version: newVersion, updatedBy: G.currentUser.name || G.currentUser.email }
+        showToast(`✅ Sync activée pour "${doc.name}". Sauvegardez dans Office → mis à jour automatiquement !`, 'success', 8000);
+        await addAuditLog('edit_sync_start', 'document', docId, `Sync automatique démarrée: ${doc.name}`);
+
+      } catch(e) {
+        if (e.name !== 'AbortError') showToast('Sync annulée', 'warning');
+      }
+    }
+
+    function stopFileWatch() {
+      if (_watchInterval) { clearInterval(_watchInterval); _watchInterval = null; }
+      _watchFileHandle  = null;
+      _watchDocId       = null;
+      _watchLastModified = 0;
+      hideSyncBadge();
+    }
+
+    function showSyncBadge(fileName, state) {
+      let badge = document.getElementById('syncStatusBadge');
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'syncStatusBadge';
+        badge.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:all 0.3s ease;backdrop-filter:blur(12px);';
+        document.body.appendChild(badge);
+      }
+      const configs = {
+        watching:  { bg: 'rgba(30,58,138,0.95)', border: '1px solid rgba(96,165,250,0.4)', icon: '🔵', text: 'Sync active — en attente de modifications', pulse: true  },
+        uploading: { bg: 'rgba(120,53,15,0.95)',  border: '1px solid rgba(251,191,36,0.4)',  icon: '⬆️', text: 'Mise à jour en cours...', pulse: false },
+        synced:    { bg: 'rgba(6,78,59,0.95)',    border: '1px solid rgba(52,211,153,0.4)',  icon: '✅', text: 'Document synchronisé !', pulse: false },
+        error:     { bg: 'rgba(127,29,29,0.95)',  border: '1px solid rgba(252,165,165,0.4)', icon: '❌', text: 'Erreur de sync', pulse: false },
+      };
+      const c = configs[state] || configs.watching;
+      badge.style.background = c.bg;
+      badge.style.border = c.border;
+      badge.style.color = '#fff';
+      badge.innerHTML = `
+        <span>${c.icon}</span>
+        <div>
+          <div style="font-size:11px;opacity:0.7;margin-bottom:2px">${escapeHtml(fileName)}</div>
+          <div>${c.text}</div>
+        </div>
+        <button onclick="stopFileWatch()" style="margin-left:8px;background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px">Arrêter</button>
+      `;
+    }
+
+    function hideSyncBadge() {
+      const badge = document.getElementById('syncStatusBadge');
+      if (badge) badge.remove();
+    }
+
+    async function autoUploadNewVersion(docId, file) {
+      const doc = G.documents.find(d => d.id === docId);
+      if (!doc || !G.supabase) return;
+
+      try {
+        const { error: uploadError } = await G.supabase.storage
+          .from(CONFIG.storageBucket)
+          .upload(doc.storage_path, file, { upsert: true, contentType: file.type });
+
+        if (uploadError) throw uploadError;
+
+        const newVersion = (doc.version || 1) + 1;
+        const { error: dbError } = await G.supabase.from('documents').update({
+          version:    newVersion,
+          size:       file.size,
+          updated_at: new Date().toISOString()
+        }).eq('id', docId);
+
+        if (dbError) throw dbError;
+
+        doc.version    = newVersion;
+        doc.size       = file.size;
+        doc.updated_at = new Date().toISOString();
+
+        if (_realtimeChannel) {
+          _realtimeChannel.send({
+            type: 'broadcast',
+            event: 'doc_updated',
+            payload: { docId, version: newVersion, updatedBy: G.currentUser.name || G.currentUser.email }
+          });
+        }
+
+        await addAuditLog('auto_version', 'document', docId, `Version ${newVersion} sauvegardée automatiquement (${formatBytes(file.size)})`);
+        renderDocuments();
+        updatePreviewMetadata(doc);
+        console.log(`✅ Version ${newVersion} uploadée pour "${doc.name}"`);
+      } catch(err) {
+        console.error('autoUpload error:', err);
+        showSyncBadge(doc.name, 'error');
+        showToast('Erreur sync: ' + err.message, 'error');
+      }
+    }
+
+    // Exposer stopFileWatch globalement
+    window.stopFileWatch = stopFileWatch;
+
+    // ── Commentaires ──
+    function toggleCommentsPanel() {
+      const panel = document.getElementById('commentsPanel');
+      if (panel) panel.classList.toggle('hidden');
+    }
+
+    async function loadComments(docId) {
+      if (!docId || !G.supabase) return;
+      try {
+        const { data } = await G.supabase.from('document_comments')
+          .select('*').eq('document_id', docId).order('created_at', { ascending: true }).limit(100);
+        _commentsCache[docId] = data || [];
+        renderComments(docId);
+      } catch(e) { /* table peut ne pas exister */ }
+    }
+
+    function renderComments(docId) {
+      const list  = document.getElementById('commentsList');
+      const count = document.getElementById('commentsCount');
+      if (!list) return;
+      const comments = _commentsCache[docId] || [];
+      if (count) count.textContent = comments.length;
+      if (!comments.length) {
+        list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-4">Aucun commentaire. Soyez le premier !</p>';
+        return;
+      }
+      list.innerHTML = comments.map(c => `
+        <div class="flex gap-2">
+          <div class="w-6 h-6 rounded-full bg-blue-500/30 flex items-center justify-center text-xs text-blue-300 flex-shrink-0">
+            ${(c.user_name || c.user_email || '?').slice(0,1).toUpperCase()}
+          </div>
+          <div class="flex-1 bg-blue-900/30 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-blue-300 text-xs font-medium">${escapeHtml(c.user_name || c.user_email || 'Anonyme')}</span>
+              <span class="text-blue-400/40 text-xs">${formatDate(c.created_at)}</span>
+            </div>
+            <p class="text-white/80 text-xs">${escapeHtml(c.content)}</p>
+          </div>
+        </div>`).join('');
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function appendComment(payload) {
+      const docId = G.currentDocId;
+      if (!docId) return;
+      if (!_commentsCache[docId]) _commentsCache[docId] = [];
+      if (!_commentsCache[docId].find(c => c.id === payload.id)) {
+        _commentsCache[docId].push(payload);
+        renderComments(docId);
+        const panel = document.getElementById('commentsPanel');
+        if (panel?.classList.contains('hidden')) {
+          showToast(`💬 Nouveau commentaire de ${payload.user_name || payload.user_email}`, 'info');
+        }
+      }
+    }
+
+    async function addComment() {
+      const input = document.getElementById('newCommentInput');
+      const text  = input?.value.trim();
+      const docId = G.currentDocId;
+      if (!text || !docId) return;
+
+      const comment = {
+        id:          generateId(),
+        document_id: docId,
+        user_id:     G.currentUser.id,
+        user_name:   G.currentUser.name || G.currentUser.email,
+        user_email:  G.currentUser.email,
+        content:     text,
+        created_at:  new Date().toISOString()
+      };
+
+      try {
+        await G.supabase.from('document_comments').insert(comment);
+      } catch(e) { /* table optionnelle */ }
+
+      if (_realtimeChannel) {
+        _realtimeChannel.send({ type: 'broadcast', event: 'comment', payload: { ...comment, docId } });
+      }
+
+      appendComment(comment);
+      input.value = '';
+
+      const panel = document.getElementById('commentsPanel');
+      if (panel?.classList.contains('hidden')) panel.classList.remove('hidden');
+    }
+
+    // ── Onglets collaboration modal ──
+    function switchCollabTab(tab) {
+      ['invite','members','activity'].forEach(t => {
+        document.getElementById(`collabTab${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.add('hidden');
+        const btn = document.getElementById(`tab${t.charAt(0).toUpperCase()+t.slice(1)}`);
+        if (btn) { btn.classList.remove('bg-blue-500/30','text-white'); btn.classList.add('text-blue-300/70'); }
       });
+      document.getElementById(`collabTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`)?.classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`);
+      if (activeBtn) { activeBtn.classList.add('bg-blue-500/30','text-white'); activeBtn.classList.remove('text-blue-300/70'); }
+
+      if (tab === 'members') loadCollabMembers();
+      if (tab === 'activity') loadCollabActivity();
+      updateCollabPresence();
     }
 
-    // Audit
-    await addAuditLog('auto_version', 'document', docId, `Version ${newVersion} sauvegardée automatiquement (${formatBytes(file.size)})`);
-
-    // Rafraîchir l'affichage
-    renderDocuments();
-    updatePreviewMetadata(doc);
-
-    console.log(`✅ Version ${newVersion} uploadée pour "${doc.name}"`);
-  } catch(err) {
-    console.error('autoUpload error:', err);
-    showSyncBadge(doc.name, 'error');
-    showToast('Erreur sync: ' + err.message, 'error');
-  }
-}
-
-// Exposer stopFileWatch globalement
-window.stopFileWatch = stopFileWatch;
-
-// ── Commentaires ──
-function toggleCommentsPanel() {
-  const panel = document.getElementById('commentsPanel');
-  if (panel) panel.classList.toggle('hidden');
-}
-
-async function loadComments(docId) {
-  if (!docId || !G.supabase) return;
-  try {
-    const { data } = await G.supabase.from('document_comments')
-      .select('*').eq('document_id', docId).order('created_at', { ascending: true }).limit(100);
-    _commentsCache[docId] = data || [];
-    renderComments(docId);
-  } catch(e) { /* table peut ne pas exister */ }
-}
-
-function renderComments(docId) {
-  const list  = document.getElementById('commentsList');
-  const count = document.getElementById('commentsCount');
-  if (!list) return;
-  const comments = _commentsCache[docId] || [];
-  if (count) count.textContent = comments.length;
-  if (!comments.length) {
-    list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-4">Aucun commentaire. Soyez le premier !</p>';
-    return;
-  }
-  list.innerHTML = comments.map(c => `
-    <div class="flex gap-2">
-      <div class="w-6 h-6 rounded-full bg-blue-500/30 flex items-center justify-center text-xs text-blue-300 flex-shrink-0">
-        ${(c.user_name || c.user_email || '?').slice(0,1).toUpperCase()}
-      </div>
-      <div class="flex-1 bg-blue-900/30 rounded-lg px-3 py-2">
-        <div class="flex items-center gap-2 mb-1">
-          <span class="text-blue-300 text-xs font-medium">${escapeHtml(c.user_name || c.user_email || 'Anonyme')}</span>
-          <span class="text-blue-400/40 text-xs">${formatDate(c.created_at)}</span>
-        </div>
-        <p class="text-white/80 text-xs">${escapeHtml(c.content)}</p>
-      </div>
-    </div>`).join('');
-  list.scrollTop = list.scrollHeight;
-}
-
-function appendComment(payload) {
-  const docId = G.currentDocId;
-  if (!docId) return;
-  if (!_commentsCache[docId]) _commentsCache[docId] = [];
-  if (!_commentsCache[docId].find(c => c.id === payload.id)) {
-    _commentsCache[docId].push(payload);
-    renderComments(docId);
-    const panel = document.getElementById('commentsPanel');
-    if (panel?.classList.contains('hidden')) {
-      showToast(`💬 Nouveau commentaire de ${payload.user_name || payload.user_email}`, 'info');
+    async function loadCollabMembers() {
+      const docId = G.collabModalDocId;
+      const list  = document.getElementById('collabMembersList');
+      if (!list || !docId) return;
+      const shares = G.shares.filter(s => s.document_id === docId);
+      if (!shares.length) {
+        list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucun collaborateur invité.</p>';
+        return;
+      }
+      list.innerHTML = shares.map(s => `
+        <div class="flex items-center justify-between p-3 bg-blue-900/20 rounded-xl">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-sm">
+              ${(s.recipient_email || '?').slice(0,1).toUpperCase()}
+            </div>
+            <div>
+              <p class="text-white text-sm">${escapeHtml(s.recipient_email || 'Inconnu')}</p>
+              <p class="text-blue-400/50 text-xs">${s.permission === 'view' ? '👁 Lecture' : s.permission === 'download' ? '⬇ Téléchargement' : '✏ Modification'} • ${formatDate(s.created_at)}</p>
+            </div>
+          </div>
+          <button onclick="revokeShare('${s.id}')" class="text-red-400/60 hover:text-red-400 text-xs p-1 rounded" title="Révoquer l'accès">
+            <i class="fas fa-user-minus"></i>
+          </button>
+        </div>`).join('');
     }
-  }
-}
 
-async function addComment() {
-  const input = document.getElementById('newCommentInput');
-  const text  = input?.value.trim();
-  const docId = G.currentDocId;
-  if (!text || !docId) return;
-
-  const comment = {
-    id:          generateId(),
-    document_id: docId,
-    user_id:     G.currentUser.id,
-    user_name:   G.currentUser.name || G.currentUser.email,
-    user_email:  G.currentUser.email,
-    content:     text,
-    created_at:  new Date().toISOString()
-  };
-
-  // Sauvegarder en base (si la table existe)
-  try {
-    await G.supabase.from('document_comments').insert(comment);
-  } catch(e) { /* table optionnelle */ }
-
-  // Broadcaster aux autres via Realtime
-  if (_realtimeChannel) {
-    _realtimeChannel.send({ type: 'broadcast', event: 'comment', payload: { ...comment, docId } });
-  }
-
-  // Afficher localement
-  appendComment(comment);
-  input.value = '';
-
-  // Ouvrir le panneau si fermé
-  const panel = document.getElementById('commentsPanel');
-  if (panel?.classList.contains('hidden')) panel.classList.remove('hidden');
-}
-
-// ── Onglets collaboration modal ──
-function switchCollabTab(tab) {
-  ['invite','members','activity'].forEach(t => {
-    document.getElementById(`collabTab${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.add('hidden');
-    const btn = document.getElementById(`tab${t.charAt(0).toUpperCase()+t.slice(1)}`);
-    if (btn) { btn.classList.remove('bg-blue-500/30','text-white'); btn.classList.add('text-blue-300/70'); }
-  });
-  document.getElementById(`collabTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`)?.classList.remove('hidden');
-  const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`);
-  if (activeBtn) { activeBtn.classList.add('bg-blue-500/30','text-white'); activeBtn.classList.remove('text-blue-300/70'); }
-
-  if (tab === 'members') loadCollabMembers();
-  if (tab === 'activity') loadCollabActivity();
-  updateCollabPresence();
-}
-
-async function loadCollabMembers() {
-  const docId = G.collabModalDocId;
-  const list  = document.getElementById('collabMembersList');
-  if (!list || !docId) return;
-  const shares = G.shares.filter(s => s.document_id === docId);
-  if (!shares.length) {
-    list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucun collaborateur invité.</p>';
-    return;
-  }
-  list.innerHTML = shares.map(s => `
-    <div class="flex items-center justify-between p-3 bg-blue-900/20 rounded-xl">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-sm">
-          ${(s.recipient_email || '?').slice(0,1).toUpperCase()}
-        </div>
-        <div>
-          <p class="text-white text-sm">${escapeHtml(s.recipient_email || 'Inconnu')}</p>
-          <p class="text-blue-400/50 text-xs">${s.permission === 'view' ? '👁 Lecture' : s.permission === 'download' ? '⬇ Téléchargement' : '✏ Modification'} • ${formatDate(s.created_at)}</p>
-        </div>
-      </div>
-      <button onclick="revokeShare('${s.id}')" class="text-red-400/60 hover:text-red-400 text-xs p-1 rounded" title="Révoquer l'accès">
-        <i class="fas fa-user-minus"></i>
-      </button>
-    </div>`).join('');
-}
-
-async function loadCollabActivity() {
-  const docId = G.collabModalDocId;
-  const list  = document.getElementById('collabActivityList');
-  if (!list || !docId || !G.supabase) return;
-  try {
-    const { data } = await G.supabase.from('audit_logs')
-      .select('*').eq('resource_id', docId).order('created_at', { ascending: false }).limit(20);
-    if (!data?.length) {
-      list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucune activité enregistrée.</p>';
-      return;
+    async function loadCollabActivity() {
+      const docId = G.collabModalDocId;
+      const list  = document.getElementById('collabActivityList');
+      if (!list || !docId || !G.supabase) return;
+      try {
+        const { data } = await G.supabase.from('audit_logs')
+          .select('*').eq('resource_id', docId).order('created_at', { ascending: false }).limit(20);
+        if (!data?.length) {
+          list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucune activité enregistrée.</p>';
+          return;
+        }
+        list.innerHTML = data.map(log => `
+          <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-blue-900/20">
+            <i class="fas fa-circle text-blue-400/40 mt-1.5" style="font-size:6px"></i>
+            <div>
+              <p class="text-white/80 text-xs">${escapeHtml(log.details || log.action || '')}</p>
+              <p class="text-blue-400/40 text-xs">${formatDate(log.created_at)}</p>
+            </div>
+          </div>`).join('');
+      } catch(e) {
+        list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Activité non disponible.</p>';
+      }
     }
-    list.innerHTML = data.map(log => `
-      <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-blue-900/20">
-        <i class="fas fa-circle text-blue-400/40 mt-1.5" style="font-size:6px"></i>
-        <div>
-          <p class="text-white/80 text-xs">${escapeHtml(log.details || log.action || '')}</p>
-          <p class="text-blue-400/40 text-xs">${formatDate(log.created_at)}</p>
-        </div>
-      </div>`).join('');
-  } catch(e) {
-    list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Activité non disponible.</p>';
-  }
-}
 
-function updateCollabPresence() {
-  const container = document.getElementById('collabPresenceList');
-  if (!container) return;
-  const users = Object.values(_presenceUsers);
-  if (!users.length) {
-    container.innerHTML = '<span class="text-blue-400/40 text-xs">Personne d\'autre en ligne</span>';
-    return;
-  }
-  container.innerHTML = users.map(u => `
-    <div class="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-full">
-      <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-      <span class="text-green-300 text-xs">${escapeHtml(u.userName || u.userEmail)}</span>
-    </div>`).join('');
-}
+    function updateCollabPresence() {
+      const container = document.getElementById('collabPresenceList');
+      if (!container) return;
+      const users = Object.values(_presenceUsers);
+      if (!users.length) {
+        container.innerHTML = '<span class="text-blue-400/40 text-xs">Personne d\'autre en ligne</span>';
+        return;
+      }
+      container.innerHTML = users.map(u => `
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-full">
+          <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+          <span class="text-green-300 text-xs">${escapeHtml(u.userName || u.userEmail)}</span>
+        </div>`).join('');
+    }
 
-async function revokeShare(shareId) {
-  if (!confirm('Révoquer cet accès ?')) return;
-  const { error } = await G.supabase.from('shares').delete().eq('id', shareId);
-  if (error) { showToast('Erreur: ' + error.message, 'error'); return; }
-  G.shares = G.shares.filter(s => s.id !== shareId);
-  showToast('Accès révoqué', 'success');
-  loadCollabMembers();
-}
+    async function revokeShare(shareId) {
+      if (!confirm('Révoquer cet accès ?')) return;
+      const { error } = await G.supabase.from('shares').delete().eq('id', shareId);
+      if (error) { showToast('Erreur: ' + error.message, 'error'); return; }
+      G.shares = G.shares.filter(s => s.id !== shareId);
+      showToast('Accès révoqué', 'success');
+      loadCollabMembers();
+    }
 
-// Exposer les nouvelles fonctions
-Object.assign(window, {
-  editCurrentDocument, toggleCommentsPanel, addComment,
-  switchCollabTab, revokeShare, loadCollabMembers, loadCollabActivity
-});
+    // Exposer les nouvelles fonctions
+    Object.assign(window, {
+      editCurrentDocument, toggleCommentsPanel, addComment,
+      switchCollabTab, revokeShare, loadCollabMembers, loadCollabActivity
+    });
   }
   
   // Exposer toutes les fonctions globalement
@@ -1343,37 +1335,36 @@ Object.assign(window, {
   window.openCollabModal       = openCollabModal;
   window.closeCollabModal      = closeCollabModal;
   window.inviteCollaborator    = inviteCollaborator;
-window.openQuickShareModal     = openQuickShareModal;
-window.closeQuickShareModal    = closeQuickShareModal;
-window.switchQuickShareTab     = switchQuickShareTab;
-window.executeQuickShare       = executeQuickShare;
-window.addShareRecipient       = addShareRecipient;
-window.handleShareEmailKeydown = handleShareEmailKeydown;
-window.suggestShareRecipients  = suggestShareRecipients;
-window.selectQsSuggestion      = selectQsSuggestion;
-window.toggleQsLinkPwd         = toggleQsLinkPwd;
-window.toggleQsLinkMaxViews    = toggleQsLinkMaxViews;
-window.openShareDetailModal    = openShareDetailModal;
-window.closeShareDetailModal   = closeShareDetailModal;
-window.filterSharedView        = filterSharedView;
-window.clearSharedFilters      = clearSharedFilters;
-window.createPublicLink        = createPublicLink;
-window.copyPublicLink          = copyPublicLink;
-window.copyQsLink              = copyQsLink;
-window.shareViaEmail           = shareViaEmail;
-window.revokePublicLink        = revokePublicLink;
-window.deletePublicLink        = deletePublicLink;
-window.extendPublicLink        = extendPublicLink;
-window.loadShareActivity       = loadShareActivity;
-window.extendShare             = extendShare;
-window.renewShare              = renewShare;
-window.deleteShareRecord       = deleteShareRecord;
-window.purgeExpiredShares      = purgeExpiredShares;
-window.toggleBulkSelect        = toggleBulkSelect;
-window.bulkRevokeSelected      = bulkRevokeSelected;
-window.bulkExtendSelected      = bulkExtendSelected;
-window.clearBulkSelection      = clearBulkSelection;
-
+  window.openQuickShareModal   = openQuickShareModal;
+  window.closeQuickShareModal  = closeQuickShareModal;
+  window.switchQuickShareTab   = switchQuickShareTab;
+  window.executeQuickShare     = executeQuickShare;
+  window.addShareRecipient     = addShareRecipient;
+  window.handleShareEmailKeydown = handleShareEmailKeydown;
+  window.suggestShareRecipients  = suggestShareRecipients;
+  window.selectQsSuggestion      = selectQsSuggestion;
+  window.toggleQsLinkPwd         = toggleQsLinkPwd;
+  window.toggleQsLinkMaxViews    = toggleQsLinkMaxViews;
+  window.openShareDetailModal    = openShareDetailModal;
+  window.closeShareDetailModal   = closeShareDetailModal;
+  window.filterSharedView        = filterSharedView;
+  window.clearSharedFilters      = clearSharedFilters;
+  window.createPublicLink        = createPublicLink;
+  window.copyPublicLink          = copyPublicLink;
+  window.copyQsLink              = copyQsLink;
+  window.shareViaEmail           = shareViaEmail;
+  window.revokePublicLink        = revokePublicLink;
+  window.deletePublicLink        = deletePublicLink;
+  window.extendPublicLink        = extendPublicLink;
+  window.loadShareActivity       = loadShareActivity;
+  window.extendShare             = extendShare;
+  window.renewShare              = renewShare;
+  window.deleteShareRecord       = deleteShareRecord;
+  window.purgeExpiredShares      = purgeExpiredShares;
+  window.toggleBulkSelect        = toggleBulkSelect;
+  window.bulkRevokeSelected      = bulkRevokeSelected;
+  window.bulkExtendSelected      = bulkExtendSelected;
+  window.clearBulkSelection      = clearBulkSelection;
   window.exportSearchResults    = exportSearchResults;
   window.createNewVersion       = createNewVersion;
   window.confirmCreateNewVersion= confirmCreateNewVersion;
@@ -1385,9 +1376,7 @@ window.clearBulkSelection      = clearBulkSelection;
   window.sysLogsPrevPage        = sysLogsPrevPage;
   window.sysLogsNextPage        = sysLogsNextPage;
   window.toggleSysLogsAutoRefresh = toggleSysLogsAutoRefresh;
-
 });
-
 
 // ─── Exposition globale — ui.js ───
 window.switchView              = switchView;
