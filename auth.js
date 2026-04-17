@@ -166,28 +166,22 @@ async function ensureCompanyExists(companyId, companyName) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// CORRECTION : setRootFolder avec upsert et vérification préalable
-// ═══════════════════════════════════════════════════════════════════════
+// CORRECTION : setRootFolder avec upsert
 async function setRootFolder(retries = 3) {
   if (!G.currentUser?.companyId) return false;
-
-  // 1. Vérifier si le dossier racine existe déjà
+  // Vérifier l'existence
   const { data: rootFolder, error: selectError } = await G.supabase
     .from('folders')
     .select('id')
     .eq('company_id', G.currentUser.companyId)
     .eq('name', 'Racine')
     .maybeSingle();
-
   if (rootFolder && !selectError) {
     G.currentFolderId = rootFolder.id;
     G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
     console.log('✅ Dossier racine déjà existant :', rootFolder.id);
     return true;
   }
-
-  // 2. Sinon, tenter de le créer avec upsert pour éviter les conflits de clé
   const newRootId = `${G.currentUser.companyId}_root`;
   const { error: upsertError } = await G.supabase
     .from('folders')
@@ -198,14 +192,12 @@ async function setRootFolder(retries = 3) {
       company_id: G.currentUser.companyId,
       created_at: new Date().toISOString()
     }, { onConflict: 'id' });
-
   if (!upsertError) {
     G.currentFolderId = newRootId;
     G.folderPath = [{ id: newRootId, name: 'Racine' }];
     console.log('✅ Dossier racine créé avec succès :', newRootId);
     return true;
   }
-
   console.error('Impossible de créer/récupérer le dossier racine', upsertError);
   showToast('Erreur d\'initialisation des dossiers', 'error');
   return false;
@@ -527,7 +519,6 @@ async function demoLogin() {
     status: 'active', isSystemAdmin: false, isDemo: true
   };
   G.currentCompany = { id: DEMO_COMPANY_ID, name: 'Entreprise Démo', plan: 'professional' };
-  // Données démo simulées (conserver l'existant)
   const now = new Date();
   const day = (n) => new Date(now - n * 86400000).toISOString();
   G.documents = [
@@ -574,7 +565,6 @@ async function oauthLogin(provider) {
   }
 }
 
-// Expositions globales
 window.handleLogin = handleLogin;
 window.handleRegister = handleRegister;
 window.handleLogout = handleLogout;
