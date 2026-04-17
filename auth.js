@@ -166,33 +166,47 @@ async function ensureCompanyExists(companyId, companyName) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// CORRECTION : setRootFolder avec upsert et vérification préalable
+// ═══════════════════════════════════════════════════════════════════════
 async function setRootFolder(retries = 3) {
   if (!G.currentUser?.companyId) return false;
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const { data: rootFolder, error } = await G.supabase
-      .from('folders')
-      .select('id')
-      .eq('company_id', G.currentUser.companyId)
-      .eq('name', 'Racine')
-      .maybeSingle();
-    if (rootFolder && !error) {
-      G.currentFolderId = rootFolder.id;
-      G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
-      return true;
-    }
-    const newRootId = `${G.currentUser.companyId}_root`;
-    const { error: insertErr } = await G.supabase.from('folders').insert({
-      id: newRootId, name: 'Racine', parent_id: null, company_id: G.currentUser.companyId, created_at: new Date().toISOString()
-    });
-    if (!insertErr) {
-      G.currentFolderId = newRootId;
-      G.folderPath = [{ id: newRootId, name: 'Racine' }];
-      return true;
-    }
-    console.warn(`Tentative ${attempt} échouée pour créer le dossier racine`, insertErr);
-    if (attempt < retries) await new Promise(r => setTimeout(r, 500));
+
+  // 1. Vérifier si le dossier racine existe déjà
+  const { data: rootFolder, error: selectError } = await G.supabase
+    .from('folders')
+    .select('id')
+    .eq('company_id', G.currentUser.companyId)
+    .eq('name', 'Racine')
+    .maybeSingle();
+
+  if (rootFolder && !selectError) {
+    G.currentFolderId = rootFolder.id;
+    G.folderPath = [{ id: rootFolder.id, name: 'Racine' }];
+    console.log('✅ Dossier racine déjà existant :', rootFolder.id);
+    return true;
   }
-  console.error('Impossible de créer/récupérer le dossier racine');
+
+  // 2. Sinon, tenter de le créer avec upsert pour éviter les conflits de clé
+  const newRootId = `${G.currentUser.companyId}_root`;
+  const { error: upsertError } = await G.supabase
+    .from('folders')
+    .upsert({
+      id: newRootId,
+      name: 'Racine',
+      parent_id: null,
+      company_id: G.currentUser.companyId,
+      created_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+  if (!upsertError) {
+    G.currentFolderId = newRootId;
+    G.folderPath = [{ id: newRootId, name: 'Racine' }];
+    console.log('✅ Dossier racine créé avec succès :', newRootId);
+    return true;
+  }
+
+  console.error('Impossible de créer/récupérer le dossier racine', upsertError);
   showToast('Erreur d\'initialisation des dossiers', 'error');
   return false;
 }
