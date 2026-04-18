@@ -16,7 +16,7 @@ const CONFIG = {
   },
   systemAdmins: [
     { email: 'ahouansouange@live.fr', companyName: 'live', companyId: 'live_company', password: 'AA++aa++11111' },
-    { email: 'systemesshop@gmail.com', companyName: 'systemesshop', companyId: 'systemesshop_company', password: 'SS++ss++11111' }
+  
   ]
 };
 
