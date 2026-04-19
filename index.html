@@ -137,6 +137,18 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
 .rich-toolbar-btn:hover{background:rgba(59,130,246,0.2);color:white;}
 .rich-toolbar-btn.active{background:rgba(59,130,246,0.3);color:#93c5fd;}
 .folder-drop-target{border:2px dashed rgba(96,165,250,0.4)!important;background:rgba(59,130,246,0.08)!important;}
+.shared-tab{transition:all 0.2s;white-space:nowrap;}
+.shared-tab.active{color:#93c5fd;border-bottom-color:#60a5fa;}
+.qs-tab{transition:all 0.2s;border-radius:8px;}
+.qs-tab.active{background:rgba(37,99,235,0.3)!important;color:#93c5fd;}
+.perm-badge-view{background:rgba(96,165,250,0.15);color:#93c5fd;border:1px solid rgba(96,165,250,0.25);}
+.perm-badge-download{background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.25);}
+.perm-badge-edit{background:rgba(245,158,11,0.15);color:#fcd34d;border:1px solid rgba(245,158,11,0.25);}
+.status-active{background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.25);}
+.status-revoked{background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.25);}
+.status-expired{background:rgba(245,158,11,0.15);color:#fcd34d;border:1px solid rgba(245,158,11,0.25);}
+.share-card{transition:all 0.2s;}
+.recipient-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(59,130,246,0.2);border:1px solid rgba(96,165,250,0.3);border-radius:20px;font-size:12px;color:#93c5fd;}
 .audit-row:hover{background:rgba(59,130,246,0.04);}
 
 </style>
@@ -568,26 +580,102 @@ body{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);min-
     <div id="view-shared" class="view-section space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-share-alt text-purple-400"></i>Documents partagés</h2><p class="text-sm text-blue-300/80">Gestion des accès et partages sécurisés</p></div>
+        <div class="flex gap-2">
+          <button onclick="openQuickShareModal()" class="btn-primary px-4 py-2 rounded-xl text-sm text-white flex items-center gap-2"><i class="fas fa-share-nodes"></i>Partage rapide</button>
+          <button onclick="refreshShares()" class="px-4 py-2 glass-card rounded-xl text-blue-300 border border-blue-500/30 text-sm flex items-center gap-2 hover:bg-blue-500/10"><i class="fas fa-sync-alt"></i>Actualiser</button>
+        </div>
       </div>
-      <div class="flex gap-2 border-b border-blue-500/20 pb-0">
-        <button onclick="switchSharedTab('received')" id="tab-received" class="px-5 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2"><i class="fas fa-inbox"></i>Reçus<span id="receivedCountBadge" class="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full hidden">0</span></button>
-        <button onclick="switchSharedTab('sent')" id="tab-sent" class="px-5 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px hover:text-blue-400 flex items-center gap-2"><i class="fas fa-paper-plane"></i>Envoyés<span id="sentCountBadge" class="ml-1 px-1.5 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded-full hidden">0</span></button>
+
+      <!-- KPIs -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="glass-card rounded-xl p-3 text-center border border-blue-500/20 cursor-pointer hover:border-blue-400/30" onclick="switchSharedTab('received')"><p class="text-white text-xl font-bold" id="kpiReceivedCount">—</p><p class="text-xs text-blue-300/50">Reçus actifs</p></div>
+        <div class="glass-card rounded-xl p-3 text-center border border-purple-500/20 cursor-pointer hover:border-purple-400/30" onclick="switchSharedTab('sent')"><p class="text-white text-xl font-bold" id="kpiSentCount">—</p><p class="text-xs text-blue-300/50">Envoyés actifs</p></div>
+        <div class="glass-card rounded-xl p-3 text-center border border-green-500/20 cursor-pointer hover:border-green-400/30" onclick="switchSharedTab('links')"><p class="text-white text-xl font-bold" id="kpiLinksCount">—</p><p class="text-xs text-blue-300/50">Liens publics</p></div>
+        <div class="glass-card rounded-xl p-3 text-center border border-orange-500/20 cursor-pointer hover:border-orange-400/30" onclick="switchSharedTab('expired')"><p class="text-white text-xl font-bold" id="kpiExpiredCount">—</p><p class="text-xs text-blue-300/50">Expirés / révoqués</p></div>
       </div>
-      <div id="shared-received">
-        <div id="sharedEmptyState" class="glass-card rounded-2xl p-8 text-center">
+
+      <!-- Filtres -->
+      <div class="glass-card rounded-xl p-3 border border-blue-500/20 flex flex-wrap items-center gap-3">
+        <input id="sharedSearchInput" oninput="filterSharedView()" placeholder="Rechercher un document ou email…" class="flex-1 min-w-[180px] bg-transparent text-white outline-none text-sm placeholder-gray-500">
+        <select id="sharedFilterPerm" onchange="filterSharedView()" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-1.5 text-sm text-gray-300 outline-none"><option value="">Toutes permissions</option><option value="view">Lecture</option><option value="download">Téléchargement</option><option value="edit">Modification</option></select>
+        <select id="sharedFilterStatus" onchange="filterSharedView()" class="bg-slate-900/50 border border-blue-500/20 rounded-lg px-3 py-1.5 text-sm text-gray-300 outline-none"><option value="">Tous statuts</option><option value="active">Actif</option><option value="revoked">Révoqué</option><option value="expired">Expiré</option></select>
+        <button onclick="clearSharedFilters()" class="text-xs text-blue-400 hover:text-blue-300">Réinitialiser</button>
+        <span id="sharedResultCount" class="text-xs text-blue-300/50 ml-auto"></span>
+      </div>
+
+      <!-- Bulk action bar -->
+      <div id="sharedBulkBar" class="hidden glass-card rounded-xl p-3 border border-blue-500/20 flex items-center gap-3">
+        <span id="sharedBulkCount" class="text-sm text-white font-medium">0 sélectionné(s)</span>
+        <button onclick="bulkRevokeSelected()" class="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs hover:bg-red-500/30 flex items-center gap-1"><i class="fas fa-ban"></i>Révoquer</button>
+        <button onclick="bulkExtendSelected(7)" class="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 text-xs hover:bg-green-500/30 flex items-center gap-1"><i class="fas fa-calendar-plus"></i>+7j</button>
+        <button onclick="clearBulkSelection()" class="ml-auto text-xs text-blue-400 hover:text-blue-300"><i class="fas fa-times"></i></button>
+      </div>
+
+      <!-- Onglets -->
+      <div class="flex border-b border-blue-500/20 pb-0 overflow-x-auto">
+        <button onclick="switchSharedTab('received')" id="sharedTab-received" class="shared-tab active px-5 py-2.5 text-sm font-medium text-blue-400 border-b-2 border-blue-400 -mb-px flex items-center gap-2 whitespace-nowrap"><i class="fas fa-inbox"></i>Reçus<span id="receivedCountBadge" class="ml-1 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded-full hidden">0</span></button>
+        <button onclick="switchSharedTab('sent')" id="sharedTab-sent" class="shared-tab px-5 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px hover:text-blue-400 flex items-center gap-2 whitespace-nowrap"><i class="fas fa-paper-plane"></i>Envoyés<span id="sentCountBadge" class="ml-1 px-1.5 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded-full hidden">0</span></button>
+        <button onclick="switchSharedTab('links')" id="sharedTab-links" class="shared-tab px-5 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px hover:text-blue-400 flex items-center gap-2 whitespace-nowrap"><i class="fas fa-link"></i>Liens publics</button>
+        <button onclick="switchSharedTab('expired')" id="sharedTab-expired" class="shared-tab px-5 py-2.5 text-sm font-medium text-gray-400 border-b-2 border-transparent -mb-px hover:text-blue-400 flex items-center gap-2 whitespace-nowrap"><i class="fas fa-clock"></i>Expirés</button>
+      </div>
+
+      <!-- Panel Reçus -->
+      <div id="shared-panel-received" class="shared-panel space-y-3">
+        <div id="sharedReceivedEmpty" class="glass-card rounded-2xl p-8 text-center hidden">
           <div class="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-400"><i class="fas fa-inbox text-3xl"></i></div>
           <p class="text-blue-300 mb-2">Aucun document reçu</p>
           <p class="text-sm text-blue-400/60">Les documents partagés avec vous apparaîtront ici</p>
         </div>
-        <div id="sharedList" class="doc-grid hidden"></div>
+        <div id="sharedReceivedList" class="space-y-3"></div>
       </div>
-      <div id="shared-sent" class="hidden space-y-3">
-        <div id="sentEmptyState" class="glass-card rounded-2xl p-8 text-center">
+
+      <!-- Panel Envoyés -->
+      <div id="shared-panel-sent" class="shared-panel hidden space-y-3">
+        <div id="sharedSentEmpty" class="glass-card rounded-2xl p-8 text-center hidden">
           <div class="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-400"><i class="fas fa-paper-plane text-3xl"></i></div>
           <p class="text-blue-300 mb-2">Aucun partage envoyé</p>
           <p class="text-sm text-blue-400/60">Partagez un document depuis la section Documents</p>
         </div>
-        <div id="sentSharesList" class="space-y-3 hidden"></div>
+        <div id="sharedSentList" class="space-y-3"></div>
+      </div>
+
+      <!-- Panel Liens publics -->
+      <div id="shared-panel-links" class="shared-panel hidden space-y-3">
+        <!-- Créer un lien public -->
+        <div class="glass-card rounded-xl p-5 border border-green-500/20">
+          <h4 class="text-white font-semibold text-sm mb-3 flex items-center gap-2"><i class="fas fa-plus-circle text-green-400"></i>Créer un lien public</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div><label class="text-blue-200 text-xs block mb-1">Document</label><select id="publicLinkDocId" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">— Sélectionner —</option></select></div>
+            <div><label class="text-blue-200 text-xs block mb-1">Expiration</label><select id="publicLinkExpiry" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="1">1 jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="0">Illimité</option></select></div>
+          </div>
+          <div class="flex flex-wrap gap-3 items-center mb-3">
+            <label class="flex items-center gap-2 text-sm text-white"><input type="checkbox" id="publicLinkPassword" onchange="document.getElementById('publicLinkPasswordVal').classList.toggle('hidden',!this.checked)"> Mot de passe</label>
+            <input id="publicLinkPasswordVal" type="text" placeholder="Mot de passe" class="hidden px-3 py-1.5 rounded-lg text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+            <select id="publicLinkPerm" class="px-3 py-1.5 rounded-lg text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="view">Lecture</option><option value="download">Téléchargement</option></select>
+          </div>
+          <button onclick="createPublicLink()" class="btn-primary px-4 py-2 rounded-xl text-white text-sm flex items-center gap-2"><i class="fas fa-link"></i>Générer le lien</button>
+          <div id="generatedPublicLinkResult" class="hidden mt-3 p-3 rounded-xl" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);">
+            <p class="text-green-400 text-xs font-bold mb-2"><i class="fas fa-check-circle mr-1"></i>Lien généré</p>
+            <div class="flex gap-2"><input id="generatedPublicLinkInput" readonly class="flex-1 px-3 py-2 rounded-lg text-green-400 text-xs font-mono outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(16,185,129,0.2);"><button onclick="copyPublicLink()" class="px-3 py-2 rounded-lg text-green-400 border border-green-500/20 hover:bg-green-500/10 text-sm"><i class="fas fa-copy"></i></button><button onclick="shareViaEmail()" class="px-3 py-2 rounded-lg text-blue-400 border border-blue-500/20 hover:bg-blue-500/10 text-sm"><i class="fas fa-envelope"></i></button></div>
+          </div>
+        </div>
+        <div id="publicLinksEmpty" class="glass-card rounded-2xl p-8 text-center hidden"><i class="fas fa-link text-3xl text-green-400/20 mb-3 block"></i><p class="text-blue-300">Aucun lien public créé</p></div>
+        <div id="publicLinksList" class="space-y-3"></div>
+      </div>
+
+      <!-- Panel Expirés -->
+      <div id="shared-panel-expired" class="shared-panel hidden space-y-3">
+        <div class="flex justify-end"><button onclick="purgeExpiredShares()" class="px-4 py-2 text-xs text-red-400 border border-red-500/20 rounded-xl hover:bg-red-500/10 flex items-center gap-2"><i class="fas fa-trash"></i>Purger tout</button></div>
+        <div id="expiredSharesEmpty" class="glass-card rounded-2xl p-8 text-center hidden"><i class="fas fa-clock text-3xl text-orange-400/20 mb-3 block"></i><p class="text-blue-300">Aucun partage expiré</p></div>
+        <div id="expiredSharesList" class="space-y-3"></div>
+      </div>
+
+      <!-- Modale détail partage -->
+      <div id="shareDetailModal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width:560px">
+          <div class="flex items-center justify-between mb-4"><h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-chart-line text-blue-400"></i>Détails du partage</h3><button onclick="closeShareDetailModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button></div>
+          <div id="shareDetailContent" class="space-y-3 max-h-[65vh] overflow-y-auto"></div>
+        </div>
       </div>
     </div>
 
@@ -1027,8 +1115,39 @@ create table if not exists workflows (
 
     <!-- ══ BILLING v6.0 -->
     <div id="view-billing2" class="view-section space-y-6">
-      <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-credit-card text-blue-400"></i>Abonnement &amp; Facturation</h2><p class="text-sm text-blue-300/80">Gérez votre plan SystemesGED</p></div>
-      <div id="billingV6Content"><p class="text-blue-300/50 text-sm text-center py-8">Chargement...</p></div>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h2 class="text-2xl font-bold text-white flex items-center gap-3"><i class="fas fa-credit-card text-blue-400"></i>Abonnement &amp; Facturation</h2><p class="text-sm text-blue-300/80">Gérez votre plan SystemesGED</p></div>
+        <button onclick="renderBillingV6()" class="px-4 py-2 glass-card rounded-xl text-blue-300 border border-blue-500/30 text-sm flex items-center gap-2 hover:bg-blue-500/10"><i class="fas fa-sync-alt"></i>Actualiser</button>
+      </div>
+      <!-- Plan actuel -->
+      <div class="glass-card rounded-xl p-5 border-l-4 border-blue-500">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div><p class="text-blue-300/70 text-xs font-semibold uppercase tracking-wider mb-1">Plan actuel</p>
+            <div class="flex items-center gap-3"><span id="currentPlanName" class="text-white text-xl font-bold">—</span><span id="currentPlanBadgeEl" class="badge-plan badge-free">FREE</span></div>
+            <p id="currentPlanDesc" class="text-blue-300/70 text-sm mt-1">—</p></div>
+          <div class="text-right"><p id="currentPlanPrice" class="text-white text-2xl font-bold">—</p><p class="text-green-400 text-xs mt-1">✓ Actif</p></div>
+        </div>
+      </div>
+      <!-- Stockage -->
+      <div class="glass-card rounded-xl p-5 border border-blue-500/20">
+        <div class="flex items-center justify-between mb-2"><p class="text-white font-semibold text-sm">Stockage utilisé</p><span id="storagePct" class="text-blue-300 text-sm font-bold">0%</span></div>
+        <div class="w-full bg-slate-900/50 rounded-full h-3 overflow-hidden"><div id="billingStorageBar" class="h-3 rounded-full transition-all duration-500 bg-blue-500" style="width:0%"></div></div>
+        <p id="storageUsed" class="text-xs text-blue-300/60 mt-2">—</p>
+        <div class="grid grid-cols-2 gap-3 mt-3">
+          <div class="glass-card rounded-lg p-3 border border-blue-500/10 text-center"><p class="text-white font-bold" id="billingDocs">—</p><p class="text-xs text-blue-300/50">Documents</p></div>
+          <div class="glass-card rounded-lg p-3 border border-blue-500/10 text-center"><p class="text-white font-bold" id="billingUsers">—</p><p class="text-xs text-blue-300/50">Utilisateurs actifs</p></div>
+        </div>
+      </div>
+      <!-- Plans disponibles -->
+      <h3 class="text-white font-semibold">Choisir un plan</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="plan-card selected" onclick="selectPlan('free',this)"><div class="badge-plan badge-free mb-3">FREE</div><p class="text-white text-2xl font-bold">0€</p><p class="text-blue-400/60 text-xs mb-3">/mois</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>5 utilisateurs</li><li><i class="fas fa-check text-green-400 mr-2"></i>1 GB stockage</li></ul></div>
+        <div class="plan-card" onclick="selectPlan('starter',this)"><div class="badge-plan badge-starter mb-3">STARTER</div><p class="text-white text-2xl font-bold">29€</p><p class="text-blue-400/60 text-xs mb-3">/mois</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>20 utilisateurs</li><li><i class="fas fa-check text-green-400 mr-2"></i>10 GB stockage</li></ul></div>
+        <div class="plan-card" onclick="selectPlan('professional',this)" style="position:relative"><div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#f59e0b,#d97706);color:white;font-size:0.65rem;font-weight:700;padding:2px 10px;border-radius:10px;">⭐ POPULAIRE</div><div class="badge-plan badge-pro mb-3 mt-2">PRO</div><p class="text-white text-2xl font-bold">79€</p><p class="text-blue-400/60 text-xs mb-3">/mois</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>100 utilisateurs</li><li><i class="fas fa-check text-green-400 mr-2"></i>100 GB stockage</li></ul></div>
+        <div class="plan-card" onclick="selectPlan('enterprise',this)"><div class="badge-plan badge-enterprise mb-3">ENTERPRISE</div><p class="text-white text-2xl font-bold">Devis</p><p class="text-blue-400/60 text-xs mb-3">&nbsp;</p><ul class="space-y-2 text-sm text-blue-300/70"><li><i class="fas fa-check text-green-400 mr-2"></i>Illimité</li></ul></div>
+      </div>
+      <div id="planPreview" class="text-xs text-blue-300/50 mt-1"></div>
+      <button id="upgradeBtn" onclick="simulateUpgrade()" class="btn-primary px-6 py-3 rounded-xl text-white font-semibold text-sm disabled:opacity-50" disabled data-plan=""><i class="fas fa-credit-card mr-2"></i>Passer au plan sélectionné</button>
     </div>
 
     <!-- ══ AUDIT SÉCURITÉ v6.0 -->
@@ -1432,7 +1551,7 @@ create table if not exists workflows (
     <!-- Actions -->
     <div class="flex gap-3 mt-4 pt-4 border-t border-blue-500/20">
       <button onclick="downloadCurrentDocument()" class="flex-1 px-4 py-2.5 bg-blue-500/20 text-blue-400 rounded-xl text-sm hover:bg-blue-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-download"></i>Télécharger</button>
-      <button onclick="shareCurrentDocument()" class="flex-1 px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-xl text-sm hover:bg-purple-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-share-alt"></i>Partager</button><button onclick="openRichEditor(G.currentDocId);closePreviewModal()" class="flex-1 px-4 py-2.5 bg-green-500/20 text-green-400 rounded-xl text-sm hover:bg-green-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-pen-nib"></i>Éditer</button>
+      <button onclick="shareCurrentDocument()" class="flex-1 px-4 py-2.5 bg-purple-500/20 text-purple-400 rounded-xl text-sm hover:bg-purple-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-share-alt"></i>Partager</button><button onclick="(function(){var id=G.currentDocId;closePreviewModal();if(!id)return;var doc=(G.documents||[]).find(function(d){return d.id===id;});var ext=doc&&doc.name?doc.name.split('.').pop().toLowerCase():'';(['doc','docx','xls','xlsx'].includes(ext)&&typeof openDocumentEditor==='function')?openDocumentEditor(id):(typeof openRichEditor==='function'&&openRichEditor(id));})()" class="flex-1 px-4 py-2.5 bg-green-500/20 text-green-400 rounded-xl text-sm hover:bg-green-500/30 font-medium flex items-center justify-center gap-2"><i class="fas fa-pen-nib"></i>Éditer</button>
       <button onclick="closePreviewModal()" class="px-4 py-2.5 bg-slate-700/50 text-gray-400 rounded-xl text-sm hover:bg-slate-600/50"><i class="fas fa-times"></i></button>
     </div>
   </div>
@@ -1991,49 +2110,8 @@ function _saveContentNow(){
   </div>
 </div>
 
-<!-- ════ RÈGLE AUTOMATION MODAL v7 ════ -->
-<div id="wfRuleModal" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:480px">
-    <div class="flex items-center justify-between mb-5">
-      <h3 class="text-white font-bold flex items-center gap-2"><i class="fas fa-magic text-orange-400"></i>Nouvelle règle d'automatisation</h3>
-      <button onclick="closeWfRuleModal()" class="text-blue-400 hover:text-white"><i class="fas fa-times text-xl"></i></button>
-    </div>
-    <form onsubmit="createWfRule(event)" class="space-y-4">
-      <div>
-        <label class="text-blue-200 text-xs font-medium block mb-1">Nom de la règle</label>
-        <input id="wfRuleName" type="text" placeholder="Ex: Upload → Notification Slack" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="text-blue-200 text-xs font-medium block mb-1">Déclencheur (SI)</label>
-          <select id="wfRuleTrigger" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
-            <option value="document_upload">Upload document</option>
-            <option value="document_delete">Suppression</option>
-            <option value="workflow_approve">Approbation workflow</option>
-            <option value="workflow_reject">Rejet workflow</option>
-            <option value="signature_done">Signature effectuée</option>
-            <option value="user_login">Connexion utilisateur</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-blue-200 text-xs font-medium block mb-1">Action (ALORS)</label>
-          <select id="wfRuleAction" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
-            <option value="start_workflow">Démarrer workflow</option>
-            <option value="send_notification">Notifier utilisateurs</option>
-            <option value="assign_tag">Assigner un tag</option>
-            <option value="move_folder">Déplacer dans dossier</option>
-            <option value="send_email">Envoyer email</option>
-            <option value="call_webhook">Appeler webhook</option>
-          </select>
-        </div>
-      </div>
-      <div class="flex gap-3 pt-2">
-        <button type="button" onclick="closeWfRuleModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm hover:bg-blue-500/10" style="border:1px solid rgba(96,165,250,0.2)">Annuler</button>
-        <button type="submit" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-medium"><i class="fas fa-save mr-2"></i>Créer la règle</button>
-      </div>
-    </form>
-  </div>
-</div>
+
+
 
 <script src="auth.js" defer></script>
 <script src="ui.js" defer></script>
@@ -2042,5 +2120,72 @@ function _saveContentNow(){
 <script src="workflows.js" defer></script>
 <script src="api.js" defer></script>
 <script src="missing-functions.js" defer></script>
+
+<!-- ════ QUICK SHARE MODAL ════ -->
+<div id="quickShareModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:560px">
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400"><i class="fas fa-share-nodes"></i></div>
+        <div><h3 class="text-white font-bold">Partage rapide</h3><p class="text-blue-300/60 text-xs">Partagez en quelques secondes</p></div>
+      </div>
+      <button onclick="closeQuickShareModal()" class="text-blue-400 hover:text-white p-2 rounded-lg"><i class="fas fa-times text-xl"></i></button>
+    </div>
+    <div class="mb-4">
+      <label class="text-blue-200 text-xs font-medium block mb-1">Document</label>
+      <select id="qsDocId" class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="">— Sélectionner un document —</option></select>
+    </div>
+    <div class="flex gap-1 p-1 mb-4 rounded-xl" style="background:rgba(0,0,0,0.2);">
+      <button onclick="switchQuickShareTab('user')" id="qsTab-user" class="qs-tab flex-1 px-3 py-2 rounded-lg text-sm font-medium text-blue-300" style="background:rgba(37,99,235,0.3);"><i class="fas fa-user mr-1"></i>Utilisateur</button>
+      <button onclick="switchQuickShareTab('link')" id="qsTab-link" class="qs-tab flex-1 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-blue-300"><i class="fas fa-link mr-1"></i>Lien</button>
+      <button onclick="switchQuickShareTab('team')" id="qsTab-team" class="qs-tab flex-1 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-blue-300"><i class="fas fa-users mr-1"></i>Équipe</button>
+    </div>
+    <div id="qsPanel-user" class="qs-panel space-y-3">
+      <div>
+        <label class="text-blue-200 text-xs font-medium block mb-1">Destinataires</label>
+        <div id="qsRecipientChips" class="flex flex-wrap gap-1 mb-2"></div>
+        <div class="relative">
+          <input id="qsEmailInput" type="email" placeholder="email@exemple.com (Entrée pour ajouter)"
+            class="w-full px-3 py-2.5 rounded-xl text-white text-sm outline-none"
+            style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"
+            oninput="suggestShareRecipients(this.value)" onkeydown="handleShareEmailKeydown(event)">
+          <div id="qsEmailSuggestions" class="hidden absolute top-full left-0 right-0 z-50 mt-1 rounded-xl overflow-hidden" style="background:rgba(10,18,50,0.98);border:1px solid rgba(96,165,250,0.25);"></div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-blue-200 text-xs block mb-1">Permission</label><select id="qsPermission" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="view">Lecture</option><option value="download">Téléchargement</option><option value="edit">Modification</option></select></div>
+        <div><label class="text-blue-200 text-xs block mb-1">Expiration</label><select id="qsExpiration" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="1">1 jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="0">Illimité</option></select></div>
+      </div>
+      <textarea id="qsMessage" rows="2" placeholder="Message optionnel…" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none resize-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"></textarea>
+    </div>
+    <div id="qsPanel-link" class="qs-panel hidden space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-blue-200 text-xs block mb-1">Expiration</label><select id="qsLinkExpiry" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="1">1 jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="0">Illimité</option></select></div>
+        <div><label class="text-blue-200 text-xs block mb-1">Permission</label><select id="qsLinkPerm" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="view">Lecture</option><option value="download">Téléchargement</option></select></div>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <label class="flex items-center gap-2 text-sm text-white cursor-pointer"><input type="checkbox" id="qsLinkUsePwd" onchange="toggleQsLinkPwd()"> Mot de passe</label>
+        <input id="qsLinkPwd" type="text" placeholder="Mot de passe" class="hidden px-3 py-1.5 rounded-lg text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+        <label class="flex items-center gap-2 text-sm text-white cursor-pointer"><input type="checkbox" id="qsLinkUseMaxViews" onchange="toggleQsLinkMaxViews()"> Limiter vues</label>
+        <input id="qsLinkMaxViews" type="number" min="1" placeholder="Max vues" class="hidden w-24 px-3 py-1.5 rounded-lg text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);">
+      </div>
+      <div id="qsLinkResult" class="hidden p-3 rounded-xl" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);">
+        <p class="text-green-400 text-xs font-bold mb-2"><i class="fas fa-check-circle mr-1"></i>Lien généré — copié !</p>
+        <div class="flex gap-2"><input id="qsLinkValue" readonly class="flex-1 px-3 py-2 rounded-lg text-green-400 text-xs font-mono outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(16,185,129,0.2);"><button onclick="copyQsLink()" class="px-3 py-2 rounded-lg text-green-400 border border-green-500/20 text-sm"><i class="fas fa-copy"></i></button></div>
+      </div>
+    </div>
+    <div id="qsPanel-team" class="qs-panel hidden space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-blue-200 text-xs block mb-1">Cible</label><select id="qsTeamTarget" onchange="_updateTeamPreview()" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="all">Tous les membres</option><option value="admin">Admins</option><option value="manager">Managers</option><option value="editor">Éditeurs</option><option value="viewer">Lecteurs</option></select></div>
+        <div><label class="text-blue-200 text-xs block mb-1">Permission</label><select id="qsTeamPerm" class="w-full px-3 py-2 rounded-xl text-white text-sm outline-none" style="background:rgba(8,15,40,0.7);border:1px solid rgba(96,165,250,0.2);"><option value="view">Lecture</option><option value="download">Téléchargement</option></select></div>
+      </div>
+      <p id="qsTeamPreviewText" class="text-blue-300/50 text-xs"></p>
+    </div>
+    <div class="flex gap-3 mt-5 pt-4 border-t border-blue-500/20">
+      <button onclick="closeQuickShareModal()" class="flex-1 py-2.5 rounded-xl text-blue-300 text-sm border border-blue-500/25 hover:bg-blue-500/10">Annuler</button>
+      <button id="qsSubmitBtn" onclick="executeQuickShare()" class="flex-1 btn-primary py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2"><i class="fas fa-paper-plane"></i><span id="qsSubmitLabel">Partager</span></button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
