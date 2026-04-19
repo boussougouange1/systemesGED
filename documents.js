@@ -213,7 +213,7 @@ function renderDocCard(doc) {
         <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center ${colorClass} text-2xl">
           <i class="fas ${iconClass}"></i>
         </div>
-        <div class="opacity-0 group-hover:opacity-100 transition-all duration-200 flex gap-1">
+        <div class="opacity-0 group-hover:opacity-100 transition-all duration-200 flex gap-1 flex-wrap">
           <button onclick="event.stopPropagation(); downloadDocument('${doc.id}')" 
                   class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-colors" 
                   title="Télécharger">
@@ -224,6 +224,7 @@ function renderDocCard(doc) {
                   title="Partager">
             <i class="fas fa-share-alt"></i>
           </button>
+          ${buildEditButton(doc)}
           <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
                   class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
                   title="Inviter à collaborer">
@@ -324,6 +325,7 @@ function renderDocListItem(doc) {
                 title="Partager">
           <i class="fas fa-share-alt"></i>
         </button>
+        ${buildEditButton(doc)}
         <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
                 class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
                 title="Inviter à collaborer">
@@ -844,18 +846,29 @@ function openPreviewModal(docId) {
 
 function updatePreviewMetadata(doc) {
   const metaContainer = document.getElementById('previewMetadata');
-  if (metaContainer) {
-    metaContainer.innerHTML = `
-      <div class="flex items-center gap-4 text-xs text-blue-300/60 flex-wrap">
-        <span><i class="fas fa-code-branch mr-1"></i>Version ${doc.version || 1}</span>
-        <span><i class="fas fa-eye mr-1"></i>${doc.views || 0} vues</span>
-        <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0} téléchargements</span>
-        <span><i class="fas fa-calendar-alt mr-1"></i>${formatDate(doc.created_at)}</span>
-        <span><i class="fas fa-database mr-1"></i>${formatBytes(doc.size)}</span>
-        ${doc.owner_id === G.currentUser.id ? '<span class="text-green-400"><i class="fas fa-user-check mr-1"></i>Propriétaire</span>' : ''}
-      </div>
-    `;
-  }
+  if (!metaContainer) return;
+  const ext = (doc.name || '').split('.').pop().toLowerCase();
+  const isEditable = ['doc','docx','xls','xlsx'].includes(ext);
+  const isW = ['doc','docx'].includes(ext);
+  metaContainer.innerHTML = `
+    <div class="flex items-center gap-4 text-xs text-blue-300/60 flex-wrap">
+      <span><i class="fas fa-code-branch mr-1"></i>Version ${doc.version || 1}</span>
+      <span><i class="fas fa-eye mr-1"></i>${doc.views || 0} vues</span>
+      <span><i class="fas fa-download mr-1"></i>${doc.downloads || 0} téléchargements</span>
+      <span><i class="fas fa-calendar-alt mr-1"></i>${formatDate(doc.created_at)}</span>
+      <span><i class="fas fa-database mr-1"></i>${formatBytes(doc.size)}</span>
+      ${doc.owner_id === G.currentUser.id ? '<span class="text-green-400"><i class="fas fa-user-check mr-1"></i>Propriétaire</span>' : ''}
+      ${isEditable && typeof buildEditButton === 'function' ? `
+        <button onclick="closePreviewModal(); openDocumentEditor('${doc.id}')"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all"
+          style="background:${isW ? 'rgba(37,99,235,0.2)' : 'rgba(16,185,129,0.2)'};
+                 color:${isW ? '#60a5fa' : '#34d399'};
+                 border:1px solid ${isW ? 'rgba(96,165,250,0.3)' : 'rgba(52,211,153,0.3)'};">
+          <i class="fas ${isW ? 'fa-file-word' : 'fa-file-excel'}"></i>
+          Ouvrir l'éditeur
+        </button>` : ''}
+    </div>
+  `;
 }
 
 function showUnsupportedPreview(doc) {
