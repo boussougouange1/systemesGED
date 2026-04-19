@@ -388,8 +388,10 @@ async function addAuditLog(action, targetType, targetId, details = '') {
   }
 }
 
-// ─── Rich Editor (sécurisé) ───
+// ─── Rich Editor — défini dans documents.js (stubs ui.js) ───
 function openRichEditor(docId) {
+  // Préférer openDocumentEditor si dispo (editor.js), sinon fallback modal
+  if (typeof openDocumentEditor === 'function') { openDocumentEditor(docId); return; }
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
   const modal = document.getElementById('richEditorModal');
@@ -405,7 +407,17 @@ function closeRichEditor() {
 }
 
 function _onRichEditorInput() {}
-function _saveRichContent() {}
+function _saveRichContent() {
+  const editorDiv = document.getElementById('richEditorContent');
+  if (!editorDiv) return;
+  const raw = editorDiv.innerHTML;
+  const docId = G.currentDocId;
+  if (docId && G.supabase) {
+    G.supabase.from('documents').update({ content: raw, updated_at: new Date().toISOString() }).eq('id', docId)
+      .then(() => showToast('Document enregistré', 'success'))
+      .catch(() => showToast('Erreur sauvegarde', 'error'));
+  }
+}
 
 // ─── Utilitaires ───
 function generateId() {
@@ -696,120 +708,103 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mainApp     = document.getElementById('mainApp');
     if (loginScreen) loginScreen.style.display = 'block';
     if (mainApp)     mainApp.style.display      = 'none';
+  }
 
-    // ══════════════════════════════════════════════
-    // COLLABORATION TEMPS RÉEL + COMMENTAIRES + EDIT
-    // ══════════════════════════════════════════════
+  // ══════════════════════════════════════════════
+  // COLLABORATION TEMPS RÉEL + COMMENTAIRES + EDIT
+  // (dispo qu'il y ait session ou non)
+  // ══════════════════════════════════════════════
+  {
 
-    let _realtimeChannel = null;
-    let _presenceUsers   = {};
-    let _commentsCache   = {};
+  let _realtimeChannel = null;
+  let _presenceUsers   = {};
+  let _commentsCache   = {};
 
-    // ── Présence temps réel ──
-    function subscribePresence(docId) {
-      if (_realtimeChannel) {
-        G.supabase.removeChannel(_realtimeChannel);
-        _realtimeChannel = null;
-      }
-      if (!docId || !G.supabase) return;
-
-      _realtimeChannel = G.supabase.channel(`doc-presence:${docId}`, {
-        config: { presence: { key: G.currentUser.id } }
-      });
-
-      _realtimeChannel
-        .on('presence', { event: 'sync' }, () => {
-          const state = _realtimeChannel.presenceState();
-          _presenceUsers = {};
-          Object.values(state).flat().forEach(u => { _presenceUsers[u.userId] = u; });
-          renderPresenceBadges();
-        })
-        .on('broadcast', { event: 'comment' }, ({ payload }) => {
-          if (payload.docId === docId) appendComment(payload);
-        })
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await _realtimeChannel.track({
-              userId:    G.currentUser.id,
-              userName:  G.currentUser.name || G.currentUser.email,
-              userEmail: G.currentUser.email,
-              joinedAt:  new Date().toISOString()
-            });
-          }
-        });
+  // ── Présence temps réel ──
+  function subscribePresence(docId) {
+    if (_realtimeChannel) {
+      G.supabase.removeChannel(_realtimeChannel);
+      _realtimeChannel = null;
     }
+    if (!docId || !G.supabase) return;
 
-    function unsubscribePresence() {
-      if (_realtimeChannel) {
-        G.supabase.removeChannel(_realtimeChannel);
-        _realtimeChannel = null;
-      }
-      _presenceUsers = {};
-      renderPresenceBadges();
-    }
+    _realtimeChannel = G.supabase.channel(`doc-presence:${docId}`, {
+      config: { presence: { key: G.currentUser.id } }
+    });
 
-    function renderPresenceBadges() {
-      const container = document.getElementById('previewPresence');
-      if (!container) return;
-      const users = Object.values(_presenceUsers).filter(u => u.userId !== G.currentUser.id);
-      if (!users.length) { container.innerHTML = ''; return; }
-      container.innerHTML = users.slice(0, 5).map(u => {
-        const initials = (u.userName || u.userEmail || '?').slice(0, 2).toUpperCase();
-        const colors   = ['bg-green-500','bg-blue-500','bg-purple-500','bg-yellow-500','bg-red-500'];
-        const color    = colors[u.userId?.charCodeAt(0) % colors.length] || 'bg-blue-500';
-        return `<div class="w-7 h-7 rounded-full ${color} flex items-center justify-center text-white text-xs font-bold cursor-default" title="${escapeHtml(u.userName || u.userEmail)}">${initials}</div>`;
-      }).join('') + (users.length > 5 ? `<span class="text-xs text-blue-400/60">+${users.length - 5}</span>` : '');
-    }
-
-    // Hooker closePreviewModal pour unsubscribe
-    const _origClosePreview = closePreviewModal;
-    window.closePreviewModal = function() {
-      unsubscribePresence();
-      const panel = document.getElementById('commentsPanel');
-      if (panel) panel.classList.add('hidden');
-      _origClosePreview();
-    };
-
-    // Hooker openPreviewModal pour subscribe + bouton Modifier
-    const _origOpenPreview = openPreviewModal;
-    window.openPreviewModal = async function(docId) {
-      await _origOpenPreview(docId);
-      subscribePresence(docId);
-      const doc = G.documents.find(d => d.id === docId);
-      const editBtn = document.getElementById('editDocBtn');
-      if (editBtn && doc) {
-        const officeExts = ['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'];
-        const ext = (doc.name?.split('.').pop() || '').toLowerCase();
-        if (officeExts.includes(ext)) editBtn.classList.remove('hidden');
-        else editBtn.classList.add('hidden');
-      }
-      loadComments(docId);
-    };
-
-    // ── Modifier un document Office avec sync automatique ──
-    let _watchInterval  = null;
-    let _watchFileHandle = null;
-    let _watchLastModified = 0;
-    let _watchDocId = null;
-
-    async function editCurrentDocument() {
-      const docId = G.currentDocId;
-      const doc   = G.documents.find(d => d.id === docId);
-      if (!doc) return;
-
-      if (!window.showOpenFilePicker) {
-        let fileUrl = doc.file_url;
-        if (G.supabase && doc.storage_path) {
-          const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
-          if (data?.signedUrl) fileUrl = data.signedUrl;
+    _realtimeChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = _realtimeChannel.presenceState();
+        _presenceUsers = {};
+        Object.values(state).flat().forEach(u => { _presenceUsers[u.userId] = u; });
+        renderPresenceBadges();
+      })
+      .on('broadcast', { event: 'comment' }, ({ payload }) => {
+        if (payload.docId === docId) appendComment(payload);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await _realtimeChannel.track({
+            userId:    G.currentUser.id,
+            userName:  G.currentUser.name || G.currentUser.email,
+            userEmail: G.currentUser.email,
+            joinedAt:  new Date().toISOString()
+          });
         }
-        const a = document.createElement('a');
-        a.href = fileUrl; a.download = doc.name; a.click();
-        showToast(`📥 Téléchargé. Modifiez puis ré-importez manuellement via "Importer".`, 'warning', 6000);
-        return;
-      }
+      });
+  }
 
-      showToast('⬇️ Téléchargement du fichier...', 'info', 3000);
+  function unsubscribePresence() {
+    if (_realtimeChannel) {
+      G.supabase.removeChannel(_realtimeChannel);
+      _realtimeChannel = null;
+    }
+    _presenceUsers = {};
+    renderPresenceBadges();
+  }
+
+  function renderPresenceBadges() {
+    const container = document.getElementById('previewPresence');
+    if (!container) return;
+    const users = Object.values(_presenceUsers).filter(u => u.userId !== G.currentUser.id);
+    if (!users.length) { container.innerHTML = ''; return; }
+    container.innerHTML = users.slice(0, 5).map(u => {
+      const initials = (u.userName || u.userEmail || '?').slice(0, 2).toUpperCase();
+      const colors   = ['bg-green-500','bg-blue-500','bg-purple-500','bg-yellow-500','bg-red-500'];
+      const color    = colors[u.userId?.charCodeAt(0) % colors.length] || 'bg-blue-500';
+      return `<div class="w-7 h-7 rounded-full ${color} flex items-center justify-center text-white text-xs font-bold cursor-default" title="${escapeHtml(u.userName || u.userEmail)}">${initials}</div>`;
+    }).join('') + (users.length > 5 ? `<span class="text-xs text-blue-400/60">+${users.length - 5}</span>` : '');
+  }
+
+  // Hooker closePreviewModal pour unsubscribe
+  const _origClosePreview = closePreviewModal;
+  window.closePreviewModal = function() {
+    unsubscribePresence();
+    const panel = document.getElementById('commentsPanel');
+    if (panel) panel.classList.add('hidden');
+    _origClosePreview();
+  };
+
+  // Hook openPreviewModal pour présence temps réel + commentaires
+  const _origOpenPreview = openPreviewModal;
+  window.openPreviewModal = async function(docId) {
+    await _origOpenPreview(docId);
+    subscribePresence(docId);
+    loadComments(docId);
+  };
+
+  // ── Modifier un document Office avec sync automatique ──
+  let _watchInterval  = null;
+  let _watchFileHandle = null;
+  let _watchLastModified = 0;
+  let _watchDocId = null;
+
+  async function editCurrentDocument() {
+    const docId = G.currentDocId;
+    const doc   = G.documents.find(d => d.id === docId);
+    if (!doc) return;
+
+    if (!window.showOpenFilePicker) {
       let fileUrl = doc.file_url;
       if (G.supabase && doc.storage_path) {
         const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
@@ -817,326 +812,338 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       const a = document.createElement('a');
       a.href = fileUrl; a.download = doc.name; a.click();
+      showToast(`📥 Téléchargé. Modifiez puis ré-importez manuellement via "Importer".`, 'warning', 6000);
+      return;
+    }
 
-      await new Promise(r => setTimeout(r, 1500));
-      showToast('📂 Sélectionnez le fichier téléchargé pour activer la sync automatique', 'info', 6000);
+    showToast('⬇️ Téléchargement du fichier...', 'info', 3000);
+    let fileUrl = doc.file_url;
+    if (G.supabase && doc.storage_path) {
+      const { data } = await G.supabase.storage.from(CONFIG.storageBucket).createSignedUrl(doc.storage_path, 3600);
+      if (data?.signedUrl) fileUrl = data.signedUrl;
+    }
+    const a = document.createElement('a');
+    a.href = fileUrl; a.download = doc.name; a.click();
 
-      try {
-        const ext = doc.name.split('.').pop().toLowerCase();
-        const mimeMap = {
-          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-          doc:  'application/msword',
-          xls:  'application/vnd.ms-excel',
-        };
+    await new Promise(r => setTimeout(r, 1500));
+    showToast('📂 Sélectionnez le fichier téléchargé pour activer la sync automatique', 'info', 6000);
 
-        const [fileHandle] = await window.showOpenFilePicker({
-          types: [{ description: 'Document Office', accept: { [mimeMap[ext] || '*/*']: [`.${ext}`] } }],
-          multiple: false
-        });
+    try {
+      const ext = doc.name.split('.').pop().toLowerCase();
+      const mimeMap = {
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        doc:  'application/msword',
+        xls:  'application/vnd.ms-excel',
+      };
 
-        stopFileWatch();
+      const [fileHandle] = await window.showOpenFilePicker({
+        types: [{ description: 'Document Office', accept: { [mimeMap[ext] || '*/*']: [`.${ext}`] } }],
+        multiple: false
+      });
 
-        _watchFileHandle  = fileHandle;
-        _watchDocId       = docId;
-        const initialFile = await fileHandle.getFile();
-        _watchLastModified = initialFile.lastModified;
+      stopFileWatch();
 
-        showSyncBadge(doc.name, 'watching');
+      _watchFileHandle  = fileHandle;
+      _watchDocId       = docId;
+      const initialFile = await fileHandle.getFile();
+      _watchLastModified = initialFile.lastModified;
 
-        _watchInterval = setInterval(async () => {
-          try {
-            const file = await _watchFileHandle.getFile();
-            if (file.lastModified !== _watchLastModified) {
-              _watchLastModified = file.lastModified;
-              showSyncBadge(doc.name, 'uploading');
-              await autoUploadNewVersion(docId, file);
-              showSyncBadge(doc.name, 'synced');
-              setTimeout(() => showSyncBadge(doc.name, 'watching'), 3000);
-            }
-          } catch(e) {
-            stopFileWatch();
+      showSyncBadge(doc.name, 'watching');
+
+      _watchInterval = setInterval(async () => {
+        try {
+          const file = await _watchFileHandle.getFile();
+          if (file.lastModified !== _watchLastModified) {
+            _watchLastModified = file.lastModified;
+            showSyncBadge(doc.name, 'uploading');
+            await autoUploadNewVersion(docId, file);
+            showSyncBadge(doc.name, 'synced');
+            setTimeout(() => showSyncBadge(doc.name, 'watching'), 3000);
           }
-        }, 3000);
-
-        showToast(`✅ Sync activée pour "${doc.name}". Sauvegardez dans Office → mis à jour automatiquement !`, 'success', 8000);
-        await addAuditLog('edit_sync_start', 'document', docId, `Sync automatique démarrée: ${doc.name}`);
-
-      } catch(e) {
-        if (e.name !== 'AbortError') showToast('Sync annulée', 'warning');
-      }
-    }
-
-    function stopFileWatch() {
-      if (_watchInterval) { clearInterval(_watchInterval); _watchInterval = null; }
-      _watchFileHandle  = null;
-      _watchDocId       = null;
-      _watchLastModified = 0;
-      hideSyncBadge();
-    }
-
-    function showSyncBadge(fileName, state) {
-      let badge = document.getElementById('syncStatusBadge');
-      if (!badge) {
-        badge = document.createElement('div');
-        badge.id = 'syncStatusBadge';
-        badge.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:all 0.3s ease;backdrop-filter:blur(12px);';
-        document.body.appendChild(badge);
-      }
-      const configs = {
-        watching:  { bg: 'rgba(30,58,138,0.95)', border: '1px solid rgba(96,165,250,0.4)', icon: '🔵', text: 'Sync active — en attente de modifications', pulse: true  },
-        uploading: { bg: 'rgba(120,53,15,0.95)',  border: '1px solid rgba(251,191,36,0.4)',  icon: '⬆️', text: 'Mise à jour en cours...', pulse: false },
-        synced:    { bg: 'rgba(6,78,59,0.95)',    border: '1px solid rgba(52,211,153,0.4)',  icon: '✅', text: 'Document synchronisé !', pulse: false },
-        error:     { bg: 'rgba(127,29,29,0.95)',  border: '1px solid rgba(252,165,165,0.4)', icon: '❌', text: 'Erreur de sync', pulse: false },
-      };
-      const c = configs[state] || configs.watching;
-      badge.style.background = c.bg;
-      badge.style.border = c.border;
-      badge.style.color = '#fff';
-      badge.innerHTML = `
-        <span>${c.icon}</span>
-        <div>
-          <div style="font-size:11px;opacity:0.7;margin-bottom:2px">${escapeHtml(fileName)}</div>
-          <div>${c.text}</div>
-        </div>
-        <button onclick="stopFileWatch()" style="margin-left:8px;background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px">Arrêter</button>
-      `;
-    }
-
-    function hideSyncBadge() {
-      const badge = document.getElementById('syncStatusBadge');
-      if (badge) badge.remove();
-    }
-
-    async function autoUploadNewVersion(docId, file) {
-      const doc = G.documents.find(d => d.id === docId);
-      if (!doc || !G.supabase) return;
-
-      try {
-        const { error: uploadError } = await G.supabase.storage
-          .from(CONFIG.storageBucket)
-          .upload(doc.storage_path, file, { upsert: true, contentType: file.type });
-
-        if (uploadError) throw uploadError;
-
-        const newVersion = (doc.version || 1) + 1;
-        const { error: dbError } = await G.supabase.from('documents').update({
-          version:    newVersion,
-          size:       file.size,
-          updated_at: new Date().toISOString()
-        }).eq('id', docId);
-
-        if (dbError) throw dbError;
-
-        doc.version    = newVersion;
-        doc.size       = file.size;
-        doc.updated_at = new Date().toISOString();
-
-        if (_realtimeChannel) {
-          _realtimeChannel.send({
-            type: 'broadcast',
-            event: 'doc_updated',
-            payload: { docId, version: newVersion, updatedBy: G.currentUser.name || G.currentUser.email }
-          });
+        } catch(e) {
+          stopFileWatch();
         }
+      }, 3000);
 
-        await addAuditLog('auto_version', 'document', docId, `Version ${newVersion} sauvegardée automatiquement (${formatBytes(file.size)})`);
-        renderDocuments();
-        updatePreviewMetadata(doc);
-        console.log(`✅ Version ${newVersion} uploadée pour "${doc.name}"`);
-      } catch(err) {
-        console.error('autoUpload error:', err);
-        showSyncBadge(doc.name, 'error');
-        showToast('Erreur sync: ' + err.message, 'error');
-      }
+      showToast(`✅ Sync activée pour "${doc.name}". Sauvegardez dans Office → mis à jour automatiquement !`, 'success', 8000);
+      await addAuditLog('edit_sync_start', 'document', docId, `Sync automatique démarrée: ${doc.name}`);
+
+    } catch(e) {
+      if (e.name !== 'AbortError') showToast('Sync annulée', 'warning');
     }
+  }
 
-    // Exposer stopFileWatch globalement
-    window.stopFileWatch = stopFileWatch;
+  function stopFileWatch() {
+    if (_watchInterval) { clearInterval(_watchInterval); _watchInterval = null; }
+    _watchFileHandle  = null;
+    _watchDocId       = null;
+    _watchLastModified = 0;
+    hideSyncBadge();
+  }
 
-    // ── Commentaires ──
-    function toggleCommentsPanel() {
-      const panel = document.getElementById('commentsPanel');
-      if (panel) panel.classList.toggle('hidden');
+  function showSyncBadge(fileName, state) {
+    let badge = document.getElementById('syncStatusBadge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'syncStatusBadge';
+      badge.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:all 0.3s ease;backdrop-filter:blur(12px);';
+      document.body.appendChild(badge);
     }
+    const configs = {
+      watching:  { bg: 'rgba(30,58,138,0.95)', border: '1px solid rgba(96,165,250,0.4)', icon: '🔵', text: 'Sync active — en attente de modifications', pulse: true  },
+      uploading: { bg: 'rgba(120,53,15,0.95)',  border: '1px solid rgba(251,191,36,0.4)',  icon: '⬆️', text: 'Mise à jour en cours...', pulse: false },
+      synced:    { bg: 'rgba(6,78,59,0.95)',    border: '1px solid rgba(52,211,153,0.4)',  icon: '✅', text: 'Document synchronisé !', pulse: false },
+      error:     { bg: 'rgba(127,29,29,0.95)',  border: '1px solid rgba(252,165,165,0.4)', icon: '❌', text: 'Erreur de sync', pulse: false },
+    };
+    const c = configs[state] || configs.watching;
+    badge.style.background = c.bg;
+    badge.style.border = c.border;
+    badge.style.color = '#fff';
+    badge.innerHTML = `
+      <span>${c.icon}</span>
+      <div>
+        <div style="font-size:11px;opacity:0.7;margin-bottom:2px">${escapeHtml(fileName)}</div>
+        <div>${c.text}</div>
+      </div>
+      <button onclick="stopFileWatch()" style="margin-left:8px;background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px">Arrêter</button>
+    `;
+  }
 
-    async function loadComments(docId) {
-      if (!docId || !G.supabase) return;
-      try {
-        const { data } = await G.supabase.from('document_comments')
-          .select('*').eq('document_id', docId).order('created_at', { ascending: true }).limit(100);
-        _commentsCache[docId] = data || [];
-        renderComments(docId);
-      } catch(e) { /* table peut ne pas exister */ }
-    }
+  function hideSyncBadge() {
+    const badge = document.getElementById('syncStatusBadge');
+    if (badge) badge.remove();
+  }
 
-    function renderComments(docId) {
-      const list  = document.getElementById('commentsList');
-      const count = document.getElementById('commentsCount');
-      if (!list) return;
-      const comments = _commentsCache[docId] || [];
-      if (count) count.textContent = comments.length;
-      if (!comments.length) {
-        list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-4">Aucun commentaire. Soyez le premier !</p>';
-        return;
-      }
-      list.innerHTML = comments.map(c => `
-        <div class="flex gap-2">
-          <div class="w-6 h-6 rounded-full bg-blue-500/30 flex items-center justify-center text-xs text-blue-300 flex-shrink-0">
-            ${(c.user_name || c.user_email || '?').slice(0,1).toUpperCase()}
-          </div>
-          <div class="flex-1 bg-blue-900/30 rounded-lg px-3 py-2">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-blue-300 text-xs font-medium">${escapeHtml(c.user_name || c.user_email || 'Anonyme')}</span>
-              <span class="text-blue-400/40 text-xs">${formatDate(c.created_at)}</span>
-            </div>
-            <p class="text-white/80 text-xs">${escapeHtml(c.content)}</p>
-          </div>
-        </div>`).join('');
-      list.scrollTop = list.scrollHeight;
-    }
+  async function autoUploadNewVersion(docId, file) {
+    const doc = G.documents.find(d => d.id === docId);
+    if (!doc || !G.supabase) return;
 
-    function appendComment(payload) {
-      const docId = G.currentDocId;
-      if (!docId) return;
-      if (!_commentsCache[docId]) _commentsCache[docId] = [];
-      if (!_commentsCache[docId].find(c => c.id === payload.id)) {
-        _commentsCache[docId].push(payload);
-        renderComments(docId);
-        const panel = document.getElementById('commentsPanel');
-        if (panel?.classList.contains('hidden')) {
-          showToast(`💬 Nouveau commentaire de ${payload.user_name || payload.user_email}`, 'info');
-        }
-      }
-    }
+    try {
+      const { error: uploadError } = await G.supabase.storage
+        .from(CONFIG.storageBucket)
+        .upload(doc.storage_path, file, { upsert: true, contentType: file.type });
 
-    async function addComment() {
-      const input = document.getElementById('newCommentInput');
-      const text  = input?.value.trim();
-      const docId = G.currentDocId;
-      if (!text || !docId) return;
+      if (uploadError) throw uploadError;
 
-      const comment = {
-        id:          generateId(),
-        document_id: docId,
-        user_id:     G.currentUser.id,
-        user_name:   G.currentUser.name || G.currentUser.email,
-        user_email:  G.currentUser.email,
-        content:     text,
-        created_at:  new Date().toISOString()
-      };
+      const newVersion = (doc.version || 1) + 1;
+      const { error: dbError } = await G.supabase.from('documents').update({
+        version:    newVersion,
+        size:       file.size,
+        updated_at: new Date().toISOString()
+      }).eq('id', docId);
 
-      try {
-        await G.supabase.from('document_comments').insert(comment);
-      } catch(e) { /* table optionnelle */ }
+      if (dbError) throw dbError;
+
+      doc.version    = newVersion;
+      doc.size       = file.size;
+      doc.updated_at = new Date().toISOString();
 
       if (_realtimeChannel) {
-        _realtimeChannel.send({ type: 'broadcast', event: 'comment', payload: { ...comment, docId } });
+        _realtimeChannel.send({
+          type: 'broadcast',
+          event: 'doc_updated',
+          payload: { docId, version: newVersion, updatedBy: G.currentUser.name || G.currentUser.email }
+        });
       }
 
-      appendComment(comment);
-      input.value = '';
-
-      const panel = document.getElementById('commentsPanel');
-      if (panel?.classList.contains('hidden')) panel.classList.remove('hidden');
+      await addAuditLog('auto_version', 'document', docId, `Version ${newVersion} sauvegardée automatiquement (${formatBytes(file.size)})`);
+      renderDocuments();
+      updatePreviewMetadata(doc);
+      console.log(`✅ Version ${newVersion} uploadée pour "${doc.name}"`);
+    } catch(err) {
+      console.error('autoUpload error:', err);
+      showSyncBadge(doc.name, 'error');
+      showToast('Erreur sync: ' + err.message, 'error');
     }
+  }
 
-    // ── Onglets collaboration modal ──
-    function switchCollabTab(tab) {
-      ['invite','members','activity'].forEach(t => {
-        document.getElementById(`collabTab${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.add('hidden');
-        const btn = document.getElementById(`tab${t.charAt(0).toUpperCase()+t.slice(1)}`);
-        if (btn) { btn.classList.remove('bg-blue-500/30','text-white'); btn.classList.add('text-blue-300/70'); }
-      });
-      document.getElementById(`collabTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`)?.classList.remove('hidden');
-      const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`);
-      if (activeBtn) { activeBtn.classList.add('bg-blue-500/30','text-white'); activeBtn.classList.remove('text-blue-300/70'); }
+  // Exposer stopFileWatch globalement
+  window.stopFileWatch = stopFileWatch;
 
-      if (tab === 'members') loadCollabMembers();
-      if (tab === 'activity') loadCollabActivity();
-      updateCollabPresence();
+  // ── Commentaires ──
+  function toggleCommentsPanel() {
+    const panel = document.getElementById('commentsPanel');
+    if (panel) panel.classList.toggle('hidden');
+  }
+
+  async function loadComments(docId) {
+    if (!docId || !G.supabase) return;
+    try {
+      const { data } = await G.supabase.from('document_comments')
+        .select('*').eq('document_id', docId).order('created_at', { ascending: true }).limit(100);
+      _commentsCache[docId] = data || [];
+      renderComments(docId);
+    } catch(e) { /* table peut ne pas exister */ }
+  }
+
+  function renderComments(docId) {
+    const list  = document.getElementById('commentsList');
+    const count = document.getElementById('commentsCount');
+    if (!list) return;
+    const comments = _commentsCache[docId] || [];
+    if (count) count.textContent = comments.length;
+    if (!comments.length) {
+      list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-4">Aucun commentaire. Soyez le premier !</p>';
+      return;
     }
-
-    async function loadCollabMembers() {
-      const docId = G.collabModalDocId;
-      const list  = document.getElementById('collabMembersList');
-      if (!list || !docId) return;
-      const shares = G.shares.filter(s => s.document_id === docId);
-      if (!shares.length) {
-        list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucun collaborateur invité.</p>';
-        return;
-      }
-      list.innerHTML = shares.map(s => `
-        <div class="flex items-center justify-between p-3 bg-blue-900/20 rounded-xl">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-sm">
-              ${(s.recipient_email || '?').slice(0,1).toUpperCase()}
-            </div>
-            <div>
-              <p class="text-white text-sm">${escapeHtml(s.recipient_email || 'Inconnu')}</p>
-              <p class="text-blue-400/50 text-xs">${s.permission === 'view' ? '👁 Lecture' : s.permission === 'download' ? '⬇ Téléchargement' : '✏ Modification'} • ${formatDate(s.created_at)}</p>
-            </div>
+    list.innerHTML = comments.map(c => `
+      <div class="flex gap-2">
+        <div class="w-6 h-6 rounded-full bg-blue-500/30 flex items-center justify-center text-xs text-blue-300 flex-shrink-0">
+          ${(c.user_name || c.user_email || '?').slice(0,1).toUpperCase()}
+        </div>
+        <div class="flex-1 bg-blue-900/30 rounded-lg px-3 py-2">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-blue-300 text-xs font-medium">${escapeHtml(c.user_name || c.user_email || 'Anonyme')}</span>
+            <span class="text-blue-400/40 text-xs">${formatDate(c.created_at)}</span>
           </div>
-          <button onclick="revokeShare('${s.id}')" class="text-red-400/60 hover:text-red-400 text-xs p-1 rounded" title="Révoquer l'accès">
-            <i class="fas fa-user-minus"></i>
-          </button>
-        </div>`).join('');
-    }
+          <p class="text-white/80 text-xs">${escapeHtml(c.content)}</p>
+        </div>
+      </div>`).join('');
+    list.scrollTop = list.scrollHeight;
+  }
 
-    async function loadCollabActivity() {
-      const docId = G.collabModalDocId;
-      const list  = document.getElementById('collabActivityList');
-      if (!list || !docId || !G.supabase) return;
-      try {
-        const { data } = await G.supabase.from('audit_logs')
-          .select('*').eq('resource_id', docId).order('created_at', { ascending: false }).limit(20);
-        if (!data?.length) {
-          list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucune activité enregistrée.</p>';
-          return;
-        }
-        list.innerHTML = data.map(log => `
-          <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-blue-900/20">
-            <i class="fas fa-circle text-blue-400/40 mt-1.5" style="font-size:6px"></i>
-            <div>
-              <p class="text-white/80 text-xs">${escapeHtml(log.details || log.action || '')}</p>
-              <p class="text-blue-400/40 text-xs">${formatDate(log.created_at)}</p>
-            </div>
-          </div>`).join('');
-      } catch(e) {
-        list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Activité non disponible.</p>';
+  function appendComment(payload) {
+    const docId = G.currentDocId;
+    if (!docId) return;
+    if (!_commentsCache[docId]) _commentsCache[docId] = [];
+    if (!_commentsCache[docId].find(c => c.id === payload.id)) {
+      _commentsCache[docId].push(payload);
+      renderComments(docId);
+      const panel = document.getElementById('commentsPanel');
+      if (panel?.classList.contains('hidden')) {
+        showToast(`💬 Nouveau commentaire de ${payload.user_name || payload.user_email}`, 'info');
       }
     }
+  }
 
-    function updateCollabPresence() {
-      const container = document.getElementById('collabPresenceList');
-      if (!container) return;
-      const users = Object.values(_presenceUsers);
-      if (!users.length) {
-        container.innerHTML = '<span class="text-blue-400/40 text-xs">Personne d\'autre en ligne</span>';
+  async function addComment() {
+    const input = document.getElementById('newCommentInput');
+    const text  = input?.value.trim();
+    const docId = G.currentDocId;
+    if (!text || !docId) return;
+
+    const comment = {
+      id:          generateId(),
+      document_id: docId,
+      user_id:     G.currentUser.id,
+      user_name:   G.currentUser.name || G.currentUser.email,
+      user_email:  G.currentUser.email,
+      content:     text,
+      created_at:  new Date().toISOString()
+    };
+
+    try {
+      await G.supabase.from('document_comments').insert(comment);
+    } catch(e) { /* table optionnelle */ }
+
+    if (_realtimeChannel) {
+      _realtimeChannel.send({ type: 'broadcast', event: 'comment', payload: { ...comment, docId } });
+    }
+
+    appendComment(comment);
+    input.value = '';
+
+    const panel = document.getElementById('commentsPanel');
+    if (panel?.classList.contains('hidden')) panel.classList.remove('hidden');
+  }
+
+  // ── Onglets collaboration modal ──
+  function switchCollabTab(tab) {
+    ['invite','members','activity'].forEach(t => {
+      document.getElementById(`collabTab${t.charAt(0).toUpperCase()+t.slice(1)}`)?.classList.add('hidden');
+      const btn = document.getElementById(`tab${t.charAt(0).toUpperCase()+t.slice(1)}`);
+      if (btn) { btn.classList.remove('bg-blue-500/30','text-white'); btn.classList.add('text-blue-300/70'); }
+    });
+    document.getElementById(`collabTab${tab.charAt(0).toUpperCase()+tab.slice(1)}`)?.classList.remove('hidden');
+    const activeBtn = document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`);
+    if (activeBtn) { activeBtn.classList.add('bg-blue-500/30','text-white'); activeBtn.classList.remove('text-blue-300/70'); }
+
+    if (tab === 'members') loadCollabMembers();
+    if (tab === 'activity') loadCollabActivity();
+    updateCollabPresence();
+  }
+
+  async function loadCollabMembers() {
+    const docId = G.collabModalDocId;
+    const list  = document.getElementById('collabMembersList');
+    if (!list || !docId) return;
+    const shares = G.shares.filter(s => s.document_id === docId);
+    if (!shares.length) {
+      list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucun collaborateur invité.</p>';
+      return;
+    }
+    list.innerHTML = shares.map(s => `
+      <div class="flex items-center justify-between p-3 bg-blue-900/20 rounded-xl">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-sm">
+            ${(s.recipient_email || '?').slice(0,1).toUpperCase()}
+          </div>
+          <div>
+            <p class="text-white text-sm">${escapeHtml(s.recipient_email || 'Inconnu')}</p>
+            <p class="text-blue-400/50 text-xs">${s.permission === 'view' ? '👁 Lecture' : s.permission === 'download' ? '⬇ Téléchargement' : '✏ Modification'} • ${formatDate(s.created_at)}</p>
+          </div>
+        </div>
+        <button onclick="revokeShare('${s.id}')" class="text-red-400/60 hover:text-red-400 text-xs p-1 rounded" title="Révoquer l'accès">
+          <i class="fas fa-user-minus"></i>
+        </button>
+      </div>`).join('');
+  }
+
+  async function loadCollabActivity() {
+    const docId = G.collabModalDocId;
+    const list  = document.getElementById('collabActivityList');
+    if (!list || !docId || !G.supabase) return;
+    try {
+      const { data } = await G.supabase.from('audit_logs')
+        .select('*').eq('resource_id', docId).order('created_at', { ascending: false }).limit(20);
+      if (!data?.length) {
+        list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Aucune activité enregistrée.</p>';
         return;
       }
-      container.innerHTML = users.map(u => `
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-full">
-          <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-          <span class="text-green-300 text-xs">${escapeHtml(u.userName || u.userEmail)}</span>
+      list.innerHTML = data.map(log => `
+        <div class="flex items-start gap-2 p-2 rounded-lg hover:bg-blue-900/20">
+          <i class="fas fa-circle text-blue-400/40 mt-1.5" style="font-size:6px"></i>
+          <div>
+            <p class="text-white/80 text-xs">${escapeHtml(log.details || log.action || '')}</p>
+            <p class="text-blue-400/40 text-xs">${formatDate(log.created_at)}</p>
+          </div>
         </div>`).join('');
+    } catch(e) {
+      list.innerHTML = '<p class="text-blue-400/40 text-xs text-center py-8">Activité non disponible.</p>';
     }
+  }
 
-    async function revokeShare(shareId) {
-      if (!confirm('Révoquer cet accès ?')) return;
-      const { error } = await G.supabase.from('shares').delete().eq('id', shareId);
-      if (error) { showToast('Erreur: ' + error.message, 'error'); return; }
-      G.shares = G.shares.filter(s => s.id !== shareId);
-      showToast('Accès révoqué', 'success');
-      loadCollabMembers();
+  function updateCollabPresence() {
+    const container = document.getElementById('collabPresenceList');
+    if (!container) return;
+    const users = Object.values(_presenceUsers);
+    if (!users.length) {
+      container.innerHTML = '<span class="text-blue-400/40 text-xs">Personne d\'autre en ligne</span>';
+      return;
     }
+    container.innerHTML = users.map(u => `
+      <div class="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 rounded-full">
+        <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+        <span class="text-green-300 text-xs">${escapeHtml(u.userName || u.userEmail)}</span>
+      </div>`).join('');
+  }
 
-    // Exposer les nouvelles fonctions
-    Object.assign(window, {
-      editCurrentDocument, toggleCommentsPanel, addComment,
-      switchCollabTab, revokeShare, loadCollabMembers, loadCollabActivity
-    });
+  async function revokeShare(shareId) {
+    if (!confirm('Révoquer cet accès ?')) return;
+    const { error } = await G.supabase.from('shares').delete().eq('id', shareId);
+    if (error) { showToast('Erreur: ' + error.message, 'error'); return; }
+    G.shares = G.shares.filter(s => s.id !== shareId);
+    showToast('Accès révoqué', 'success');
+    loadCollabMembers();
+  }
+
+  // Exposer les nouvelles fonctions
+  Object.assign(window, {
+    editCurrentDocument, toggleCommentsPanel, addComment,
+    switchCollabTab, revokeShare, loadCollabMembers, loadCollabActivity
+  });
   }
   
   // Exposer toutes les fonctions globalement
@@ -1376,6 +1383,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.sysLogsPrevPage        = sysLogsPrevPage;
   window.sysLogsNextPage        = sysLogsNextPage;
   window.toggleSysLogsAutoRefresh = toggleSysLogsAutoRefresh;
+// stopFileWatch is exposed inside DOMContentLoaded block above
 });
 
 // ─── Exposition globale — ui.js ───
