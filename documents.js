@@ -1124,125 +1124,13 @@ async function inviteCollaborator() {
 // 6. PARTAGES (fonctions de base)
 // ═══════════════════════════════════════════════════════════════════════
 
-function openShareModal(docId) {
-  G.currentDocId = docId;
-  const modal = document.getElementById('shareModal');
-  if (modal) modal.classList.remove('hidden');
-  const doc = G.documents.find(d => d.id === docId);
-  const docInfo = document.getElementById('shareDocInfo');
-  if (docInfo && doc) docInfo.textContent = doc.name;
-}
-
-function closeShareModal() {
-  const modal = document.getElementById('shareModal');
-  if (modal) modal.classList.add('hidden');
-  G.currentDocId = null;
-}
-
-function switchShareTab(tab) {
-  const sendPanel = document.getElementById('sharePanel-send');
-  const historyPanel = document.getElementById('sharePanel-history');
-  const sendTab = document.getElementById('shareTab-send');
-  const historyTab = document.getElementById('shareTab-history');
-  if (tab === 'send') {
-    if (sendPanel) sendPanel.classList.remove('hidden');
-    if (historyPanel) historyPanel.classList.add('hidden');
-    if (sendTab) sendTab.classList.add('border-blue-400', 'text-blue-400');
-    if (historyTab) historyTab.classList.remove('border-blue-400', 'text-blue-400');
-  } else {
-    if (sendPanel) sendPanel.classList.add('hidden');
-    if (historyPanel) historyPanel.classList.remove('hidden');
-    if (historyTab) historyTab.classList.add('border-blue-400', 'text-blue-400');
-    if (sendTab) sendTab.classList.remove('border-blue-400', 'text-blue-400');
-    loadShareHistory();
-  }
-}
-
-async function loadShareHistory(docId = null) {
-  const targetDocId = docId || G.currentDocId;
-  if (!targetDocId) {
-    const historyContainer = document.getElementById('shareHistoryList');
-    if (historyContainer) historyContainer.innerHTML = '<div class="text-center py-8 text-blue-300/40"><p>Sélectionnez un document pour voir son historique</p></div>';
-    return;
-  }
-  try {
-    const { data: shares, error } = await G.supabase
-      .from('shares')
-      .select('*, documents!document_id(name)')
-      .eq('document_id', targetDocId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    const historyContainer = document.getElementById('shareHistoryList');
-    if (historyContainer) {
-      if (!shares || shares.length === 0) {
-        historyContainer.innerHTML = '<p class="text-center py-4 text-blue-300/50">Aucun historique de partage pour ce document</p>';
-      } else {
-        historyContainer.innerHTML = shares.map(s => `
-          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-blue-500/20">
-            <div>
-              <p class="text-white text-sm">Partagé avec : ${escapeHtml(s.recipient_email)}</p>
-              <p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>
-              ${s.expires_at ? `<p class="text-xs text-yellow-400/70">Expire le ${formatDate(s.expires_at)}</p>` : ''}
-            </div>
-            ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30">Révoquer</button>` : ''}
-          </div>
-        `).join('');
-      }
-    }
-  } catch (err) {
-    console.error('loadShareHistory error:', err);
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // 7. ÉDITEUR RICHE SÉCURISÉ (avec DOMPurify)
 // ═══════════════════════════════════════════════════════════════════════
 
-function openRichEditor(docId) {
-  const doc = G.documents.find(d => d.id === docId);
-  if (!doc) return;
-  G.currentDocId = docId;   // important pour la sauvegarde
-  const modal = document.getElementById('richEditorModal');
-  if (!modal) return;
-  const editorDiv = document.getElementById('richEditorContent');
-  if (editorDiv) editorDiv.innerHTML = doc.content || '';
-  modal.classList.remove('hidden');
-  showToast('Éditeur sécurisé', 'info');
-}
-
-function closeRichEditor() {
-  const modal = document.getElementById('richEditorModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-function _onRichEditorInput() {}
-
-function _saveRichContent() {
-  const editorDiv = document.getElementById('richEditorContent');
-  if (!editorDiv) return;
-  const raw = editorDiv.innerHTML;
-  const sanitized = DOMPurify.sanitize(raw);
-  const docId = G.currentDocId;
-  if (docId && G.supabase) {
-    G.supabase.from('documents').update({ content: sanitized, updated_at: new Date().toISOString() }).eq('id', docId)
-      .then(() => showToast('Document enregistré', 'success'))
-      .catch(err => showToast('Erreur sauvegarde', 'error'));
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // 8. FONCTIONS UTILITAIRES
 // ═══════════════════════════════════════════════════════════════════════
-
-function handleDocDragStart(e, docId) {
-  e.dataTransfer.setData('text/plain', docId);
-}
-
-function showDocContextMenu(e, docId) {
-  e.preventDefault();
-  e.stopPropagation();
-  deleteDocument(docId);
-}
 
 function _fallbackCopy(text) {
   const ta = document.createElement('textarea');
@@ -1262,38 +1150,6 @@ function _fallbackCopy(text) {
 
 // ─── Stub generatePublicLink (défini dans workflows.js) ───
 // Appelé depuis les cartes document; workflows.js le redéfinira au chargement
-async function generatePublicLink(docId, expiresInDays = 7) {
-  showToast('Génération du lien public…', 'info');
-  // La vraie implémentation est dans workflows.js
-  if (typeof window._generatePublicLinkImpl === 'function') {
-    return window._generatePublicLinkImpl(docId, expiresInDays);
-  }
-  showToast('Module de partage non chargé', 'error');
-}
-
-async function copyShareLink(docId) {
-  if (typeof window._copyShareLinkImpl === 'function') return window._copyShareLinkImpl(docId);
-  showToast('Copie du lien non disponible', 'error');
-}
-
-async function scanAllDocuments() {
-  showToast('Analyse en cours…', 'info');
-  if (typeof window._scanAllDocumentsImpl === 'function') return window._scanAllDocumentsImpl();
-}
-
-function exportAuditLog() {
-  if (typeof window._exportAuditLogImpl === 'function') return window._exportAuditLogImpl();
-  showToast('Export non disponible', 'error');
-}
-function exportAllData() {
-  if (typeof window._exportAllDataImpl === 'function') return window._exportAllDataImpl();
-  showToast('Export non disponible', 'error');
-}
-function exportDocumentsCsv() {
-  if (typeof window._exportDocumentsCsvImpl === 'function') return window._exportDocumentsCsvImpl();
-  showToast('Export CSV non disponible', 'error');
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // EXPOSITIONS GLOBALES
 // ═══════════════════════════════════════════════════════════════════════
