@@ -224,7 +224,7 @@ function renderDocCard(doc) {
                   title="Partager">
             <i class="fas fa-share-alt"></i>
           </button>
-          ${buildEditButton(doc)}
+          ${typeof buildEditButton === 'function' ? buildEditButton(doc) : ''}
           <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
                   class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
                   title="Inviter à collaborer">
@@ -325,7 +325,7 @@ function renderDocListItem(doc) {
                 title="Partager">
           <i class="fas fa-share-alt"></i>
         </button>
-        ${buildEditButton(doc)}
+        ${typeof buildEditButton === 'function' ? buildEditButton(doc) : ''}
         <button onclick="event.stopPropagation(); openCollabModal('${doc.id}')" 
                 class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-colors" 
                 title="Inviter à collaborer">
@@ -1257,6 +1257,41 @@ function _fallbackCopy(text) {
     showToast('Impossible de copier', 'error');
   }
   document.body.removeChild(ta);
+}
+
+
+// ─── Stub generatePublicLink (défini dans workflows.js) ───
+// Appelé depuis les cartes document; workflows.js le redéfinira au chargement
+async function generatePublicLink(docId, expiresInDays = 7) {
+  showToast('Génération du lien public…', 'info');
+  // La vraie implémentation est dans workflows.js
+  if (typeof window._generatePublicLinkImpl === 'function') {
+    return window._generatePublicLinkImpl(docId, expiresInDays);
+  }
+  showToast('Module de partage non chargé', 'error');
+}
+
+async function copyShareLink(docId) {
+  if (typeof window._copyShareLinkImpl === 'function') return window._copyShareLinkImpl(docId);
+  showToast('Copie du lien non disponible', 'error');
+}
+
+async function scanAllDocuments() {
+  showToast('Analyse en cours…', 'info');
+  if (typeof window._scanAllDocumentsImpl === 'function') return window._scanAllDocumentsImpl();
+}
+
+function exportAuditLog() {
+  if (typeof window._exportAuditLogImpl === 'function') return window._exportAuditLogImpl();
+  showToast('Export non disponible', 'error');
+}
+function exportAllData() {
+  if (typeof window._exportAllDataImpl === 'function') return window._exportAllDataImpl();
+  showToast('Export non disponible', 'error');
+}
+function exportDocumentsCsv() {
+  if (typeof window._exportDocumentsCsvImpl === 'function') return window._exportDocumentsCsvImpl();
+  showToast('Export CSV non disponible', 'error');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
