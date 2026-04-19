@@ -75,7 +75,7 @@ async function loadShareHistory(docId = null) {
               <p class="text-xs text-blue-300/60">${s.status} • ${formatDate(s.created_at)}</p>
               ${s.expires_at ? `<p class="text-xs text-yellow-400/70">Expire le ${formatDate(s.expires_at)}</p>` : ''}
             </div>
-            ${s.status === 'active' ? `<button onclick="revokeShareRecord('${s.id}')" class="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30">Révoquer</button>` : ''}
+            ${s.status === 'active' ? `<button onclick="revokeShare('${s.id}')" class="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30">Révoquer</button>` : ''}
           </div>
         `).join('');
       }
@@ -311,7 +311,7 @@ function _renderSent() {
           <button onclick="openShareDetailModal('${share.id}')" class="p-2 rounded-lg hover:bg-blue-500/20 text-blue-400 transition-all" title="Détails & activité"><i class="fas fa-chart-line text-sm"></i></button>
           ${status === 'active' ? `
             <button onclick="extendShare('${share.id}', 7)" class="p-2 rounded-lg hover:bg-green-500/20 text-green-400 transition-all" title="Prolonger 7 jours"><i class="fas fa-calendar-plus text-sm"></i></button>
-            <button onclick="revokeShareRecord('${share.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Révoquer"><i class="fas fa-ban text-sm"></i></button>
+            <button onclick="revokeShare('${share.id}')" class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 transition-all" title="Révoquer"><i class="fas fa-ban text-sm"></i></button>
           ` : `
             <button onclick="renewShare('${share.id}')" class="p-2 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-all" title="Renouveler"><i class="fas fa-rotate text-sm"></i></button>
           `}
@@ -441,7 +441,7 @@ function _renderActivityChart(days) {
 
 function loadShareActivity(days) { _renderActivityChart(parseInt(days)); }
 
-async function revokeShareRecord(shareId) {
+async function revokeShare(shareId) {
   if (!confirm('Révoquer ce partage ? Le destinataire n\'aura plus accès au document.')) return;
   try {
     const { error } = await G.supabase.from('shares').update({ status: 'revoked', revoked_at: new Date().toISOString() }).eq('id', shareId);
@@ -732,6 +732,16 @@ function toggleQsLinkMaxViews() {
   if (inp) inp.classList.toggle('hidden', !cb?.checked);
 }
 
+function _updateTeamPreview() {
+  const target = document.getElementById('qsTeamTarget')?.value;
+  const preview = document.getElementById('qsTeamPreviewText');
+  if (!preview) return;
+  let count = 0;
+  if (target === 'all') count = G.users.filter(u => u.status === 'active').length;
+  else count = G.users.filter(u => u.status === 'active' && u.role === target).length;
+  preview.textContent = `${count} membre(s) avec le rôle "${target}"`;
+}
+
 async function executeQuickShare() {
   const docId = document.getElementById('qsDocId')?.value;
   if (!docId) { showToast('Sélectionnez un document', 'warning'); return; }
@@ -842,7 +852,7 @@ function openShareDetailModal(shareId) {
         <p class="text-white font-semibold text-sm mb-3 flex items-center gap-2"><i class="fas fa-chart-bar text-purple-400"></i>Statistiques d'accès</p>
         <div class="grid grid-cols-3 gap-3 text-center"><div><p class="text-2xl font-bold text-purple-300">${share.views || 0}</p><p class="text-[10px] text-blue-300/50">Vues</p></div><div><p class="text-2xl font-bold text-green-300">${share.downloads || 0}</p><p class="text-[10px] text-blue-300/50">Téléchargements</p></div><div><p class="text-2xl font-bold text-blue-300">${share.last_accessed ? formatDate(share.last_accessed) : '—'}</p><p class="text-[10px] text-blue-300/50">Dernier accès</p></div></div>
       </div>
-      ${status === 'active' && share.sender_id === G.currentUser?.id ? `<div class="flex gap-3"><button onclick="extendShare('${share.id}', 7); closeShareDetailModal();" class="flex-1 py-2.5 rounded-xl text-sm text-green-400 border border-green-500/25 hover:bg-green-500/10 flex items-center justify-center gap-2"><i class="fas fa-calendar-plus"></i>Prolonger +7j</button><button onclick="revokeShareRecord('${share.id}'); closeShareDetailModal();" class="flex-1 py-2.5 rounded-xl text-sm text-red-400 border border-red-500/25 hover:bg-red-500/10 flex items-center justify-center gap-2"><i class="fas fa-ban"></i>Révoquer</button></div>` : ''}
+      ${status === 'active' && share.sender_id === G.currentUser?.id ? `<div class="flex gap-3"><button onclick="extendShare('${share.id}', 7); closeShareDetailModal();" class="flex-1 py-2.5 rounded-xl text-sm text-green-400 border border-green-500/25 hover:bg-green-500/10 flex items-center justify-center gap-2"><i class="fas fa-calendar-plus"></i>Prolonger +7j</button><button onclick="revokeShare('${share.id}'); closeShareDetailModal();" class="flex-1 py-2.5 rounded-xl text-sm text-red-400 border border-red-500/25 hover:bg-red-500/10 flex items-center justify-center gap-2"><i class="fas fa-ban"></i>Révoquer</button></div>` : ''}
     `;
   }
   const modal = document.getElementById('shareDetailModal');
@@ -914,7 +924,10 @@ async function generatePublicLink(docId, expiresInDays = 7) {
   return url;
 }
 
-
+function copyShareLink() {
+  const val = document.getElementById('shareLinkInput')?.value;
+  if (val) _copyText(val);
+}
 
 function _setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
 function _setBadge(id, count) { const el = document.getElementById(id); if (!el) return; if (count > 0) { el.textContent = count; el.classList.remove('hidden'); } else el.classList.add('hidden'); }
@@ -1100,5 +1113,4 @@ Object.assign(window, {
   renderWorkflows, openCreateWorkflowModal, closeWorkflowModal, createWorkflow,
   actOnWorkflow, addWfComment, openWfDetail, closeWfDetail, filterWorkflows,
   searchWorkflows, setWfView, closeWfDetailModal, switchWfView
-  window.revokeShareRecord = revokeShareRecord;
 });
