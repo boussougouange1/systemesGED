@@ -316,12 +316,12 @@ function _loadLibraries(type) {
   return new Promise(resolve => {
     const libs = type === 'word'
       ? [
-          { tag:'link',   href:'https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css' },
-          { tag:'script', src:'https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js',               check:'Quill'   },
+          { tag:'link',   href:'https://cdn.quilljs.com/1.3.7/quill.snow.css' },
+          { tag:'script', src:'https://cdn.quilljs.com/1.3.7/quill.min.js',               check:'Quill'   },
           { tag:'script', src:'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js', check:'mammoth' }
         ]
       : [
-          { tag:'script', src:'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js', check:'XLSX' }
+          { tag:'script', src:'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js', check:'XLSX' }
         ];
 
     const scripts = libs.filter(l => l.tag === 'script');
