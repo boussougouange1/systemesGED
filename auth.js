@@ -15,8 +15,8 @@ const CONFIG = {
     enterprise: { name: 'Enterprise', price: null, users: 999999, storage: 999999999999 }
   },
   systemAdmins: [
-    // Ajouter ici les emails des super-administrateurs de secours :
-    // { email: 'superadmin@votredomaine.com', companyId: 'votre_company_id', companyName: 'Votre Entreprise' }
+    
+  
   ]
 };
 
@@ -78,13 +78,25 @@ window.G = {
   moveModalDocId: null,
   collabModalDocId: null,
   collabUsers: [],
-  // auditFilter: utiliser _audit.filter (défini dans api.js)
+  auditFilter: { days: 30, severity: '', action: '' },
   logFilter: 'all',
   auditCurrentPage: 1,
   auditPageSize: 20,
   _isDemo: false
 };
 
+// ─── Protection anti-copie ───
+(function protectApplication() {
+  document.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) ||
+        (e.ctrlKey && (e.key === 'u' || e.key === 'U'))) {
+      e.preventDefault();
+      return false;
+    }
+  });
+})();
 
 // ─── Initialisation Supabase ───
 async function initSupabase() {
