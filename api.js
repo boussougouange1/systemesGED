@@ -407,7 +407,6 @@ function requestAccountDeletion() {
 }
 
 function copySqlSchema() { const s=document.getElementById('sqlSchemaBlock')?.textContent; if(s) _copyTxt(s); }
-function openDangerModal() { showToast('Fonctionnalité en développement','info'); }
 function closeNotifPanel() { const p=document.getElementById('notifPanel'); if(p) p.classList.add('hidden'); }
 function toggleNotifications() { const p=document.getElementById('notifPanel'); if(p) p.classList.toggle('hidden'); }
 function markAllNotifRead() { showToast('Notifications lues','success'); ['notifBadge','notifCountBadge'].forEach(id=>{document.getElementById(id)?.classList.add('hidden');}); }
@@ -663,12 +662,6 @@ function _copyTxt(text) {
   if(navigator.clipboard) navigator.clipboard.writeText(text).then(()=>showToast('Copié','success')).catch(()=>_fallbackCopy(text));
   else _fallbackCopy(text);
 }
-function _fallbackCopy(text) {
-  const ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
-  try{document.execCommand('copy');showToast('Copié','success');}catch(_){showToast('Impossible de copier','error');}
-  document.body.removeChild(ta);
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // 7. INTEGRATIONS (avec try/catch)
 // ═══════════════════════════════════════════════════════════════════════
