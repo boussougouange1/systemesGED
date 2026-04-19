@@ -15,7 +15,7 @@ const CONFIG = {
     enterprise: { name: 'Enterprise', price: null, users: 999999, storage: 999999999999 }
   },
   systemAdmins: [
-    { email: 'ahouansouange@live.fr', companyName: 'live', companyId: 'live_company', password: 'AA++aa++11111' },
+    
   
   ]
 };
