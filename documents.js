@@ -1188,12 +1188,13 @@ async function loadShareHistory(docId = null) {
 function openRichEditor(docId) {
   const doc = G.documents.find(d => d.id === docId);
   if (!doc) return;
+  G.currentDocId = docId;   // important pour la sauvegarde
   const modal = document.getElementById('richEditorModal');
   if (!modal) return;
-  const textarea = document.getElementById('richEditorTextarea');
-  if (textarea) textarea.value = doc.content || '';
+  const editorDiv = document.getElementById('richEditorContent');
+  if (editorDiv) editorDiv.innerHTML = doc.content || '';
   modal.classList.remove('hidden');
-  showToast('Éditeur sécurisé (mode texte)', 'info');
+  showToast('Éditeur sécurisé', 'info');
 }
 
 function closeRichEditor() {
@@ -1204,9 +1205,9 @@ function closeRichEditor() {
 function _onRichEditorInput() {}
 
 function _saveRichContent() {
-  const textarea = document.getElementById('richEditorTextarea');
-  if (!textarea) return;
-  const raw = textarea.value;
+  const editorDiv = document.getElementById('richEditorContent');
+  if (!editorDiv) return;
+  const raw = editorDiv.innerHTML;
   const sanitized = DOMPurify.sanitize(raw);
   const docId = G.currentDocId;
   if (docId && G.supabase) {
