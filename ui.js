@@ -450,30 +450,27 @@ function getFileIcon(type) {
     audio:  { icon: 'fa-file-audio',       color: 'text-green-400' },
     code:   { icon: 'fa-file-code',        color: 'text-cyan-400' },
     zip:    { icon: 'fa-file-archive',     color: 'text-yellow-400' },
-    txt:    { icon: 'fa-file-alt',     color: 'text-gray-400' },
-    unknown:{ icon: 'fa-file',          color: 'text-blue-400/70' },
-    pdf:    { icon: 'fa-file-pdf',      color: 'text-red-400' },
-    doc:    { icon: 'fa-file-word',     color: 'text-blue-400' },
-    docx:   { icon: 'fa-file-word',     color: 'text-blue-400' },
-    xls:    { icon: 'fa-file-excel',    color: 'text-green-400' },
-    xlsx:   { icon: 'fa-file-excel',    color: 'text-green-400' },
-    ppt:    { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
-    pptx:   { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
-    png:    { icon: 'fa-file-image',    color: 'text-purple-400' },
-    jpg:    { icon: 'fa-file-image',    color: 'text-purple-400' },
-    jpeg:   { icon: 'fa-file-image',    color: 'text-purple-400' },
-    gif:    { icon: 'fa-file-image',    color: 'text-purple-400' },
-    webp:   { icon: 'fa-file-image',    color: 'text-purple-400' },
-    svg:    { icon: 'fa-file-image',    color: 'text-purple-400' },
-    zip:    { icon: 'fa-file-archive',  color: 'text-yellow-400' },
-    rar:    { icon: 'fa-file-archive',  color: 'text-yellow-400' },
-    mp4:    { icon: 'fa-file-video',    color: 'text-pink-400' },
-    mp3:    { icon: 'fa-file-audio',    color: 'text-green-400' },
-    json:   { icon: 'fa-file-code',     color: 'text-cyan-400' },
-    xml:    { icon: 'fa-file-code',     color: 'text-cyan-400' },
-    html:   { icon: 'fa-file-code',     color: 'text-cyan-400' },
-    css:    { icon: 'fa-file-code',     color: 'text-cyan-400' },
-    js:     { icon: 'fa-file-code',     color: 'text-cyan-400' }
+    txt:    { icon: 'fa-file-alt',         color: 'text-gray-400' },
+    unknown:{ icon: 'fa-file',             color: 'text-blue-400/70' },
+    pdf: { icon: 'fa-file-pdf', color: 'text-red-400' },
+    doc: { icon: 'fa-file-word', color: 'text-blue-400' },
+    docx: { icon: 'fa-file-word', color: 'text-blue-400' },
+    xls: { icon: 'fa-file-excel', color: 'text-green-400' },
+    xlsx: { icon: 'fa-file-excel', color: 'text-green-400' },
+    ppt: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
+    pptx: { icon: 'fa-file-powerpoint', color: 'text-orange-400' },
+    png: { icon: 'fa-file-image', color: 'text-purple-400' },
+    jpg: { icon: 'fa-file-image', color: 'text-purple-400' },
+    jpeg: { icon: 'fa-file-image', color: 'text-purple-400' },
+    gif: { icon: 'fa-file-image', color: 'text-purple-400' },
+    txt: { icon: 'fa-file-alt', color: 'text-gray-400' },
+    zip: { icon: 'fa-file-archive', color: 'text-yellow-400' },
+    mp4: { icon: 'fa-file-video', color: 'text-pink-400' },
+    mp3: { icon: 'fa-file-audio', color: 'text-green-400' },
+    json: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    html: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    css: { icon: 'fa-file-code', color: 'text-cyan-400' },
+    js: { icon: 'fa-file-code', color: 'text-cyan-400' }
   };
   const m = map[type] || { icon: 'fa-file', color: 'text-blue-400' };
   return `${m.icon} ${m.color}`;
@@ -543,53 +540,7 @@ function handleDocDragStart(e, docId) {
 function showDocContextMenu(e, docId) {
   e.preventDefault();
   e.stopPropagation();
-
-  // Supprimer tout menu contextuel existant
-  document.querySelectorAll('.doc-context-menu').forEach(m => m.remove());
-
-  const menu = document.createElement('div');
-  menu.className = 'doc-context-menu';
-  menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:9999;
-    background:rgba(8,15,40,0.98);border:1px solid rgba(96,165,250,0.25);
-    border-radius:12px;padding:6px;min-width:180px;
-    box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(12px);`;
-
-  const doc = G.documents.find(d => d.id === docId);
-  const canEdit = doc && (doc.owner_id === G.currentUser?.id
-    || G.currentUser?.role === 'admin' || G.currentUser?.role === 'manager');
-
-  const items = [
-    { icon: 'fa-eye',      label: 'Prévisualiser',  fn: `openPreviewModal('${docId}')` },
-    { icon: 'fa-download', label: 'Télécharger',    fn: `downloadDocument('${docId}')` },
-    { icon: 'fa-share-alt',label: 'Partager',       fn: `openShareModal('${docId}')` },
-    ...(canEdit ? [
-      { icon: 'fa-folder-open', label: 'Déplacer', fn: `openMoveModal('${docId}')` },
-      { icon: 'fa-pen-nib',     label: 'Éditer',   fn: `openRichEditor('${docId}')` },
-      { icon: 'fa-trash', label: 'Supprimer', fn: `deleteDocument('${docId}')`, danger: true },
-    ] : []),
-  ];
-
-  menu.innerHTML = items.map(item => `
-    <button onclick="${item.fn};this.closest('.doc-context-menu').remove()"
-      class="w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-blue-500/20 transition-colors ${item.danger ? 'text-red-400 hover:bg-red-500/20' : 'text-blue-200'}">
-      <i class="fas ${item.icon} w-4 text-center opacity-70"></i>${item.label}
-    </button>`).join('');
-
-  document.body.appendChild(menu);
-
-  // Ajuster si dépasse l'écran
-  const rect = menu.getBoundingClientRect();
-  if (rect.right > window.innerWidth) menu.style.left = (e.clientX - rect.width) + 'px';
-  if (rect.bottom > window.innerHeight) menu.style.top = (e.clientY - rect.height) + 'px';
-
-  // Fermer au clic ailleurs
-  const close = (ev) => {
-    if (!menu.contains(ev.target)) {
-      menu.remove();
-      document.removeEventListener('click', close);
-    }
-  };
-  setTimeout(() => document.addEventListener('click', close), 0);
+  deleteDocument(docId);
 }
 
 // ─── Sécurité : Échappement HTML ───
@@ -1435,19 +1386,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 // stopFileWatch is exposed inside DOMContentLoaded block above
 });
 
-// ─── Quick Share — preview équipe ───
-function _updateTeamPreview() {
-  const target = document.getElementById('qsTeamTarget')?.value || 'all';
-  const el     = document.getElementById('qsTeamPreviewText');
-  if (!el) return;
-  const count = target === 'all'
-    ? G.users.length
-    : G.users.filter(u => u.role === target).length;
-  el.textContent = count
-    ? `${count} membre(s) recevront l'accès`
-    : 'Aucun membre dans ce groupe';
-}
-
 // ─── Exposition globale — ui.js ───
 window.switchView              = switchView;
 window.openMobileSidebar       = openMobileSidebar;
@@ -1468,7 +1406,6 @@ window.generateId              = generateId;
 window.canValidateUsers        = canValidateUsers;
 window.addAuditLog             = addAuditLog;
 window.handleGlobalSearch      = handleGlobalSearch;
-window._updateTeamPreview      = _updateTeamPreview;
 window.openResetModal          = openResetModal;
 window.closeResetModal         = closeResetModal;
 window.sendResetEmail          = sendResetEmail;
