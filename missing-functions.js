@@ -233,6 +233,71 @@ Object.defineProperty(window, 'SB', {
   configurable: true
 });
 
+// ─── 10. BRIDGE wfHistoryList ↔ wfDetailHistory ──────────────────────
+// api.js openWfDetail() writes to #wfHistoryList
+// workflows.js loadWorkflowHistory() writes to #wfDetailHistory
+// → on synchronise les deux en miroir via MutationObserver
+
+document.addEventListener('DOMContentLoaded', function () {
+  function _mirrorHistory() {
+    const src  = document.getElementById('wfHistoryList');
+    const dest = document.getElementById('wfDetailHistory');
+    if (!src || !dest) return;
+    // Quand api.js écrit dans wfHistoryList, on copie vers wfDetailHistory
+    new MutationObserver(() => {
+      if (src.innerHTML.trim()) {
+        dest.innerHTML = src.innerHTML;
+        dest.classList.remove('hidden');
+        src.classList.add('hidden');   // On utilise dest comme affichage principal
+      }
+    }).observe(src, { childList: true, subtree: true, characterData: true });
+  }
+  _mirrorHistory();
+
+  // Exposer _updateTeamPreview au scope global (défini dans workflows.js)
+  setTimeout(function () {
+    if (typeof _updateTeamPreview === 'function' && !window._updateTeamPreview) {
+      window._updateTeamPreview = _updateTeamPreview;
+    }
+  }, 600);
+});
+
+// ─── 11. Correctif createWorkflow — lecture des steps depuis le container ──
+// workflows.js createWorkflow() lit wfSteps (textarea) OR wfStepsContainer (divs)
+// On s'assure que si wfStepsContainer est présent, on injecte ses valeurs dans wfSteps
+
+(function () {
+  const _origCreate = window.createWorkflow;
+  if (typeof _origCreate !== 'function') return; // sera patché après DOMContentLoaded
+  window.createWorkflow = function (e) {
+    const container = document.getElementById('wfStepsContainer');
+    const textarea  = document.getElementById('wfSteps');
+    if (container && textarea) {
+      const steps = Array.from(container.querySelectorAll('input[type=text]'))
+        .map(i => i.value.trim()).filter(Boolean);
+      if (steps.length) textarea.value = steps.join(',');
+    }
+    return _origCreate.call(this, e);
+  };
+})();
+
+document.addEventListener('DOMContentLoaded', function () {
+  setTimeout(function () {
+    const _orig = window.createWorkflow;
+    if (typeof _orig !== 'function') return;
+    window.createWorkflow = function (e) {
+      const container = document.getElementById('wfStepsContainer');
+      const textarea  = document.getElementById('wfSteps');
+      if (container && textarea) {
+        const steps = Array.from(container.querySelectorAll('input[type=text]'))
+          .map(i => i.value.trim()).filter(Boolean);
+        if (steps.length) textarea.value = steps.join(',');
+      }
+      return _orig.call(this, e);
+    };
+  }, 800);
+});
+
 // Exposer tout globalement
 Object.assign(window, {
   richCmd,
